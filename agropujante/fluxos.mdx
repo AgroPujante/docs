@@ -13,7 +13,7 @@ description: "Trial → PRO, apoiador, publicação de artigo, ciclo de vida do 
     `POST /subscriptions/checkout` (JWT) cria a cobrança no Asaas — PIX ou cartão (tokenizado via `POST /checkout/cards`).
   </Step>
   <Step title="Webhook Asaas confirma o pagamento">
-    O Asaas chama `POST /subscriptions/webhook` (validado por `asaas-access-token`). O evento é logado em `asaas_webhooks_log`.
+    O Asaas chama `POST /subscriptions/webhook` (validado por `asaas-access-token`). O evento é processado direto — o Portal não mantém tabela de auditoria de webhooks; o rastro fica em `site_subscription_events`.
   </Step>
   <Step title="Assinatura ativa">
     A row em `site_subscriptions` vira `active`, `users.is_subscriber = true`, e o evento entra em `site_subscription_events`. O usuário passa a ver artigos completos, boletins inteiros e downloads de PDF.

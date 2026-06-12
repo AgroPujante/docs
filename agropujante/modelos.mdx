@@ -5,6 +5,20 @@ description: "Entidades do schema pujante agrupadas por domínio, extensões Pos
 
 Todas as tabelas vivem no schema **`pujante`** do Supabase Postgres (não no `public`). Em qualquer acesso via PostgREST, envie `Accept-Profile: pujante`.
 
+## Identidade (compartilhada com o ecossistema)
+
+| Tabela | Papel no Portal |
+|---|---|
+| `users` | Usuários do Portal — login, `is_subscriber`, `password_hash` (bcrypt `$2b$` ou `supabase_managed`), `user_type` |
+| `members` | Pessoas físicas — DDL é da Escola, mas o Portal lê/escreve em fluxos de apoiador |
+| `password_reset_codes` | Códigos OTP de reset de senha |
+| `profiles` | Perfil público (@handle, bio, especialidades) |
+| `user_follows` | Grafo social (seguir autores/usuários) |
+
+<Note>
+`users` e `members` são as tabelas mais **compartilhadas** do schema: o Portal escreve nelas em checkout, assinaturas e revenue, e a Escola também — veja o [mapa de propriedade de tabelas](/propriedade-tabelas) antes de alterar qualquer coluna.
+</Note>
+
 ## Conteúdo editorial
 
 | Tabela | Papel |
@@ -35,6 +49,10 @@ Posts do tipo **julgado** são conteúdo editorial. Não confunda com a tabela `
 | `site_subscriptions` | Assinaturas PRO/apoiador (status, billing_type — inclusive `MANUAL`) |
 | `site_subscription_events` | Trilha de eventos de assinatura (webhooks Asaas, mudanças de status) |
 | `credit_cards` | Tokens de cartão salvos via Asaas (nunca o PAN) |
+
+<Warning>
+`site_subscriptions` (Portal) **não é** a tabela `subscriptions` (Escola). São dois sistemas de assinatura separados, com gateways, planos e ciclos distintos, no mesmo schema. Um usuário PRO do Portal não aparece em `subscriptions`, e um membro da Escola não aparece em `site_subscriptions`.
+</Warning>
 
 ## Jurisprudência e boletins
 
@@ -82,8 +100,12 @@ Posts do tipo **julgado** são conteúdo editorial. Não confunda com a tabela `
 
 | Tabela | Papel |
 |---|---|
-| `asaas_webhooks_log` | Log bruto dos webhooks Asaas (idempotência e auditoria) |
+| `email_sends` / `email_click_events` | Tracking de e-mails transacionais (eventos do webhook Resend) |
 | `noticias_coletadas` | Notícias agregadas por scraping (Playwright) para o digest |
+
+<Warning>
+O Portal **não** tem tabela de auditoria de webhooks do Asaas — o evento de `POST /subscriptions/webhook` é processado direto. A tabela `asaas_webhook_events` existe apenas na **Escola**. Num incidente de pagamento do Portal, o rastro está em `site_subscriptions`/`site_subscription_events` e nos logs do Railway.
+</Warning>
 
 ## Extensões Postgres
 

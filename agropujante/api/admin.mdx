@@ -966,8 +966,11 @@ Admin: `GET /admin/nps/stats` e `GET /admin/nps/responses` (gestor+).
 
 | Método | Path | Descrição | Auth |
 |---|---|---|---|
-| POST | `/webhooks/resend` | Status de entrega/abertura/clique de email → `email_analytics` | Assinatura Resend |
-| POST | `/webhooks/asaas` | Status de pagamento → `asaas_webhooks_log` + processamento | Header `asaas-access-token` |
+| POST | `/webhooks/resend` | Status de entrega/abertura/clique de email → `email_sends` / `email_click_events` | Assinatura Resend |
+
+<Warning>
+O webhook de pagamento do Asaas no Portal vive em `POST /subscriptions/webhook` (ver [Monetização](/agropujante/api/monetizacao)) — não existe rota `/webhooks/asaas` nem tabela `asaas_webhooks_log` neste backend. O Portal processa o evento direto, sem tabela de auditoria de webhook (diferente da Escola, que audita em `asaas_webhook_events`).
+</Warning>
 
 <AccordionGroup>
 <Accordion title="POST /api/v1/webhooks/resend">

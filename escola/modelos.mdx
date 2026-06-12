@@ -19,6 +19,10 @@ Todas as tabelas vivem no schema **`pujante`** do Supabase PostgreSQL (81+ tabel
 `users` é a conta de acesso (ligada ao Supabase Auth via `supabase_auth_id`); `members` é a pessoa física (cadastro comercial). Um `user` aponta para um `member` via `member_id`.
 </Note>
 
+<Warning>
+`users` e `members` são **compartilhadas com o AgroPujante**, que também escreve nelas (checkout, assinaturas PRO via `users.is_subscriber`, pipelines de apoiador). Antes de alterar colunas ou constraints, consulte o [mapa de propriedade de tabelas](/propriedade-tabelas).
+</Warning>
+
 ## Comercial
 
 | Tabela | Campos principais |
@@ -29,6 +33,10 @@ Todas as tabelas vivem no schema **`pujante`** do Supabase PostgreSQL (81+ tabel
 | `coupons` | Código, desconto percentual ou preço fixo, limites de uso, expiração |
 | `payment_links` | Links de pagamento |
 | `external_payments` | Pagamentos externos (Hotmart, PagarMe legacy) |
+
+<Warning>
+`subscriptions` (Escola) **não é** a `site_subscriptions` (AgroPujante). São assinaturas separadas, com produtos e gateways distintos, no mesmo schema — não cruze as duas em queries sem entender a diferença.
+</Warning>
 
 ## Mentoria
 
