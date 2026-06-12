@@ -32,7 +32,7 @@ A Escola Pujante integra com os serviços abaixo. A coluna "Backend" indica onde
     A criação/gestão de cobranças recorrentes em PagarMe e Asaas continua no backend NestJS (`/api`). O FastAPI já cuida de **imports** (sync gateway → local), **webhooks** e **dashboards**. Não duplique a lógica de cobrança no v2 sem desligar a do legado.
   </Accordion>
   <Accordion title="Bling: OAuth ainda não migrado">
-    Os endpoints de autorização OAuth e emissão de NFe do módulo Bling no v2 ainda retornam 501; consulta de notas, KPIs e configuração fiscal já funcionam. Veja [API: Financeiro](/escola/api/financeiro).
+    Os endpoints de autorização OAuth e emissão de NFe do módulo Bling no v2 ainda retornam 501; consulta de notas, KPIs e configuração fiscal já funcionam. Veja [API: NFSe (Bling)](/escola/api/nfse).
   </Accordion>
   <Accordion title="Bunny separa storage de stream">
     O upload de **vídeo de aula** vai para o Bunny Stream (`BUNNY_STREAM_*`); covers e materiais vão para o Bunny Storage (`BUNNY_STORAGE_*`) servidos pela CDN.

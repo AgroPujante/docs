@@ -1,0 +1,645 @@
+---
+title: "Financeiro"
+description: "MRR/ARR, receita por gateway, consolidado, assinantes, funil, usuários e newsletter."
+icon: "chart-line"
+---
+
+Endpoints financeiros e de base de usuários que alimentam os dashboards. Quase todos aceitam **JWT Bearer ou API Key read-only** (coluna Auth = JWT/Key). Veja [Autenticação](/admin/autenticacao).
+
+<Note>
+A URL base `https://admin-api.pujante.com.br` usada nos exemplos é **ilustrativa** — a base real depende do deploy no Railway.
+</Note>
+
+<Note>
+O parâmetro `origin` aparece em vários endpoints e filtra por produto: `site` (AgroPujante), `escola` ou `all` (default na maioria) — veja [Convenções](/admin/convencoes#parametro-origin).
+</Note>
+
+## Erros comuns
+
+Os shapes 401/403/422 são os padrões da API — veja [Convenções](/admin/convencoes#erros-comuns). Os exemplos por endpoint referenciam essa página em vez de repeti-los.
+
+## Financial
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/financial` | MRR/ARR + movimentos + cashflow + breakdown por plano | JWT/Key |
+| GET | `/admin/financial/by-gateway` | GMV PAID por gateway (Asaas, Pagar.me, Hotmart) | JWT/Key |
+| GET | `/admin/financial/consolidado` | Receita consolidada fiel ao painel (Apoiadores + Escola + PRO) | JWT/Key |
+
+### GET /admin/financial
+
+<ParamField query="origin" type="string" default="all">
+Produto: `site`, `escola` ou `all`.
+</ParamField>
+
+<ParamField query="period_days" type="integer">
+Janela de análise, entre 7 e 90 dias.
+</ParamField>
+
+### GET /admin/financial/by-gateway
+
+<ParamField query="month" type="string">
+Mês de referência no formato `YYYY-MM`.
+</ParamField>
+
+<AccordionGroup>
+<Accordion title="GET /admin/financial">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/financial?origin=all&period_days=30" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/financial?origin=all&period_days=30" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK"
+{
+  "origin": "all",
+  "refreshed_at": "2026-06-12T03:00:04+00:00",
+  "has_data": true,
+  "note": null,
+  "summary": {
+    "mrr_total": 48750.0,
+    "arr_total": 585000.0,
+    "mrr_delta_pct": 4.2,
+    "mrr_delta_abs": 1962.5,
+    "period_label": "jun/2026"
+  },
+  "movements": {
+    "new": 3200.0,
+    "expansion": 450.0,
+    "reactivation": 280.0,
+    "contraction": -120.0,
+    "churn": -1847.5,
+    "net": 1962.5
+  },
+  "cashflow": {
+    "days": 30,
+    "entrada_total": 52300.0,
+    "reembolso_total": 1240.0,
+    "liquido_total": 51060.0,
+    "points": [
+      { "date": "2026-06-11", "entrada": 1890.0, "reembolso": 0.0, "liquido": 1890.0 }
+    ]
+  },
+  "breakdown": [
+    {
+      "plan_slug": "monthly",
+      "plan_label": "PRO Mensal",
+      "origin": "site",
+      "subscribers": 540,
+      "mrr": 26460.0,
+      "arr": 317520.0,
+      "churn_pct": 3.1
+    }
+  ]
+}
+```
+
+`period_days` fora de 7–90 retorna **422**; 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
+</Accordion>
+
+<Accordion title="GET /admin/financial/by-gateway">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/financial/by-gateway?month=2026-06" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/financial/by-gateway?month=2026-06" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK"
+{
+  "period_label": "jun/2026",
+  "period_month": "2026-06",
+  "refreshed_at": "2026-06-12T03:00:04+00:00",
+  "total_gmv": 61200.0,
+  "rows": [
+    { "gateway": "asaas", "label": "Asaas", "gmv": 39780.0, "share_pct": 65.0 },
+    { "gateway": "pagarme", "label": "Pagar.me", "gmv": 13464.0, "share_pct": 22.0 },
+    { "gateway": "hotmart", "label": "Hotmart", "gmv": 7956.0, "share_pct": 13.0 }
+  ]
+}
+```
+
+`month` fora do formato `YYYY-MM` retorna **422** (validação de pattern); 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
+</Accordion>
+
+<Accordion title="GET /admin/financial/consolidado">
+A credencial usada (Bearer ou X-API-Key) é **encaminhada às origens** para buscar os deltas live.
+
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/financial/consolidado" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/financial/consolidado" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK (resumido — rows/months truncados)"
+{
+  "generated_at": "2026-06-12T14:05:00+00:00",
+  "note": "Numeros fieis ao painel admin: relatorios reconciliados do Wander (Apoiadores/Planilha + Escola/PDF) + deltas live. NAO usa as MVs (admin_mv_*), que inflam a Escola ~4x ao tratar matricula como MRR.",
+  "apoiadores": {
+    "reconciled": {
+      "source": "Planilha Wander (Asaas)",
+      "period_label": "jan/2024 — abr/2026",
+      "months_count": 28,
+      "gross_brl": 412300.0,
+      "net_brl": 389120.0,
+      "transactions": 1480,
+      "last12_gross_brl": 198400.0,
+      "last12_net_brl": 187250.0,
+      "avg_monthly_gross": 14725.0,
+      "net_factor": 0.9438,
+      "rows": [
+        {
+          "month": "2026-04",
+          "label": "abr/2026",
+          "gross_brl": 16800.0,
+          "net_brl": 15860.0,
+          "net_estimated": false,
+          "transactions": 58
+        }
+      ]
+    },
+    "live": {
+      "available": true,
+      "since": "2026-05-01",
+      "gross_brl": 31200.0,
+      "net_brl": 29450.0,
+      "transactions": 104,
+      "months_count": 2,
+      "months": ["2026-05", "2026-06"],
+      "error": null
+    },
+    "combined_gross_brl": 443500.0,
+    "combined_net_brl": 418570.0,
+    "combined_transactions": 1584
+  },
+  "escola": {
+    "reconciled": {
+      "source": "PDF Wander (Hotmart -> Pagar.me)",
+      "period_label": "jan/2024 — abr/2026",
+      "months_count": 28,
+      "gross_brl": 286400.0,
+      "net_brl": 261900.0,
+      "transactions": 920,
+      "rows": []
+    },
+    "live": {
+      "available": true,
+      "since": "2026-05-01",
+      "gross_brl": 18900.0,
+      "net_brl": 17320.0,
+      "transactions": 61,
+      "months_count": 2,
+      "months": ["2026-05", "2026-06"],
+      "error": null
+    },
+    "combined_gross_brl": 305300.0,
+    "combined_net_brl": 279220.0,
+    "combined_transactions": 981
+  },
+  "pro": {
+    "available": true,
+    "source": "AgroPujante /admin/revenue/summary + /monthly-history",
+    "mrr_realizado": 21340.0,
+    "mrr_pro_realizado": 18200.0,
+    "mrr_supporter_realizado": 3140.0,
+    "arr_realizado": 256080.0,
+    "paid_users": 462,
+    "trials_active": 38,
+    "current_month": "2026-06",
+    "vendas_mes_brl": 9870.0,
+    "vendas_mes_count": 73,
+    "last12_revenue": 214500.0,
+    "months_count": 12,
+    "error": null
+  }
+}
+```
+
+Os blocos `live`/`pro` são best-effort: se a origem não responder, vêm com `available: false` e `error` preenchido (a chamada continua **200**). Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
+</Accordion>
+</AccordionGroup>
+
+## Subscribers
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/subscribers` | Lista paginada de assinantes | JWT/Key |
+| GET | `/admin/subscribers/{subscriber_id}/timeline` | Timeline de eventos do assinante (pagamentos, acessos, emails) | JWT/Key |
+
+### GET /admin/subscribers
+
+<ParamField query="origin" type="string">
+Produto de origem do assinante.
+</ParamField>
+
+<ParamField query="plan" type="string">
+Filtra por plano.
+</ParamField>
+
+<ParamField query="status" type="string">
+Filtra por status da assinatura.
+</ParamField>
+
+<ParamField query="q" type="string">
+Busca textual (nome, email).
+</ParamField>
+
+<ParamField query="limit" type="integer" default="50">
+Itens por página, de 1 a 200.
+</ParamField>
+
+<ParamField query="offset" type="integer" default="0">
+Deslocamento da paginação.
+</ParamField>
+
+<AccordionGroup>
+<Accordion title="GET /admin/subscribers">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/subscribers?origin=site&status=ativo&q=fazenda&limit=50&offset=0" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/subscribers?origin=site&status=ativo&limit=50" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK"
+{
+  "total": 1280,
+  "limit": 50,
+  "offset": 0,
+  "items": [
+    {
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+      "name": "Mariana Souza",
+      "email": "mariana.souza@fazendaboavista.com.br",
+      "phone": "+55 62 99888-7766",
+      "origin": "site",
+      "plan_slug": "annual",
+      "plan_label": "PRO Anual",
+      "status": "ativo",
+      "billing_type": "CREDIT_CARD",
+      "mrr": 49.9,
+      "due_date": "2026-07-02T00:00:00+00:00",
+      "created_at": "2025-07-02T11:22:33+00:00"
+    }
+  ],
+  "has_data": true,
+  "note": null
+}
+```
+
+Valores válidos de `status`: `all`, `ativo`, `trial`, `cancelado`, `inadimplente` (outro valor → **422**). Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
+</Accordion>
+
+<Accordion title="GET /admin/subscribers/{subscriber_id}/timeline">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/subscribers/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d/timeline" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/subscribers/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d/timeline" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK"
+{
+  "subscriber_id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+  "events": [
+    {
+      "id": "ev_001",
+      "at": "2026-06-02T09:14:00+00:00",
+      "kind": "payment",
+      "title": "Pagamento confirmado",
+      "detail": "PRO Anual — R$ 598,80 via cartão",
+      "origin": "site"
+    },
+    {
+      "id": "ev_002",
+      "at": "2026-06-10T19:42:00+00:00",
+      "kind": "access",
+      "title": "Acesso ao portal",
+      "detail": null,
+      "origin": "site"
+    }
+  ],
+  "has_data": true,
+  "note": null
+}
+```
+
+ID desconhecido retorna **200** com `events: []` e `has_data: false`. Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
+</Accordion>
+</AccordionGroup>
+
+## Funnel
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/funnel` | Funil de 5 etapas por origem (`?origin`) | JWT/Key |
+| GET | `/admin/user-actions` | Top 5 + bottom 5 ações com % de adoção (`?origin`) | JWT/Key |
+
+<AccordionGroup>
+<Accordion title="GET /admin/funnel">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/funnel?origin=all" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/funnel?origin=all" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK"
+{
+  "origin": "all",
+  "refreshed_at": "2026-06-12T03:00:04+00:00",
+  "has_data": true,
+  "note": null,
+  "steps": [
+    { "stage": "visitante", "label": "Visitantes", "total": 91200, "site": 88400, "escola": 2800, "conv_pct": null },
+    { "stage": "cadastrado", "label": "Cadastrados", "total": 14350, "site": 12800, "escola": 1550, "conv_pct": 15.7 },
+    { "stage": "trial", "label": "Trial", "total": 1820, "site": 1820, "escola": 0, "conv_pct": 12.7 },
+    { "stage": "pro", "label": "PRO", "total": 940, "site": 940, "escola": 0, "conv_pct": 51.6 },
+    { "stage": "supporter", "label": "Apoiadores", "total": 340, "site": 290, "escola": 50, "conv_pct": 36.2 }
+  ]
+}
+```
+
+Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
+</Accordion>
+
+<Accordion title="GET /admin/user-actions">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/user-actions?origin=site" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/user-actions?origin=site" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK"
+{
+  "origin": "site",
+  "refreshed_at": "2026-06-12T03:00:04+00:00",
+  "has_data": true,
+  "note": null,
+  "top": [
+    {
+      "origin": "site",
+      "action_key": "post_view",
+      "action_label": "Leu um artigo",
+      "users_who_did": 2980,
+      "active_users_30d": 3150,
+      "pct_adoption": 94.6
+    }
+  ],
+  "bottom": [
+    {
+      "origin": "site",
+      "action_key": "search",
+      "action_label": "Usou a busca",
+      "users_who_did": 310,
+      "active_users_30d": 3150,
+      "pct_adoption": 9.8
+    }
+  ]
+}
+```
+
+Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
+</Accordion>
+</AccordionGroup>
+
+## Users
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/users` | Lista paginada Site + Escola (`?origin, ?stage, ?q, ?limit, ?offset`) | JWT/Key |
+| GET | `/admin/users/{user_id}` | Detalhe do usuário + timeline | JWT/Key |
+
+<AccordionGroup>
+<Accordion title="GET /admin/users">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/users?origin=all&stage=pro&q=carlos&limit=50&offset=0" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/users?origin=all&stage=pro&limit=50" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK"
+{
+  "total": 940,
+  "limit": 50,
+  "offset": 0,
+  "items": [
+    {
+      "id": "site:7f8e9d0c-1b2a-4c3d-8e9f-0a1b2c3d4e5f",
+      "source_id": "7f8e9d0c-1b2a-4c3d-8e9f-0a1b2c3d4e5f",
+      "name": "Carlos Pereira",
+      "email": "carlos.pereira@agro.com.br",
+      "origin": "site",
+      "stage": "pro",
+      "plan_slug": "monthly",
+      "mrr": 49.9,
+      "created_at": "2025-11-20T08:00:00+00:00",
+      "last_seen_at": "2026-06-11T22:15:00+00:00"
+    }
+  ],
+  "has_data": true,
+  "note": null
+}
+```
+
+Valores válidos de `stage`: `all`, `visitante`, `cadastrado`, `trial`, `pro`, `supporter` (outro valor → **422**). Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
+</Accordion>
+
+<Accordion title="GET /admin/users/{user_id}">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/users/site:7f8e9d0c-1b2a-4c3d-8e9f-0a1b2c3d4e5f" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/users/site:7f8e9d0c-1b2a-4c3d-8e9f-0a1b2c3d4e5f" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK"
+{
+  "user": {
+    "id": "site:7f8e9d0c-1b2a-4c3d-8e9f-0a1b2c3d4e5f",
+    "source_id": "7f8e9d0c-1b2a-4c3d-8e9f-0a1b2c3d4e5f",
+    "name": "Carlos Pereira",
+    "email": "carlos.pereira@agro.com.br",
+    "origin": "site",
+    "stage": "pro",
+    "plan_slug": "monthly",
+    "mrr": 49.9,
+    "created_at": "2025-11-20T08:00:00+00:00",
+    "last_seen_at": "2026-06-11T22:15:00+00:00"
+  },
+  "events": [
+    {
+      "id": "ev_101",
+      "at": "2026-06-11T22:15:00+00:00",
+      "kind": "like",
+      "title": "Curtiu um artigo",
+      "detail": "Marco legal do agro: o que muda em 2026",
+      "origin": "site"
+    }
+  ],
+  "has_data": true,
+  "note": null
+}
+```
+
+Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
+</Accordion>
+</AccordionGroup>
+
+## Newsletter
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/newsletter` | Visão consolidada Site + Escola (`?origin, ?limit`) | JWT/Key |
+| GET | `/admin/newsletter/site-dashboard` | Dashboard estilo Mailchimp com deltas (`?days` 1–365) | JWT/Key |
+
+<AccordionGroup>
+<Accordion title="GET /admin/newsletter">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/newsletter?origin=all&limit=50" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/newsletter?origin=all&limit=50" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK"
+{
+  "origin": "all",
+  "refreshed_at": "2026-06-12T14:05:00+00:00",
+  "has_data": true,
+  "note": null,
+  "summary": {
+    "total_subscribers": 18450,
+    "delta_30d": 612,
+    "open_rate_pct": 41.2,
+    "click_rate_pct": 6.8
+  },
+  "daily": [
+    {
+      "day": "2026-06-11",
+      "site_subscribed": 24,
+      "escola_subscribed": 3,
+      "total_subscribed": 27,
+      "sent": 18200,
+      "delivered": 17890,
+      "opened": 7420,
+      "clicked": 1180,
+      "bounced": 310
+    }
+  ],
+  "subscribers": [
+    {
+      "id": "ns_001",
+      "email": "joana.lima@cooperagro.com.br",
+      "name": "Joana Lima",
+      "origin": "site",
+      "subscribed_at": "2026-06-11T10:02:00+00:00",
+      "is_active": true
+    }
+  ],
+  "campaigns": [
+    {
+      "id": "cp_042",
+      "title": "Newsletter semanal #87 — Crédito rural",
+      "slug": "newsletter-87-credito-rural",
+      "published_at": "2026-06-09T09:00:00+00:00",
+      "recipients": 18200,
+      "opened": 7420,
+      "clicked": 1180
+    }
+  ]
+}
+```
+
+Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
+</Accordion>
+
+<Accordion title="GET /admin/newsletter/site-dashboard">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/newsletter/site-dashboard?days=30" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/newsletter/site-dashboard?days=30" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK (métricas no formato MetricWithDelta — exemplo resumido)"
+{
+  "days": 30,
+  "refreshed_at": "2026-06-12T14:05:00+00:00",
+  "audience": {
+    "total_contacts": { "value": 16890.0, "previous": 16401.0, "delta_pct": 3.0, "delta_abs": 489.0, "trend": "up" },
+    "subscribed": { "value": 15920.0, "previous": 15480.0, "delta_pct": 2.8, "delta_abs": 440.0, "trend": "up" },
+    "unsubscribed_total": { "value": 970.0, "previous": 921.0, "delta_pct": 5.3, "delta_abs": 49.0, "trend": "up" },
+    "new_in_period": { "value": 489.0, "previous": 512.0, "delta_pct": -4.5, "delta_abs": -23.0, "trend": "down" },
+    "daily_contacts": [ { "day": "2026-06-11", "value": 27.0 } ]
+  },
+  "delivery": {
+    "bounce_rate": { "value": 1.7, "previous": 2.1, "delta_pct": -19.0, "delta_abs": -0.4, "trend": "down" },
+    "bounces": { "value": 310.0, "previous": 365.0, "delta_pct": -15.1, "delta_abs": -55.0, "trend": "down" },
+    "unsubscribe_rate": { "value": 0.3, "previous": 0.3, "delta_pct": 0.0, "delta_abs": 0.0, "trend": "flat" },
+    "unsubscribes": { "value": 49.0, "previous": 51.0, "delta_pct": -3.9, "delta_abs": -2.0, "trend": "down" },
+    "delivery_rate": { "value": 98.3, "previous": 97.9, "delta_pct": 0.4, "delta_abs": 0.4, "trend": "up" },
+    "deliveries": { "value": 17890.0, "previous": 17120.0, "delta_pct": 4.5, "delta_abs": 770.0, "trend": "up" },
+    "bounce_health": { "label": "healthy", "text": "Integro" },
+    "delivery_health": { "label": "healthy", "text": "Integro" },
+    "unsub_health": { "label": "healthy", "text": "Integro" },
+    "daily_deliveries": [ { "day": "2026-06-11", "value": 17890.0 } ]
+  },
+  "funnel": {
+    "sent": { "value": 18200.0, "previous": 17480.0, "delta_pct": 4.1, "delta_abs": 720.0, "trend": "up" },
+    "delivered": { "value": 17890.0, "previous": 17120.0, "delta_pct": 4.5, "delta_abs": 770.0, "trend": "up" },
+    "opened": { "value": 7420.0, "previous": 7010.0, "delta_pct": 5.8, "delta_abs": 410.0, "trend": "up" },
+    "clicked": { "value": 1180.0, "previous": 1095.0, "delta_pct": 7.8, "delta_abs": 85.0, "trend": "up" }
+  },
+  "engagement": {
+    "sent": { "value": 18200.0, "previous": 17480.0, "delta_pct": 4.1, "delta_abs": 720.0, "trend": "up" },
+    "open_rate": { "value": 41.5, "previous": 40.9, "delta_pct": 1.5, "delta_abs": 0.6, "trend": "up" },
+    "opened": { "value": 7420.0, "previous": 7010.0, "delta_pct": 5.8, "delta_abs": 410.0, "trend": "up" },
+    "click_rate": { "value": 6.6, "previous": 6.4, "delta_pct": 3.1, "delta_abs": 0.2, "trend": "up" },
+    "clicked": { "value": 1180.0, "previous": 1095.0, "delta_pct": 7.8, "delta_abs": 85.0, "trend": "up" },
+    "click_to_open_rate": { "value": 15.9, "previous": 15.6, "delta_pct": 1.9, "delta_abs": 0.3, "trend": "up" },
+    "daily_sends": [ { "day": "2026-06-09", "value": 18200.0 } ]
+  }
+}
+```
+
+`days` fora de 1–365 retorna **422**; 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
+</Accordion>
+</AccordionGroup>

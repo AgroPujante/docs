@@ -1,0 +1,115 @@
+---
+title: "Convenções da API"
+description: "Shape de erro, paginação, auth, rate limit, IDs legados e casing dos bodies da API v2"
+icon: "ruler"
+---
+
+Convenções que valem para **toda** a API v2. As páginas de [referência](/escola/api/auth) documentam apenas os erros específicos de cada endpoint — os genéricos vivem aqui.
+
+## Shape de erro
+
+O handler global (`core/exceptions.py`) padroniza todo erro como `{detail, code}`:
+
+```json
+{ "detail": "Acesso restrito", "code": "http_error" }
+```
+
+| `code` | Quando | Status típico |
+|---|---|---|
+| `http_error` | Qualquer `HTTPException` do FastAPI (401, 403, 429, 501...) | variável |
+| `not_found` | `NotFoundException` — recurso inexistente | 404 |
+| `validation_error` | Validação de negócio, campo obrigatório ausente, valor inválido | 422 |
+| `conflict` | Registro duplicado (inclui unique violation do Postgres) | 409 |
+| `forbidden` | Acesso negado por regra de negócio | 403 |
+| `fk_violation` | FK violation traduzida — recurso relacionado não encontrado | 404 |
+| `supabase_error` | Erro de banco não mapeado | 500 |
+| `internal_error` | Exceção não tratada | 500 |
+
+O **422 de validação Pydantic** é a exceção: segue o shape padrão do FastAPI, com `detail` como array:
+
+```json
+{
+  "detail": [
+    { "type": "missing", "loc": ["body", "email"], "msg": "Field required", "input": {} }
+  ]
+}
+```
+
+### Erros genéricos de autenticação
+
+Qualquer endpoint autenticado pode responder:
+
+```json title="401 Unauthorized — sem token"
+{ "detail": "Token de autenticacao nao fornecido", "code": "http_error" }
+```
+
+```json title="401 Unauthorized — token inválido"
+{ "detail": "Token invalido ou expirado", "code": "http_error" }
+```
+
+```json title="403 Forbidden — role insuficiente"
+{ "detail": "Acesso restrito", "code": "http_error" }
+```
+
+Também pode ocorrer `{ "detail": "Usuario nao mapeado. Contate o suporte." }` quando o JWT é válido mas não existe registro correspondente em `pujante.users`.
+
+## Mensagens sem acento
+
+As mensagens de erro vêm **sem acentuação** (`"Usuario nao encontrado"`, `"Codigo invalido ou expirado."`). Isso é uma propriedade do backend — as strings são escritas assim no código de propósito, seguindo o padrão do projeto — e não um erro de transcrição desta documentação. Os exemplos das páginas de API reproduzem as mensagens literalmente.
+
+<Info>
+**Bug conhecido — 404 duplicado.** O construtor de `NotFoundException` concatena `" nao encontrado"` ao nome do recurso. Quando o código chama `NotFoundException("Usuario nao encontrado.")`, o resultado é a mensagem duplicada `"Usuario nao encontrado. nao encontrado"`. Você verá esse shape em endpoints como `POST /auth/set-password` e `POST /auth/handoff-link` — confie no status `404` e no `code: "not_found"`, não no texto.
+</Info>
+
+## Níveis de auth
+
+Cada endpoint da referência indica um destes níveis (detalhes em [Autenticação](/escola/autenticacao)):
+
+| Nível | Significado |
+|---|---|
+| **Público** | Sem token (alguns exigem token próprio no payload/header, como webhooks) |
+| **JWT** | Qualquer usuário autenticado (Supabase JWT validado via JWKS) |
+| **MANAGER** | Role `ADMIN` ou `COMMUNITY_MANAGER` |
+| **ADMIN** | Apenas `ADMIN` |
+| **Internal Token** | Header `X-Internal-Token` com o `INTERNAL_API_TOKEN` — uso sistema-a-sistema |
+
+## Paginação
+
+Listagens paginadas seguem o envelope:
+
+```json
+{ "data": [], "total": 120, "page": 1, "limit": 20, "totalPages": 6 }
+```
+
+<Note>
+Nem todo endpoint de listagem é paginado — vários retornam array direto, e alguns legados usam variações (`{items, count}` no billing, `pagination` aninhada em notícias). O shape exato está documentado em cada endpoint.
+</Note>
+
+## Rate limit
+
+- A dependência **slowapi** está declarada e o limite é configurável via `RATE_LIMIT_PER_MINUTE` (padrão **60 req/min**).
+- O fluxo de **password reset** tem limites próprios de negócio: máximo de **3 solicitações por email/hora** (resposta genérica, anti-enumeration) e **5 tentativas por código OTP** — excedido, responde `429 { "detail": "Muitas tentativas. Solicite um novo codigo." }`.
+
+<Note>
+O limiter global do slowapi ainda não está registrado no `main.py` — na prática, hoje a proteção efetiva é a por endpoint (password reset). Não dependa de 429 automático em outros fluxos sem confirmar no código.
+</Note>
+
+## IDs: text e CUIDs legados
+
+Por herança do sistema legado (Prisma/NestJS), as chaves primárias são `id` do tipo **`text`** — não `uuid`. Você encontrará dois formatos convivendo:
+
+- **CUIDs legados**: `clx1a2b3c0001mk08de4f5g6h` (registros criados pelo Nest)
+- **UUIDs**: `a1b2c3d4-e5f6-4a7b-8c9d-...` (registros mais novos)
+
+Trate IDs sempre como string opaca — nunca valide formato nem converta para UUID.
+
+## Casing dos bodies
+
+Requests e responses usam **camelCase** (`memberId`, `productType`, `coverImageUrl`). Exceções documentadas, que usam **snake_case**:
+
+| Endpoint | Campos |
+|---|---|
+| `POST /auth/password-reset/verify` / `confirm` | `reset_token`, `new_password` |
+| `POST /trials/grant` | `duration_days`, `source_ref` (e resposta com `trial_id`, `expires_at`, `user_id`) |
+
+Alguns relatórios financeiros também devolvem chaves snake_case (`gross_brl`, `monthly_totals`) — o shape literal está nos exemplos de cada endpoint.

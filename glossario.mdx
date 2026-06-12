@@ -1,0 +1,75 @@
+---
+title: Glossário
+description: Os termos do ecossistema Pujante — definição curta e link para a página canônica
+icon: book
+---
+
+Terminologia do ecossistema. Cada termo tem definição de 1–2 linhas e o link para a página que aprofunda.
+
+## Negócio e acesso
+
+**Apoiador**
+Assinante do Portal (modelo de apoio financeiro) registrado em `site_subscriptions` + `site_subscription_events`. → [Monetização do Portal](/agropujante/api/monetizacao)
+
+**PRO**
+Nível de acesso pago do Portal, materializado em `users.is_subscriber`. Libera conteúdo e recursos exclusivos. → [Monetização do Portal](/agropujante/api/monetizacao)
+
+**Supporter ⊃ PRO**
+Apoiador ativo **inclui** acesso PRO — as duas condições não coexistem como assinaturas separadas (1 assinatura por usuário). → [Auth & Users do Portal](/agropujante/api/auth-users)
+
+**Trial**
+Acesso temporário concedido entre produtos: o Portal concede trial da Escola via `POST /api/v2/trials/grant` (token interno) e vice-versa. → [Ecossistema](/ecossistema#conexoes-entre-produtos)
+
+**Member vs User**
+`users` é o cadastro central compartilhado; `members` vem do mundo Escola/clube de membros. Um mesmo humano pode existir nas duas tabelas. → [Propriedade de tabelas](/propriedade-tabelas)
+
+**OFFICE_SUPPORTER / MEMBERS_CLUB / MENTORSHIP / CURSO_DO_MES**
+Os 4 tipos de produto de assinatura da Escola (`products.type`): escritório apoiador, clube de membros, mentoria e curso do mês. `OFFICE_SUPPORTER` também aparece como `user_type` legado no Portal. → [Assinaturas da Escola](/escola/api/assinaturas)
+
+## Conteúdo (Portal)
+
+**Jurisprudência (consulta)**
+A busca de jurisprudência em `/jurisprudencia`, servida pela integração **jurisprudencias.ai**. Não confundir com julgados nem boletins. → [API de Jurisprudência](/agropujante/api/jurisprudencia)
+
+**Julgado (post)**
+Tipo de **post editorial** do Portal — análise escrita de uma decisão. Vive em `posts`, não na tabela `julgados`. → [API de Conteúdo](/agropujante/api/conteudo)
+
+**Boletim**
+PDF curado de decisões, distribuído por newsletter. A tabela `julgados` pertence aos **boletins** (itens dos PDFs), não aos posts. → [API de Jurisprudência](/agropujante/api/jurisprudencia)
+
+## Escola
+
+**GDA**
+Programa de acompanhamento de mentorados da Escola: testes DISC e socioemocionais, planos de ação, tarefas mensais e análises por IA. → [API de Mentoria](/escola/api/mentoria)
+
+**Mentorado**
+Aluno acompanhado no programa de mentoria/GDA — tracking nas tabelas `mentored_*`. → [API de Mentoria](/escola/api/mentoria)
+
+**Exordial**
+Gerador de petições com IA da Escola. Fluxo assíncrono: `POST /exordial/generate` devolve `jobId` e o cliente faz polling do status. → [API consumida pelo Mobile](/mobile/api-consumida)
+
+**Strangler (Nest legado)**
+Estratégia de migração da Escola: o FastAPI `/api/v2` substitui o NestJS `/api` rota a rota; o que ainda não migrou responde no legado. → [Arquitetura da Escola](/escola/arquitetura)
+
+## Plataforma e infra
+
+**Handoff**
+Troca de credenciais Portal→Escola: o Portal resolve um token de sessão da Escola para o usuário autenticado, via `INTERNAL_API_TOKEN`, evitando segundo login. → [Ecossistema](/ecossistema#conexoes-entre-produtos)
+
+**MV (`admin_mv_*`)**
+Materialized views do Pujante Admin que pré-agregam dados do schema para dashboards. Refresh a cada 15 minutos (APScheduler) — os números podem estar até 15 min atrasados. → [Arquitetura do Admin](/admin/arquitetura)
+
+**Macro/Sub (Gantt)**
+Hierarquia de tasks do Gantt do Admin: task **Macro** agrupa **Subs**, na estrutura Time > Projeto > Pessoa > Task. → [API do Gantt](/admin/api/gantt)
+
+**PostgREST / Accept-Profile**
+API REST automática do Supabase sobre o Postgres. Como o schema é `pujante` (não `public`), toda chamada precisa do header `Accept-Profile: pujante` (e `Content-Profile` para escrita). → [Convenções de banco](/convencoes-banco)
+
+**RLS (Row Level Security)**
+Policies por linha no Postgres. Obrigatória em tabela exposta via PostgREST; default-deny só vale com RLS habilitada. → [Convenções de banco](/convencoes-banco#rls-row-level-security)
+
+**Service Role vs Anon Key**
+Duas chaves do Supabase: a **anon key** vai ao navegador e respeita RLS; a **service role** é segredo de backend e **ignora** RLS (a escrita editorial do Portal usa-a via FastAPI). Nunca exponha a service role no cliente. → [Convenções de banco](/convencoes-banco#rls-row-level-security)
+
+**CUID**
+Formato de ID dos registros legados da Escola (ex. `clx3k9d2f0001mk08yq4w7d1z`), herdado do Prisma/Nest, em colunas `id text`. Tabelas novas usam UUID. → [Convenções de banco](/convencoes-banco#chaves-primarias-text-cuid-vs-uuid)

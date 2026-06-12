@@ -6,6 +6,22 @@ icon: "database"
 
 Todas as tabelas vivem no schema **`pujante`** do Supabase PostgreSQL (81+ tabelas). Por herança do sistema legado, as chaves primárias seguem o padrão `id` do tipo `text`.
 
+## Núcleo identidade + comercial
+
+O coração do modelo é a relação entre contas de acesso, pessoas, escritórios e assinaturas:
+
+```mermaid
+erDiagram
+    users ||--o| members : "member_id"
+    members }o--o{ offices : "office_members (N:N)"
+    subscriptions }o--|| products : "product_id"
+    subscriptions }o--o| members : "member_id"
+    subscriptions }o--o| offices : "office_id"
+    subscriptions ||--o{ subscription_payments : "subscription_id"
+```
+
+Uma `subscription` pertence a um `member` **ou** a um `office` (assinatura pessoal vs assinatura do escritório apoiador), nunca aos dois.
+
 ## Identidade
 
 | Tabela | Campos principais |
@@ -64,14 +80,19 @@ Todas as tabelas vivem no schema **`pujante`** do Supabase PostgreSQL (81+ tabel
 | `lms_tracks` | `kind`: `TRILHA`, `IMERSAO` ou `CURSO_DO_MES` |
 | `lms_courses` | Cursos dentro de uma trilha |
 | `lms_lessons` | Aulas (vídeo via Bunny Stream) |
-| `lms_materials` | Materiais anexos de aula |
-| `lms_teachers` | Professores |
-| `lms_lesson_access_log` | Progresso de vídeo (segundos assistidos, posição, completed) |
-| `lms_lesson_topics_progress` | Checklist de tópicos por aula |
-| `lms_comments` | Comentários (com replies via `parent_id`) |
-| `lms_ai_agents` | Agentes de IA configuráveis por aula |
-| `lms_ai_agent_knowledge` | Base de conhecimento de cada agente |
-| `lms_ai_chat_history` | Histórico de chat IA por aluno/aula |
+| `lms_lesson_materials` | Materiais anexos de aula |
+| `lms_teachers` / `lms_lesson_teachers` | Professores e vínculo N:N com aulas |
+| `lms_lesson_access_logs` | Progresso de vídeo (segundos assistidos, posição, completed) |
+| `lms_lesson_topic_progress` | Checklist de tópicos por aula |
+| `lms_lesson_comments` | Comentários (com replies via `parent_id`) |
+| `lms_lesson_certificates` | Certificados emitidos por aula |
+| `lms_lesson_ai_agents` | Agentes de IA configuráveis por aula |
+| `lms_lesson_ai_knowledge` | Base de conhecimento de cada agente |
+| `lms_lesson_ai_messages` | Histórico de chat IA por aluno/aula |
+
+<Info>
+A base de conhecimento dos agentes (`lms_lesson_ai_knowledge`) guarda textos e arquivos servidos ao **Assistant da OpenAI** (referenciado por `openai_assistant_id` no agente) — não há embeddings nem pgvector nessas tabelas.
+</Info>
 
 ## Editorial
 
@@ -102,7 +123,7 @@ Todas as tabelas vivem no schema **`pujante`** do Supabase PostgreSQL (81+ tabel
 |---|---|
 | `doc_sections` | Wiki interna de documentação |
 | `menu_permissions` | Matriz de permissões de menu por tipo de usuário |
-| `knowledge_base` | Documentos com embeddings (busca semântica) |
+| `knowledge_base` | Documentos da base de conhecimento. A busca semântica usa embeddings da OpenAI e ainda roda no Nest legado — no v2, `/knowledge-base/index` e `/search` retornam 501 (só `/stats` está implementado) |
 | `suggestions` | Sugestões enviadas pelos usuários |
 | `whatsapp_conversations` | Conversas WhatsApp (Z-API) |
 | `password_reset_codes` | Códigos OTP do fluxo de reset de senha |

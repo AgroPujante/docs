@@ -1,6 +1,7 @@
 ---
 title: "Arquitetura"
 description: "Estrutura de pastas, feature modules e configuração dos dois clients de API"
+icon: "sitemap"
 ---
 
 ## Estrutura de pastas
@@ -20,6 +21,26 @@ src/
 ├── stores/                # Zustand: auth, escola, notifications, theme
 └── ...
 app/                       # rotas Expo Router (file-based)
+```
+
+## Fluxo de dados
+
+```mermaid
+graph TD
+    App["App (telas em src/features)"] --> RQ["TanStack Query<br/>cache + persistência em AsyncStorage"]
+    App --> Stores["Stores Zustand<br/>auth · escola · notifications · theme"]
+
+    RQ --> Endpoints["src/api/endpoints/<br/>(19 arquivos Portal)"]
+    RQ --> EndpointsEscola["src/api/endpoints/escola/<br/>(7 arquivos)"]
+
+    Endpoints --> Client["client.ts"]
+    EndpointsEscola --> EscolaClient["escolaClient.ts"]
+
+    Stores -- "token Portal (Secure Store)" --> Client
+    Stores -- "JWT Supabase" --> EscolaClient
+
+    Client --> ApiV1["API AgroPujante /api/v1"]
+    EscolaClient --> ApiV2["API Escola /api/v2"]
 ```
 
 ## Dois clients, dois mundos
@@ -51,14 +72,14 @@ Cada um dos 22 módulos em `src/features/` é autocontido:
 
 ## Configuração de base URLs
 
-As URLs dos backends ficam em `app.json`, dentro de `expo.extra`:
+As URLs dos backends ficam em `app.json`, dentro de `expo.extra` — **só o host**, sem path. Os sufixos `/api/v1` e `/api/v2` são concatenados em `src/constants/env.ts`:
 
 ```json
 {
   "expo": {
     "extra": {
-      "apiUrl": "https://api.agropujante.com.br/api/v1",
-      "escolaApiUrl": "http://192.168.0.10:8765/api/v2"
+      "apiUrl": "https://api.agropujante.com.br",
+      "escolaApiUrl": "https://api.escolapujante.com.br"
     }
   }
 }
@@ -67,7 +88,7 @@ As URLs dos backends ficam em `app.json`, dentro de `expo.extra`:
 | Chave | Backend | Observação |
 |---|---|---|
 | `apiUrl` | AgroPujante `/api/v1` | Produção por padrão |
-| `escolaApiUrl` | Escola `/api/v2` | Em dev aponta pro IP da máquina na rede local (Expo Go não resolve `localhost`) |
+| `escolaApiUrl` | Escola `/api/v2` | Em dev local troca pro IP da máquina na rede, ex. `http://192.168.0.10:8765` (Expo Go não resolve `localhost` — veja o [Quickstart](/mobile/quickstart#apontando-pra-uma-api-local)) |
 
 <Warning>
   Ainda não existe esquema de `.env` por ambiente — trocar de dev pra produção hoje exige editar o `app.json` manualmente. Essa pendência está documentada em [Build e deploy](/mobile/build-deploy).

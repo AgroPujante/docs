@@ -1,0 +1,560 @@
+---
+title: "Marketing"
+description: "Aquisição e performance: marketing summary, conversões por UTM, cliques de email e Meta Ads."
+icon: "bullhorn"
+---
+
+Endpoints de aquisição que alimentam a aba Marketing do painel. Quase todos aceitam **JWT Bearer ou API Key read-only** (coluna Auth = JWT/Key). Veja [Autenticação](/admin/autenticacao).
+
+<Note>
+A URL base `https://admin-api.pujante.com.br` usada nos exemplos é **ilustrativa** — a base real depende do deploy no Railway.
+</Note>
+
+<Note>
+O parâmetro `origin` aparece em vários endpoints e filtra por produto: `site` (AgroPujante), `escola` ou `all` (default na maioria) — veja [Convenções](/admin/convencoes#parametro-origin).
+</Note>
+
+## Erros comuns
+
+Os shapes 401/403/422 são os padrões da API — veja [Convenções](/admin/convencoes#erros-comuns). Os exemplos por endpoint referenciam essa página em vez de repeti-los.
+
+## Marketing
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/marketing/summary` | Visits, signups, paid, MRR, CAC, LTV, ROAS + badge de cortesias | JWT/Key |
+| GET | `/admin/marketing/by-channel` | Uma linha por `utm_source` | JWT/Key |
+| GET | `/admin/marketing/by-product` | Uma linha por produto (`pro_mensal`/`semestral`/`anual`, `apoiador`, `escola_membro`) | JWT/Key |
+
+### GET /admin/marketing/summary
+
+<ParamField query="days" type="integer">
+Janela em dias, entre 7 e 365.
+</ParamField>
+
+<ParamField query="origin" type="string">
+Produto: `site`, `escola` ou `all`.
+</ParamField>
+
+<AccordionGroup>
+<Accordion title="GET /admin/marketing/summary">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/marketing/summary?days=30&origin=all" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/marketing/summary?days=30&origin=all" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK"
+{
+  "period_days": 30,
+  "origin": "all",
+  "refreshed_at": "2026-06-12T03:00:04+00:00",
+  "has_data": true,
+  "totals": {
+    "visits": 91200,
+    "signups": 1430,
+    "paid_subs": 118,
+    "gmv_brl": 23410.0,
+    "net_revenue_brl": 21680.0
+  },
+  "meta": {
+    "spend_brl": 8420.0,
+    "impressions": 1240000,
+    "clicks": 18600,
+    "meta_purchases": 96,
+    "meta_purchase_value_brl": 19120.0,
+    "ctr_pct": 1.5,
+    "cpm_brl": 6.79
+  },
+  "derived": {
+    "cac_brl": 71.36,
+    "ltv_brl_avg": 412.5,
+    "payback_months": 1.9,
+    "roas_net": 2.57,
+    "roas_pixel": 2.27
+  },
+  "courtesies": {
+    "count": 14,
+    "estimated_mrr_brl": 698.6
+  },
+  "utm_coverage_pct": 82.2
+}
+```
+
+`days` fora de 7–365 retorna **422**; 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
+</Accordion>
+
+<Accordion title="GET /admin/marketing/by-channel">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/marketing/by-channel?days=30&origin=all" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/marketing/by-channel?days=30&origin=all" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK"
+{
+  "period_days": 30,
+  "origin": "all",
+  "refreshed_at": "2026-06-12T03:00:04+00:00",
+  "has_data": true,
+  "rows": [
+    {
+      "utm_source": "meta",
+      "visits": 38200,
+      "signups": 620,
+      "paid_subs": 74,
+      "gross_revenue_brl": 14760.0,
+      "net_revenue_brl": 13690.0,
+      "spend_brl": 8420.0,
+      "cac_brl": 113.78,
+      "roas_net": 1.63,
+      "paid_share_pct": 62.7
+    },
+    {
+      "utm_source": "direto",
+      "visits": 41800,
+      "signups": 590,
+      "paid_subs": 31,
+      "gross_revenue_brl": 6120.0,
+      "net_revenue_brl": 5660.0,
+      "spend_brl": 0.0,
+      "cac_brl": null,
+      "roas_net": null,
+      "paid_share_pct": 26.3
+    }
+  ]
+}
+```
+
+Erros 401/403/422: veja [Erros comuns](/admin/convencoes#erros-comuns).
+</Accordion>
+
+<Accordion title="GET /admin/marketing/by-product">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/marketing/by-product?days=30&origin=all" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/marketing/by-product?days=30&origin=all" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK"
+{
+  "period_days": 30,
+  "origin": "all",
+  "refreshed_at": "2026-06-12T03:00:04+00:00",
+  "has_data": true,
+  "rows": [
+    {
+      "product_type": "pro_anual",
+      "paid_subs": 52,
+      "gmv_brl": 31140.0,
+      "avg_ticket_brl": 598.8,
+      "cac_brl": 96.4,
+      "ltv_brl_avg": 598.8,
+      "lifetime_months_avg": 12.0,
+      "payback_months": 1.9
+    },
+    {
+      "product_type": "apoiador",
+      "paid_subs": 9,
+      "gmv_brl": 2691.0,
+      "avg_ticket_brl": 299.0,
+      "cac_brl": null,
+      "ltv_brl_avg": 1495.0,
+      "lifetime_months_avg": 5.0,
+      "payback_months": null
+    }
+  ]
+}
+```
+
+Erros 401/403/422: veja [Erros comuns](/admin/convencoes#erros-comuns).
+</Accordion>
+</AccordionGroup>
+
+## UTM analytics
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/conversions-by-utm` | Signups + paid + GMV por UTM (`?origin, ?days, ?group_by` default `campaign`) | JWT/Key |
+
+<Note>
+A convenção de UTMs usada pelos produtos está documentada no repositório em `docs/UTM_CONVENTION.md`.
+</Note>
+
+<AccordionGroup>
+<Accordion title="GET /admin/conversions-by-utm">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/conversions-by-utm?origin=all&days=30&group_by=campaign" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/conversions-by-utm?origin=all&days=30&group_by=campaign" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK"
+{
+  "origin": "all",
+  "days": 30,
+  "group_by": "campaign",
+  "refreshed_at": "2026-06-12T03:00:04+00:00",
+  "has_data": true,
+  "total_signups": 1430,
+  "total_paid_subs": 118,
+  "total_gmv_brl": 23410.0,
+  "rows": [
+    {
+      "utm_source": "meta",
+      "utm_medium": "cpc",
+      "utm_campaign": "pro-anual-junho",
+      "signups": 410,
+      "paid_subs": 52,
+      "gmv_brl": 10980.0,
+      "avg_ticket_brl": 211.15,
+      "conv_pct": 12.7
+    },
+    {
+      "utm_source": null,
+      "utm_medium": null,
+      "utm_campaign": null,
+      "signups": 380,
+      "paid_subs": 21,
+      "gmv_brl": 4120.0,
+      "avg_ticket_brl": 196.19,
+      "conv_pct": 5.5
+    }
+  ]
+}
+```
+
+`group_by` aceita `source`, `medium`, `campaign`, `content` ou `term` (outro valor → **422**). Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
+</Accordion>
+</AccordionGroup>
+
+## Email clicks
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/email-clicks/cashback` | Cliques no botão de cashback do email `pro_welcome` (`?days`) | JWT/Key |
+
+<AccordionGroup>
+<Accordion title="GET /admin/email-clicks/cashback">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/email-clicks/cashback?days=30" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/email-clicks/cashback?days=30" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK"
+{
+  "days": 30,
+  "total_clicks": 87,
+  "distinct_clickers": 61,
+  "emails_sent": 52,
+  "ctr_pct": 117.3,
+  "last_click_at": "2026-06-11T20:47:12+00:00"
+}
+```
+
+`days` fora de 1–365 retorna **422**; 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
+</Accordion>
+</AccordionGroup>
+
+## Meta Ads
+
+<Warning>
+Requer as variáveis `META_*` configuradas. Sem elas, os endpoints retornam vazio com um aviso — veja [Variáveis de ambiente](/admin/variaveis-ambiente).
+</Warning>
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/meta-ads/summary` | Spend, vendas, custo/compra, ROAS, CPM, CTR + série diária | JWT/Key |
+| GET | `/admin/meta-ads/by-creative` | Performance por criativo, com thumbnail | JWT/Key |
+| GET | `/admin/meta-ads/funnel` | Criativos → Pág. Vendas → Checkout → Vendas | JWT/Key |
+| GET | `/admin/meta-ads/daily-economics` | ROAS · CAC · RL diário (spend Meta + receita Asaas) | JWT/Key |
+| POST | `/admin/meta-ads/sync` | Sync manual, assíncrono (responde 202) | JWT |
+
+### GET /admin/meta-ads/summary
+
+<ParamField query="days" type="integer">
+Janela em dias, entre 1 e 365. Alternativa ao intervalo explícito.
+</ParamField>
+
+<ParamField query="start_date" type="string">
+Início do intervalo (`YYYY-MM-DD`). Usar junto com `end_date`.
+</ParamField>
+
+<ParamField query="end_date" type="string">
+Fim do intervalo (`YYYY-MM-DD`).
+</ParamField>
+
+### GET /admin/meta-ads/funnel
+
+<ParamField query="adset_id" type="string">
+Restringe o funil a um conjunto de anúncios.
+</ParamField>
+
+<ParamField query="plan" type="string" default="all">
+Plano: `all`, `monthly`, `semiannual` ou `annual`.
+</ParamField>
+
+### POST /admin/meta-ads/sync
+
+<ParamField query="days" type="integer">
+Lookback do sync manual, entre 1 e 90 dias.
+</ParamField>
+
+<AccordionGroup>
+<Accordion title="GET /admin/meta-ads/summary">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/meta-ads/summary?start_date=2026-05-13&end_date=2026-06-11" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/meta-ads/summary?days=30" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK"
+{
+  "days": 30,
+  "refreshed_at": "2026-06-12T06:00:00+00:00",
+  "has_data": true,
+  "note": null,
+  "window_start": "2026-05-13",
+  "window_end": "2026-06-11",
+  "spend_total": 8420.0,
+  "purchases_total": 96,
+  "purchase_value_total": 19120.0,
+  "impressions_total": 1240000,
+  "clicks_total": 18600,
+  "cost_per_purchase": 87.71,
+  "roas": 2.27,
+  "cpm": 6.79,
+  "ctr_pct": 1.5,
+  "revenue_net_brl": 17480.0,
+  "revenue_gross_brl": 19120.0,
+  "revenue_fees_brl": 1640.0,
+  "roas_net": 2.08,
+  "plan_breakdown": [
+    { "plan": "annual", "label": "Anual", "count": 52, "revenue_brl": 12940.0 },
+    { "plan": "monthly", "label": "Mensal", "count": 44, "revenue_brl": 4540.0 }
+  ],
+  "points": [
+    {
+      "date": "2026-06-11",
+      "spend": 290.0,
+      "purchases": 4,
+      "purchase_value": 820.0,
+      "impressions": 41000,
+      "clicks": 610
+    }
+  ]
+}
+```
+
+Erros de validação do range (status **400**):
+
+```json title="400 Bad Request — range incompleto"
+{ "detail": "start_date e end_date devem ser fornecidos juntos." }
+```
+
+```json title="400 Bad Request — range invertido"
+{ "detail": "end_date deve ser >= start_date." }
+```
+
+```json title="400 Bad Request — fim no futuro"
+{ "detail": "end_date nao pode ser no futuro." }
+```
+
+```json title="400 Bad Request — range muito longo"
+{ "detail": "Range maximo de 365 dias." }
+```
+
+Erros 401/403/422: veja [Erros comuns](/admin/convencoes#erros-comuns).
+</Accordion>
+
+<Accordion title="GET /admin/meta-ads/by-creative">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/meta-ads/by-creative?days=30" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/meta-ads/by-creative?days=30" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK"
+{
+  "days": 30,
+  "refreshed_at": "2026-06-12T06:00:00+00:00",
+  "has_data": true,
+  "note": null,
+  "rows": [
+    {
+      "ad_id": "238450012345678",
+      "ad_name": "Depoimento produtor — PRO Anual",
+      "creative_id": "120210987654321",
+      "creative_name": "video-depoimento-v3",
+      "thumbnail_url": "https://scontent.xx.fbcdn.net/v/t15.5256-10/thumb.jpg",
+      "campaign_name": "pro-anual-junho",
+      "impressions": 412000,
+      "clicks": 7200,
+      "spend": 2980.0,
+      "purchases": 38,
+      "purchase_value": 7820.0,
+      "cost_per_purchase": 78.42,
+      "roas": 2.62,
+      "ctr_pct": 1.75
+    }
+  ]
+}
+```
+
+Mesmos erros **400** de range do `/summary`. Erros 401/403/422: veja [Erros comuns](/admin/convencoes#erros-comuns).
+</Accordion>
+
+<Accordion title="GET /admin/meta-ads/funnel">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/meta-ads/funnel?days=30&plan=annual" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/meta-ads/funnel?days=30&plan=annual" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK (linhas de funil resumidas)"
+{
+  "days": 30,
+  "refreshed_at": "2026-06-12T06:00:00+00:00",
+  "has_data": true,
+  "note": null,
+  "window_start": "2026-05-13",
+  "window_end": "2026-06-11",
+  "plan": "annual",
+  "ticket_ref": 598.8,
+  "overall": {
+    "adset_id": null,
+    "adset_name": null,
+    "impressions": 1240000,
+    "clicks": 18600,
+    "spend": 8420.0,
+    "cpm": 6.79,
+    "ctr_pct": 1.5,
+    "cpc": 0.45,
+    "landing_page_views": 12400,
+    "cost_per_visit": 0.68,
+    "cost_per_visit_pct": 0.11,
+    "connect_ratio_pct": 66.7,
+    "initiate_checkouts": 890,
+    "initiate_pct": 7.2,
+    "cost_per_checkout": 9.46,
+    "cost_per_checkout_pct": 1.58,
+    "abandons": 838,
+    "abandons_pct": 94.2,
+    "purchases": 52,
+    "cac": 161.92,
+    "cac_pct": 27.0,
+    "conv_checkout_pct": 5.8,
+    "roas": 1.54
+  },
+  "by_adset": [],
+  "adsets": [
+    { "id": "120211122334455", "name": "Lookalike compradores 1%" }
+  ],
+  "vendas": 52,
+  "revenue_gross_brl": 31140.0,
+  "revenue_net_brl": 28430.0,
+  "rl_minus_spend": 20010.0
+}
+```
+
+Plano inválido (status **400**):
+
+```json title="400 Bad Request — plan inválido"
+{ "detail": "plan deve ser um de ('all', 'monthly', 'semiannual', 'annual')." }
+```
+
+Mesmos erros **400** de range do `/summary`. Erros 401/403/422: veja [Erros comuns](/admin/convencoes#erros-comuns).
+</Accordion>
+
+<Accordion title="GET /admin/meta-ads/daily-economics">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/meta-ads/daily-economics?days=30&plan=all" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/meta-ads/daily-economics?days=30&plan=all" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK"
+{
+  "days": 30,
+  "refreshed_at": "2026-06-12T06:00:00+00:00",
+  "has_data": true,
+  "note": null,
+  "window_start": "2026-05-13",
+  "window_end": "2026-06-11",
+  "plan": "all",
+  "points": [
+    {
+      "date": "2026-06-11",
+      "spend": 290.0,
+      "vendas": 4,
+      "gross_brl": 998.0,
+      "net_brl": 910.0,
+      "cac": 72.5,
+      "roas": 3.14,
+      "rl": 620.0
+    }
+  ]
+}
+```
+
+Mesmos erros **400** de range/plan do `/summary` e `/funnel`. Erros 401/403/422: veja [Erros comuns](/admin/convencoes#erros-comuns).
+</Accordion>
+
+<Accordion title="POST /admin/meta-ads/sync">
+Escrita: **somente JWT**. Uma API key recebe **403** (veja [Erros comuns](/admin/convencoes#erros-comuns)).
+
+```bash title="Requisição (JWT)"
+curl -X POST "https://admin-api.pujante.com.br/admin/meta-ads/sync?days=30" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="202 Accepted"
+{ "fetched": 1240, "upserted": 1240 }
+```
+
+Se as variáveis `META_*` não estiverem configuradas ou a Meta API falhar, o sync responde **202** com stats zeradas (no-op, sem erro):
+
+```json title="202 Accepted — não configurado / falha na Meta API"
+{ "fetched": 0, "upserted": 0 }
+```
+
+`days` fora de 1–90 retorna **422**.
+</Accordion>
+</AccordionGroup>

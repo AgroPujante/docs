@@ -1,9 +1,28 @@
 ---
 title: "Fluxos de negócio"
 description: "Trial → PRO, apoiador, publicação de artigo, ciclo de vida do boletim e campanhas de email"
+icon: "arrow-progress"
 ---
 
 ## Trial → PRO
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Cliente (front)
+    participant API as Portal API (FastAPI)
+    participant A as Asaas
+
+    C->>API: GET /subscriptions/plans
+    API-->>C: planos (mensal, semestral, anual)
+    C->>API: POST /subscriptions/checkout (JWT)
+    API->>A: cria assinatura/cobrança (PIX ou cartão)
+    A-->>C: página de pagamento / QR Code PIX
+    C->>A: paga
+    A->>API: POST /subscriptions/webhook (asaas-access-token)
+    API->>API: site_subscriptions.status = active<br/>users.is_subscriber = true<br/>evento em site_subscription_events
+    API-->>A: 200 {received: true}
+```
 
 <Steps>
   <Step title="Usuário escolhe um plano">
@@ -60,6 +79,20 @@ Cancelamento: `POST /subscriptions/cancel` (JWT). O funil de trial e a receita s
 ## Boletim
 
 Ciclo de vida via `/admin/boletins` (admin+):
+
+```mermaid
+stateDiagram-v2
+    [*] --> draft : POST /admin/boletins
+    draft --> draft : uploads (PDF, capa) e edição
+    draft --> published : POST /admin/boletins/{id}/publish
+    published --> archived : POST /admin/boletins/{id}/archive
+    archived --> [*] : DELETE /admin/boletins/{id}
+    note right of published
+        Visível em GET /boletins.
+        Publicar também cria um draft
+        de campanha de newsletter.
+    end note
+```
 
 <Steps>
   <Step title="Draft">

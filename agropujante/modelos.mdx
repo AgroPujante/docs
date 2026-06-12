@@ -1,6 +1,7 @@
 ---
 title: "Modelos de dados"
 description: "Entidades do schema pujante agrupadas por domínio, extensões Postgres e busca vetorial"
+icon: "database"
 ---
 
 Todas as tabelas vivem no schema **`pujante`** do Supabase Postgres (não no `public`). Em qualquer acesso via PostgREST, envie `Accept-Profile: pujante`.
@@ -35,8 +36,44 @@ Todas as tabelas vivem no schema **`pujante`** do Supabase Postgres (não no `pu
 | `books` | Livros recomendados/curados |
 
 <Note>
-Posts do tipo **julgado** são conteúdo editorial. Não confunda com a tabela `julgados` (itens de boletim) nem com a consulta de jurisprudência (jurisprudencias.ai) — veja a seção de jurisprudência abaixo.
+Posts do tipo **julgado** são conteúdo editorial. Não confunda com os `julgados` de boletim nem com a consulta de jurisprudência (jurisprudencias.ai) — veja a seção de jurisprudência abaixo.
 </Note>
+
+### Relacionamentos do domínio editorial
+
+`ON DELETE` confirmados no `supabase_schema.sql`:
+
+```mermaid
+erDiagram
+    categories ||--o{ posts : "category_id (ON DELETE SET NULL)"
+    posts ||--o{ post_authors : "ON DELETE CASCADE"
+    authors ||--o{ post_authors : "ON DELETE CASCADE"
+    posts ||--o{ post_tags : "ON DELETE CASCADE"
+    tags ||--o{ post_tags : "ON DELETE CASCADE"
+    posts ||--o{ post_attachments : "ON DELETE CASCADE"
+
+    posts {
+        uuid id PK
+        string slug UK
+        string type "noticia|artigo|julgado|..."
+        string status "draft|published|..."
+        uuid category_id FK
+        vector embedding "1536 dims"
+    }
+    post_authors {
+        uuid post_id PK,FK
+        uuid author_id PK,FK
+        bool is_primary
+    }
+    post_tags {
+        uuid post_id PK,FK
+        uuid tag_id PK,FK
+    }
+```
+
+<Info>
+Deletar um post **cascateia** vínculos N:N e anexos, mas deletar uma categoria **não** apaga posts — eles ficam com `category_id = NULL`. O nome físico da tabela de anexos é `post_attachments` (o router é `/attachments`).
+</Info>
 
 ## Negócio (monetização e parceiros)
 
@@ -62,6 +99,45 @@ Posts do tipo **julgado** são conteúdo editorial. Não confunda com a tabela `
 | `julgados` | Julgados que compõem um boletim (um deles marcado como `sample_julgado` para usuários free) |
 | `juris_folders` | Pastas pessoais do usuário para organizar decisões encontradas na consulta |
 | `juris_folder_items` | Itens salvos dentro das pastas (referências a decisões dos tribunais) |
+
+### Relacionamentos do domínio de jurisprudência
+
+`ON DELETE` confirmados nas migrations `031_boletins_jurisprudencia.sql` e `048_juris_folders.sql`:
+
+```mermaid
+erDiagram
+    users ||--o{ boletins : "created_by (ON DELETE SET NULL)"
+    boletins ||--o{ julgados : "embutidos (coluna JSONB)"
+    users ||--o{ juris_folders : "user_id (ON DELETE CASCADE)"
+    juris_folders ||--o{ juris_folder_items : "folder_id (ON DELETE CASCADE)"
+    juris_folder_items }o..o| julgados : "sem FK — snapshot JSONB de decisão externa"
+
+    boletins {
+        uuid id PK
+        string slug UK
+        string status "draft|published|archived"
+        jsonb julgados "array de julgados"
+        jsonb sample_julgado
+        string access_tier
+        uuid created_by FK
+    }
+    juris_folders {
+        uuid id PK
+        text user_id FK
+        string slug "UNIQUE(user_id, slug)"
+    }
+    juris_folder_items {
+        uuid id PK
+        uuid folder_id FK
+        text external_id "id na jurisprudencias.ai"
+        text tribunal_code
+        jsonb snapshot "decisão congelada"
+    }
+```
+
+<Info>
+Dois detalhes do schema físico que a nomenclatura da doc esconde: o nome real da tabela de boletins é **`boletins_jurisprudencia`**, e os `julgados` **não são uma tabela** — vivem como array JSONB dentro do boletim. Já `juris_folder_items` não referencia julgados por FK: guarda um **snapshot JSONB** da decisão externa (`external_id` + `tribunal_code`), de propósito, para sobreviver a mudanças de id/payload no provedor.
+</Info>
 
 ## Newsletter e marketing
 
@@ -117,3 +193,29 @@ O Portal **não** tem tabela de auditoria de webhooks do Asaas — o evento de `
     Coluna `embedding` (1536 dimensões) em posts, gerada com OpenAI `text-embedding-3-small`. Índice **HNSW** para busca semântica em `GET /search?semantic=true`.
   </Card>
 </CardGroup>
+
+## Pipeline de embeddings
+
+Como a coluna `posts.embedding` é alimentada (código em `backend/app/services/embeddings.py` e `services/posts.py`):
+
+1. **Quando é gerado** — na **criação** do post (`POST /posts`) e em qualquer **update** que toque `title`, `excerpt` ou `content` (`PATCH /posts/{id}`). O texto embeddado é `título (peso 2x) + excerpt + primeiros 2.000 caracteres do content` (HTML removido), via API da OpenAI.
+2. **Modelo** — `text-embedding-3-small`, **1536 dimensões**.
+3. **Índice** — **HNSW** com `vector_cosine_ops` (migration `001_enable_pgvector.sql`), usado por `GET /search?semantic=true`.
+
+<Info>
+A geração é **best-effort**: se a chamada à OpenAI falhar (timeout, chave ausente), o post é salvo **sem** embedding — a publicação nunca é bloqueada. O custo disso é que posts podem ficar fora da busca semântica silenciosamente.
+</Info>
+
+### Backfill de posts sem embedding
+
+O script `backend/scripts/index_embeddings.py` varre os posts `published` com `embedding IS NULL` e gera em lotes:
+
+```bash
+python scripts/index_embeddings.py --batch-size 10
+```
+
+Use `--force` para regenerar **todos** os embeddings, inclusive os que já existem.
+
+<Warning>
+Trocar o modelo de embedding (ex.: migrar para `text-embedding-3-large`) **invalida o índice inteiro**: vetores de modelos diferentes não são comparáveis (e a dimensão pode mudar). A troca exige ajustar a coluna/índice e rodar um **reindex total** com `--force` — não misture vetores de dois modelos na mesma coluna.
+</Warning>

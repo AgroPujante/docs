@@ -1,0 +1,81 @@
+---
+title: "Quickstart"
+description: "Rodando o Pujante Mobile localmente — Expo Go, emulador e configuração de API local"
+icon: "rocket"
+---
+
+Como sair do clone pro app rodando no seu celular (Expo Go) ou em um emulador.
+
+## Pré-requisitos
+
+- **Node 20+** — exigido pelo Expo SDK 54.
+- **Expo CLI** — não precisa instalar globalmente: o projeto usa `npx expo`.
+- **Expo Go** instalado no celular ([iOS](https://apps.apple.com/app/expo-go/id982107779) / [Android](https://play.google.com/store/apps/details?id=host.exp.exponent)), **ou** um emulador Android (Android Studio) / simulador iOS (Xcode, só em macOS).
+
+<Note>
+  O `package.json` não declara `engines`, então o Node mínimo não está travado no repo — Node 20 LTS é a recomendação segura pro Expo SDK 54.
+</Note>
+
+## Subindo o app
+
+<Steps>
+  <Step title="Instale as dependências">
+    ```bash
+    npm install
+    ```
+  </Step>
+  <Step title="Inicie o dev server">
+    ```bash
+    npx expo start
+    ```
+
+    Os scripts do `package.json` são atalhos pra isso: `npm start` (`expo start`), `npm run android`, `npm run ios` e `npm run web` abrem direto na plataforma correspondente.
+  </Step>
+  <Step title="Abra no device ou emulador">
+    - **Expo Go (device físico)**: escaneie o QR code do terminal. O celular precisa estar na **mesma rede Wi-Fi** da máquina de desenvolvimento.
+    - **Emulador Android**: pressione `a` no terminal (ou `npm run android`).
+    - **Simulador iOS** (macOS): pressione `i` no terminal (ou `npm run ios`).
+  </Step>
+  <Step title="Faça login">
+    O login usa as credenciais do Portal AgroPujante. Por padrão o app aponta pras APIs de produção (`expo.extra` no `app.json`), então funciona sem nenhum backend local. Veja [Autenticação](/mobile/autenticacao) pro fluxo completo.
+  </Step>
+</Steps>
+
+## Apontando pra uma API local
+
+As base URLs vivem em `app.json`, em `expo.extra` — o app concatena os sufixos `/api/v1` (Portal) e `/api/v2` (Escola) em `src/constants/env.ts`:
+
+```json
+{
+  "expo": {
+    "extra": {
+      "apiUrl": "https://api.agropujante.com.br",
+      "escolaApiUrl": "http://192.168.0.10:8765"
+    }
+  }
+}
+```
+
+Pra desenvolver contra um backend da Escola rodando localmente (porta `8765`), troque `escolaApiUrl` pelo **IP da sua máquina na rede local** (ex.: `http://192.168.0.10:8765`) — não use `localhost`.
+
+<Info>
+  **Por que `localhost` não funciona no Expo Go?** O JavaScript do app executa **no celular**, não na sua máquina. No device físico, `localhost` resolve pro próprio celular — onde não há backend nenhum escutando. O device só alcança seu backend pelo IP da máquina na rede Wi-Fi compartilhada. (Em emulador Android, a alternativa clássica é `10.0.2.2`, que mapeia pro host.)
+</Info>
+
+<Tip>
+  Pra descobrir o IP da máquina: `ipconfig` (Windows) ou `ifconfig`/`ip addr` (macOS/Linux). Confirme também que o backend local está escutando em `0.0.0.0`, e não só em `127.0.0.1`.
+</Tip>
+
+<Warning>
+  Depois de editar o `app.json`, reinicie o `npx expo start` (se necessário com `--clear`) pra recarregar o `expo.extra`.
+</Warning>
+
+## Limitações conhecidas
+
+<Warning>
+  **EAS Build ainda não foi configurado** — o `projectId` em `app.json` é um placeholder (`"TODO-RODAR-eas-init"`). Não há build nativo nem distribuição por loja; todo o desenvolvimento hoje roda via Expo Go. Detalhes em [Build e deploy](/mobile/build-deploy).
+</Warning>
+
+<Note>
+  Não existe `.env` por ambiente: trocar entre API local e produção é edição manual do `app.json` (pendência mapeada em [Build e deploy](/mobile/build-deploy#pendências)). Também não há scripts de teste ou lint no `package.json` — só `start`/`android`/`ios`/`web`.
+</Note>

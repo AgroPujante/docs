@@ -1,28 +1,31 @@
 ---
 title: Arquitetura do ecossistema
 description: Como AgroPujante, Escola Pujante, Pujante Admin e Pujante Mobile se conectam
+icon: diagram-project
 ---
 
 ## Visão geral
 
 O ecossistema Pujante é composto por 4 produtos que compartilham infraestrutura central:
 
-```
-                        ┌──────────────────────────────┐
-                        │   Supabase (PostgreSQL)      │
-                        │   schema `pujante`           │
-                        │   Auth (JWT ES256 / JWKS)    │
-                        │   Storage                    │
-                        └──────────────┬───────────────┘
-                                       │
-        ┌──────────────┬───────────────┼───────────────┬──────────────┐
-        │              │               │               │              │
-┌───────▼──────┐ ┌─────▼────────┐ ┌────▼─────────┐ ┌───▼──────────────┐
-│ AgroPujante  │ │ Escola       │ │ Pujante      │ │ Pujante Mobile   │
-│ (Portal)     │ │ Pujante      │ │ Admin        │ │ (Expo + RN)      │
-│ FastAPI      │ │ FastAPI v2 + │ │ FastAPI      │ │ consome /api/v1  │
-│ /api/v1      │ │ Nest legado  │ │ agregador    │ │ e /api/v2        │
-└──────────────┘ └──────────────┘ └──────────────┘ └──────────────────┘
+```mermaid
+graph TD
+    SB[("Supabase<br/>PostgreSQL — schema pujante<br/>Auth (JWT ES256 / JWKS) · Storage")]
+
+    PORTAL["AgroPujante (Portal)<br/>FastAPI — /api/v1"]
+    ESCOLA["Escola Pujante<br/>FastAPI /api/v2 + Nest legado /api"]
+    ADMIN["Pujante Admin<br/>FastAPI agregador — /admin, /gantt"]
+    MOBILE["Pujante Mobile<br/>Expo + React Native"]
+
+    PORTAL -->|"lê/escreve"| SB
+    ESCOLA -->|"lê/escreve"| SB
+    ADMIN -->|"leitura agregada<br/>(MVs admin_mv_*)"| SB
+
+    PORTAL <-->|"handoff de auth<br/>(INTERNAL_API_TOKEN)"| ESCOLA
+    ADMIN -.->|"proxy / delegação de escrita"| PORTAL
+    ADMIN -.->|"proxy / delegação de escrita"| ESCOLA
+    MOBILE -->|"consome /api/v1"| PORTAL
+    MOBILE -->|"consome /api/v2"| ESCOLA
 ```
 
 ## Infraestrutura compartilhada
@@ -41,12 +44,28 @@ O ecossistema Pujante é composto por 4 produtos que compartilham infraestrutura
 
 Um usuário do Portal com acesso à Escola (`user.escola.has_access`) não precisa logar duas vezes:
 
+```mermaid
+sequenceDiagram
+    participant C as Cliente
+    participant P as Portal API (/api/v1)
+    participant E as Escola API (/api/v2)
+    participant SA as Supabase Auth
+
+    C->>P: GET /api/v1/escola/handoff-token<br/>Authorization: Bearer (JWT do Portal)
+    P->>E: POST /api/v2/auth/handoff-link<br/>X-Internal-Token: INTERNAL_API_TOKEN
+    E->>SA: resolve sessão Supabase do usuário
+    SA-->>E: token Supabase válido
+    E-->>P: token de sessão da Escola
+    P-->>C: handoff token
+    C->>E: chamadas /api/v2<br/>Authorization: Bearer (handoff token)
+```
+
 <Steps>
   <Step title="Token de handoff">
-    O cliente autenticado chama `GET /api/v1/escola/handoff-token` no Portal.
+    O cliente autenticado chama `GET /api/v1/escola/handoff-token` no Portal — veja [Auth & Users do Portal](/agropujante/api/auth-users).
   </Step>
   <Step title="Comunicação interna">
-    O backend do Portal chama a Escola via `INTERNAL_API_TOKEN` (`POST /api/v2/auth/handoff-link`) e resolve um token Supabase válido.
+    O backend do Portal chama a Escola via `INTERNAL_API_TOKEN` (header `X-Internal-Token`, `POST /api/v2/auth/handoff-link`) e resolve um token Supabase válido — veja [Auth da Escola](/escola/api/auth).
   </Step>
   <Step title="Sessão na Escola">
     O cliente usa o token retornado como Bearer nas chamadas `/api/v2`.
@@ -57,7 +76,7 @@ O Portal também concede trials da Escola via `POST /api/v2/trials/grant` (auten
 
 ### Admin → Portal e Escola: agregação e delegação
 
-O Pujante Admin é **read-mostly**: lê direto do schema `pujante` (incluindo materialized views `admin_mv_*`) e **delega escrita** aos backends de origem:
+O Pujante Admin é **read-mostly**: lê direto do schema `pujante` (incluindo materialized views `admin_mv_*`, atualizadas a cada 15 minutos via APScheduler) e **delega escrita** aos backends de origem:
 
 - `POST /admin/launches` roteia para o backend do Portal ou da Escola conforme o `kind` do lançamento (conteúdos editoriais → Portal; aulas/trilhas/eventos → Escola), repassando o Bearer token do admin.
 - Os proxies genéricos `/admin/escola/{path}` e `/admin/agropujante/{path}` repassam qualquer chamada autenticada ao upstream correspondente.
@@ -69,10 +88,35 @@ O app mobile consome as duas APIs com o mesmo padrão Bearer token:
 - **Portal** (`/api/v1`): feed, posts, boletins, gamificação, push notifications.
 - **Escola** (`/api/v2`): LMS, testes comportamentais, mentoria, Exordial — autenticado via handoff token do Portal ou login direto.
 
-## Padrões comuns
+## Migrations no schema compartilhado
 
-- **Resposta de erro**: HTTP status + `{ "detail": "mensagem" }` (padrão FastAPI em todos os backends).
-- **Paginação**: `{ data: [], total, page, limit, totalPages }` na Escola; `limit`/`offset` no Admin; `page`/`page_size` no Portal.
+O schema `pujante` é um só, mas **cada produto versiona as próprias migrations no próprio repo** (no Portal: `backend/migrations`, convenção `NNN_descricao.sql`). A numeração `NNN` **não é global** — a `017` do Portal não tem relação com a `0017` da Escola. As migrations são aplicadas **à mão no SQL Editor do Supabase, antes do deploy do código** — não há runner automático.
+
+Como o schema é compartilhado, uma migration de um produto pode quebrar outro silenciosamente. Antes de escrever DDL, leia o [guia de migrations do Portal](/agropujante/migrations) e o [checklist de migration segura](/convencoes-banco#checklist-de-migration-segura).
+
+## Entidades que se confundem
+
+O schema compartilhado acumulou pares de nomes parecidos que **não são a mesma coisa**:
+
+| Confusão comum | Realidade |
+|----------------|-----------|
+| `subscriptions` vs `site_subscriptions` | `subscriptions` + `subscription_payments` + `products` = assinaturas da **Escola**. `site_subscriptions` + `site_subscription_events` = apoiadores do **Portal**. Não se misturam. |
+| Jurisprudência vs julgados vs boletins | 3 conceitos do Portal: **consulta de jurisprudência** (`/jurisprudencia`, integração jurisprudencias.ai) ≠ **julgados** (posts editoriais, tipo de `posts`) ≠ **boletins** (PDFs curados — a tabela `julgados` pertence aos boletins, não aos posts). |
+| `noticias` vs `noticias_coletadas` | `noticias` (prefixo `noticia_*`) é da **Escola**; `noticias_coletadas` é do **Portal** (pipeline de coleta editorial). |
+| `users` vs `members` | Ambas compartilhadas. `users` é o cadastro central (Portal escreve em checkout/assinatura/revenue); `members` vem do mundo Escola/clube de membros. Um mesmo humano pode existir nas duas. |
+| `asaas_webhook_events` | Auditoria de webhook Asaas **só existe na Escola**. O Portal processa webhooks Asaas sem tabela de auditoria equivalente. |
+
+Veja o [mapa de propriedade de tabelas](/propriedade-tabelas) para a regra de quem é dono de quê.
+
+## Padrões comuns (matriz por produto)
+
+| | AgroPujante (Portal) | Escola Pujante | Pujante Admin |
+|---|---|---|---|
+| **Shape de erro** | `{ "detail": "..." }` | `{ "detail": "...", "code": "..." }` | `{ "detail": "..." }` |
+| **Paginação** | `page` / `page_size` | `{ data, total, page, limit, totalPages }` | `limit` / `offset` |
+| **Auth header** | `Authorization: Bearer <JWT>` (+ `X-Internal-Token` em rotas internas) | `Authorization: Bearer <JWT>` (+ `X-Internal-Token` em rotas internas) | `Authorization: Bearer <JWT>` |
+| **Formato de ID** | UUID (`uuid-ossp`) | `text` — CUIDs legados (ex. `clx3k9...`) nas tabelas antigas; UUID nas novas | UUID nas tabelas próprias (`admin_*`, `gantt_*`) |
+
 - **Roles**: cada produto tem seu próprio RBAC sobre o mesmo cadastro de usuários — veja a página de autenticação de cada produto.
 
 <Warning>

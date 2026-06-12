@@ -1,0 +1,51 @@
+---
+title: Propriedade de tabelas
+description: Quem é dono de cada núcleo de tabelas do schema pujante — quem versiona o DDL, quem escreve e quem lê
+icon: table
+---
+
+O schema `pujante` é compartilhado pelos 4 produtos, mas **cada tabela tem um dono**. A regra é simples:
+
+> **Dono = quem versiona a migration.** O produto que mantém o DDL da tabela no próprio repo é o único autorizado a alterar sua estrutura. Os demais podem ler (e, em casos documentados, escrever) — mas nunca mudar colunas.
+
+Prefixos de namespace ajudam a identificar o dono de bater o olho:
+
+| Prefixo | Dono |
+|---------|------|
+| `admin_*`, `gantt_*` | Pujante Admin |
+| `lms_*`, `noticia_*`, `bling_*`, `mentored_*`, `career_*` | Escola Pujante |
+| sem prefixo | varia — consulte a tabela mestra abaixo |
+
+## Tabela mestra
+
+| Tabela(s) | Dono (DDL) | Quem escreve | Quem lê | Observação |
+|-----------|-----------|--------------|---------|------------|
+| `users` | **Compartilhada** — ambos os repos têm migrations que a alteram | Portal (checkout, assinaturas, revenue, `is_subscriber`) e Escola (flags de auth, ex. `requires_password_reset`) | Todos | Cadastro central. Qualquer ALTER exige coordenação entre Portal e Escola. |
+| `members` | **Compartilhada** (origem no mundo Escola/clube de membros) | Escola | Portal, Escola, Admin | Não confundir com `users` — um mesmo humano pode existir nas duas. |
+| `offices`, `office_members` | Escola | Escola | Portal (vínculo de apoiador de escritório), Admin | Escritórios apoiadores. |
+| `subscriptions`, `subscription_payments`, `products` | Escola | Escola | Admin | Assinaturas da **Escola** (tipos `OFFICE_SUPPORTER`, `MEMBERS_CLUB`, `MENTORSHIP`, `CURSO_DO_MES`). Não misturar com `site_subscriptions`. |
+| `site_subscriptions`, `site_subscription_events` | Portal | Portal | Admin | Apoiadores do **Portal**. Apoiador ativo inclui PRO (`users.is_subscriber`). |
+| `credit_cards` | Portal | Portal | Portal | Tokens de cartão via Asaas — nunca o PAN. |
+| `posts` e satélites | Portal | Portal (editorial via FastAPI + service role) | Todos | Conteúdo editorial: notícias, artigos, julgados (como **tipo de post**), podcasts. |
+| `boletins`, `julgados`, `juris_folders` | Portal | Portal | Mobile, Admin | A tabela `julgados` pertence aos **boletins** (PDFs curados) — não aos posts tipo julgado nem à consulta jurisprudencias.ai. |
+| `newsletter_*` | Portal | Portal | Admin | Campanhas e listas de newsletter. |
+| `noticias` (prefixo `noticia_*`) | Escola | Escola | Escola | Notícias internas da Escola — **não** é o editorial do Portal. |
+| `noticias_coletadas` | Portal | Portal | Portal | Pipeline de coleta editorial do Portal. |
+| `lms_*` | Escola | Escola | Mobile (via API), Admin | Trilhas, aulas, progresso (`lms_tracks.kind`: `TRILHA`, `IMERSAO`, `CURSO_DO_MES`). |
+| `mentored_*`, `career_*` | Escola | Escola | Admin | Mentoria/GDA e Career Booster. |
+| `bling_*` | Escola | Escola | Escola | Integração Bling (financeiro). |
+| `admin_*`, `gantt_*` | Admin | Admin | Admin | Inclui as MVs `admin_mv_*` (refresh a cada 15 min via APScheduler). |
+| `email_sends`, `email_click_events` | Portal | Portal | Admin | Tracking de envio/clique de e-mail do Portal. |
+| `email_campaign_logs` | Escola | Escola | Escola | Log de campanhas da Escola — tabela distinta das de e-mail do Portal. |
+| `asaas_webhook_events` | Escola | Escola | Escola | Auditoria de webhook Asaas **só existe na Escola**; o Portal não tem equivalente. |
+| `password_reset_codes` | **Compartilhada** — DDL versionado no Portal (migration `005`) | Portal e Escola (ambos os backends geram/consomem códigos na mesma tabela) | Portal, Escola | Confirmado no código: a Escola usa a tabela via PostgREST (`Accept-Profile: pujante`) sem migration própria de criação. |
+| `api_keys` | Portal | Portal | Portal | Chaves de API do Portal. |
+| `admin_api_keys` | Admin | Admin | Admin | Chaves do Admin — tabela distinta de `api_keys`. |
+
+<Warning>
+**Alterar tabela compartilhada (`users`, `members`, `password_reset_codes`) quebra o outro produto silenciosamente.** Renomear/remover coluna, mudar tipo ou adicionar `NOT NULL` em algo que o outro backend insere sem informar produz erro só em runtime, em produção. Antes de qualquer ALTER nessas tabelas: procure usos nos repos do Portal **e** da Escola, e siga o [checklist de migration segura](/convencoes-banco#checklist-de-migration-segura).
+</Warning>
+
+<Note>
+O schema `pujante` tem **~100 tabelas** (contagem aproximada de junho/2026). Esta página cobre os núcleos — para tabelas não listadas, aplique a regra do prefixo e, na dúvida, procure a migration de criação nos repos.
+</Note>

@@ -1,44 +1,14 @@
 ---
-title: "API: marketing e site"
-description: "Newsletter, campanhas admin, ads, banners, apoiadores, parceiros, eventos, ticker, redirects e OG/SEO"
+title: "Marketing e site"
+description: "Newsletter, campanhas, ads, banners, apoiadores, parceiros, eventos, ticker, redirects e OG/SEO"
+icon: "bullhorn"
 ---
 
 Base: `/api/v1`.
 
 ## Erros comuns
 
-O handler global adiciona `code` ao body. Shapes que se repetem:
-
-```json title="401 Unauthorized — sem credencial"
-{ "detail": "Não autenticado", "code": "http_error" }
-```
-
-```json title="401 Unauthorized — token ruim"
-{ "detail": "Token inválido ou expirado", "code": "http_error" }
-```
-
-```json title="403 Forbidden — role insuficiente (admin/gestor)"
-{ "detail": "Acesso negado — permissão insuficiente", "code": "http_error" }
-```
-
-```json title="422 Unprocessable Entity — validação Pydantic (shape padrão FastAPI)"
-{
-  "detail": [
-    {
-      "type": "missing",
-      "loc": ["body", "subject"],
-      "msg": "Field required",
-      "input": {}
-    }
-  ]
-}
-```
-
-A newsletter pública é rate-limited via slowapi (`5/minute` no subscribe). Ao estourar:
-
-```json title="429 Too Many Requests — slowapi"
-{ "error": "Rate limit exceeded: 5 per 1 minute" }
-```
+Shapes de erro (`{detail, code}`), 422 do Pydantic e o 429 do slowapi seguem as [convenções da API](/agropujante/convencoes). Específico desta página: o subscribe público da newsletter é limitado a `5/minute` por IP.
 
 ## Newsletter pública (`/newsletter`)
 
@@ -80,7 +50,7 @@ curl -X POST "https://api.agropujante.com.br/api/v1/newsletter/subscribe" \
 }
 ```
 
-Erros genéricos (422, 429): ver [Erros comuns](#erros-comuns).
+Erros genéricos (422, 429): ver [convenções da API](/agropujante/convencoes).
 </Accordion>
 
 <Accordion title="DELETE /api/v1/newsletter/{subscriber_id}">
@@ -102,6 +72,10 @@ O router também expõe `GET /newsletter/by-slug/{slug}` (HTML público da campa
 ## Admin newsletters (`/admin/newsletters`)
 
 Gestão completa de campanhas — ciclo draft → test → send → tracking (ver [fluxo de campanha](/agropujante/fluxos#campanha-de-email)). Tudo admin+.
+
+<Warning>
+`POST /admin/newsletters/{id}/send` dispara email para a **lista real** (milhares de inscritos) — os exemplos são ilustrativos; confirme o ambiente e o `segment` antes de rodar. Para validar, use `/test` (até 5 emails) ou `/send-custom` (até 50).
+</Warning>
 
 | Método | Path | Descrição | Auth |
 |---|---|---|---|

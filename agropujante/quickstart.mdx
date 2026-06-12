@@ -1,0 +1,114 @@
+---
+title: "Quickstart"
+description: "Rodar o AgroPujante localmente — backend FastAPI, frontend Vite e verificação no Swagger"
+icon: "rocket"
+---
+
+Como subir o portal completo na sua máquina: backend FastAPI na porta **8000** e frontend Vite na porta **5173** (os defaults do código já apontam um para o outro).
+
+<Info>
+Você vai precisar das credenciais do projeto Supabase (URL, anon key, service role e JWT secret). Elas vivem no painel do Supabase/Railway — peça acesso à equipe; nunca commite valores. Veja [Variáveis de ambiente](/agropujante/variaveis-ambiente).
+</Info>
+
+<Steps>
+  <Step title="Clone o repositório">
+    ```bash
+    git clone https://github.com/AgroPujante/AgroPujante.git
+    cd AgroPujante
+    ```
+
+    O repo é um monorepo simples: frontend na raiz, backend em `backend/`.
+  </Step>
+
+  <Step title="Backend — venv e dependências">
+    ```bash
+    cd backend
+    python -m venv .venv
+    # Windows
+    .venv\Scripts\activate
+    # macOS/Linux
+    source .venv/bin/activate
+
+    pip install -r requirements.txt
+    ```
+  </Step>
+
+  <Step title="Backend — .env mínimo">
+    Crie `backend/.env` com o subconjunto essencial (as quatro primeiras são obrigatórias — sem elas o app nem sobe):
+
+    ```bash title="backend/.env"
+    SUPABASE_URL=...
+    SUPABASE_ANON_KEY=...
+    SUPABASE_SERVICE_ROLE_KEY=...
+    SUPABASE_JWT_SECRET=...
+    SUPABASE_DB_SCHEMA=pujante
+    DEBUG=true
+    ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5174
+    ```
+
+    As demais integrações (OpenAI, Asaas, Resend, jurisprudencias.ai...) são opcionais em dev — os endpoints correspondentes degradam ou falham isoladamente sem derrubar o resto.
+
+    <Warning>
+    `DEBUG=true` abre o Swagger e o schema OpenAPI sem API key. É o comportamento esperado em dev — **nunca** em produção.
+    </Warning>
+  </Step>
+
+  <Step title="Backend — rodar">
+    ```bash
+    uvicorn app.main:app --reload --port 8000
+    ```
+
+    <Note>
+    Esse é o comando de dev usual; o que está versionado no repo é o de produção (`Procfile`/`railway.json`: `uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 2` atrás do `newrelic-admin`). Se algo divergir, confirme no repo.
+    </Note>
+  </Step>
+
+  <Step title="Frontend — instalar e rodar">
+    Na raiz do repo:
+
+    ```bash
+    npm install
+    npm run dev
+    ```
+
+    O Vite sobe em `http://localhost:5173`. O frontend usa `VITE_API_URL` como base da API com fallback para `http://localhost:8000` — então, com o backend na 8000, funciona sem `.env`. Para apontar para outra porta/host, crie um `.env` na raiz:
+
+    ```bash title=".env (raiz, opcional em dev)"
+    VITE_API_URL=http://localhost:8000
+    VITE_SUPABASE_URL=...
+    VITE_SUPABASE_ANON_KEY=...
+    ```
+
+    <Tip>
+    `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` são necessárias para as leituras que o front faz **direto no PostgREST** (ver [Arquitetura](/agropujante/arquitetura#duas-vias-de-acesso-a-dados)) — sem elas, partes do site que não passam pelo FastAPI ficam vazias.
+    </Tip>
+  </Step>
+
+  <Step title="Verificação">
+    Com `DEBUG=true`, abra o Swagger:
+
+    ```text
+    http://localhost:8000/api/docs
+    ```
+
+    E o health check:
+
+    ```bash
+    curl http://localhost:8000/health
+    # {"status": "ok"}
+    ```
+
+    Se o Swagger pedir API key, o `DEBUG=true` não foi carregado (cheque o `.env` e reinicie o uvicorn). Por fim, abra `http://localhost:5173` e confirme que a home lista posts.
+  </Step>
+</Steps>
+
+## Próximos passos
+
+<CardGroup cols={2}>
+  <Card title="Convenções da API" icon="ruler" href="/agropujante/convencoes">
+    Shape de erro, paginação, níveis de auth e rate limiting da `/api/v1`.
+  </Card>
+  <Card title="Variáveis de ambiente" icon="gear" href="/agropujante/variaveis-ambiente">
+    Lista completa das variáveis de front e back.
+  </Card>
+</CardGroup>

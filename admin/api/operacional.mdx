@@ -1,6 +1,7 @@
 ---
-title: "API: operacional"
-description: "Endpoints de operação do painel: tickets, reuniões, acesso ao painel, anotações de cobrança, custos, API keys, system, launches e proxy."
+title: "Operacional"
+description: "Tickets, reuniões, acesso ao painel, cobrança, custos, API keys, system, launches e proxy."
+icon: "clipboard-list"
 ---
 
 Estes endpoints cobrem a operação interna do time. A maioria exige **JWT Bearer** (escrita nunca aceita API key). Veja [Autenticação](/admin/autenticacao).
@@ -11,43 +12,7 @@ A URL base `https://admin-api.pujante.com.br` usada nos exemplos é **ilustrativ
 
 ## Erros comuns
 
-Shapes padrão do FastAPI, válidos para todos os endpoints desta página. Os exemplos por endpoint referenciam esta seção em vez de repeti-los.
-
-```json title="401 Unauthorized — sem credencial"
-{ "detail": "nao autenticado" }
-```
-
-```json title="401 Unauthorized — JWT inválido ou expirado"
-{ "detail": "token invalido: Signature has expired" }
-```
-
-```json title="401 Unauthorized — API key inválida, revogada ou expirada"
-{ "detail": "API key invalida ou expirada" }
-```
-
-```json title="403 Forbidden — email fora de ALLOWED_ADMIN_EMAILS"
-{ "detail": "usuario nao autorizado" }
-```
-
-Caso específico do Admin: API key tentando um método de **escrita** (POST/PATCH/PUT/DELETE) — a chave é read-only e só passa em GET. Como quase tudo nesta página é escrita, API key praticamente não serve aqui:
-
-```json title="403 Forbidden — API key em método de escrita"
-{ "detail": "API key e somente leitura — apenas requisicoes GET sao permitidas" }
-```
-
-```json title="422 Unprocessable Entity — validação de body/params"
-{
-  "detail": [
-    {
-      "type": "string_too_short",
-      "loc": ["body", "problema"],
-      "msg": "String should have at least 1 character",
-      "input": "",
-      "ctx": { "min_length": 1 }
-    }
-  ]
-}
-```
+Os shapes 401/403/422 são os padrões da API — veja [Convenções](/admin/convencoes#erros-comuns). Específico desta página: como quase tudo aqui é **escrita**, API key (read-only, só GET) praticamente não serve — qualquer POST/PATCH/PUT/DELETE com ela responde 403.
 
 ## Tickets
 
@@ -139,7 +104,7 @@ Se a migration ainda não foi aplicada:
 { "detail": "A tabela pujante.admin_tickets ainda nao existe. Aplique a migration 005_admin_tickets.sql no Supabase." }
 ```
 
-Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+Erros 401/403/422: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="POST /admin/tickets">
@@ -183,7 +148,7 @@ curl -X POST "https://admin-api.pujante.com.br/admin/tickets" \
 { "detail": "falha ao criar chamado" }
 ```
 
-Erros 401/403/422 e 503 (migration): veja [Erros comuns](#erros-comuns) e o GET acima.
+Erros 401/403/422 e 503 (migration): veja [Erros comuns](/admin/convencoes#erros-comuns) e o GET acima.
 </Accordion>
 
 <Accordion title="PATCH /admin/tickets/{id}">
@@ -222,7 +187,7 @@ curl -X PATCH "https://admin-api.pujante.com.br/admin/tickets/3f6a1b2c-4d5e-6f7a
 { "detail": "chamado nao encontrado" }
 ```
 
-Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+Erros 401/403/422: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="DELETE /admin/tickets/{id}">
@@ -235,7 +200,7 @@ curl -X DELETE "https://admin-api.pujante.com.br/admin/tickets/3f6a1b2c-4d5e-6f7
 (sem corpo)
 ```
 
-Erros 401/403: veja [Erros comuns](#erros-comuns).
+Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 </AccordionGroup>
 
@@ -311,7 +276,7 @@ Se a migration ainda não foi aplicada:
 { "detail": "A tabela pujante.admin_reunioes ainda nao existe. Aplique a migration 014_admin_reunioes.sql no Supabase." }
 ```
 
-Erros 401/403: veja [Erros comuns](#erros-comuns).
+Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="POST /admin/reunioes">
@@ -348,7 +313,7 @@ curl -X POST "https://admin-api.pujante.com.br/admin/reunioes" \
 { "detail": "falha ao criar reuniao" }
 ```
 
-Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+Erros 401/403/422: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="PATCH /admin/reunioes/{id}">
@@ -383,7 +348,7 @@ curl -X PATCH "https://admin-api.pujante.com.br/admin/reunioes/7c8d9e0f-1a2b-3c4
 { "detail": "reuniao nao encontrada" }
 ```
 
-Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+Erros 401/403/422: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="DELETE /admin/reunioes/{id}">
@@ -396,7 +361,7 @@ curl -X DELETE "https://admin-api.pujante.com.br/admin/reunioes/7c8d9e0f-1a2b-3c
 (sem corpo)
 ```
 
-Erros 401/403: veja [Erros comuns](#erros-comuns).
+Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 </AccordionGroup>
 
@@ -424,7 +389,7 @@ curl "https://admin-api.pujante.com.br/admin/panel-access/me" \
 { "email": "pedro@pujante.com.br", "cargo": "administrador" }
 ```
 
-Cargos possíveis: `administrador`, `editorial`, `financeiro`, `auditoria`. Quem não tem registro é tratado como `administrador` (retrocompat). Erros 401/403: veja [Erros comuns](#erros-comuns).
+Cargos possíveis: `administrador`, `editorial`, `financeiro`, `auditoria`. Quem não tem registro é tratado como `administrador` (retrocompat). Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="GET /admin/panel-access/members">
@@ -480,7 +445,7 @@ curl -X POST "https://admin-api.pujante.com.br/admin/panel-access/members" \
 { "detail": "Cargo sem permissão para esta ação." }
 ```
 
-`cargo` fora de `administrador|editorial|financeiro|auditoria` → **422**. Erros 401/403 genéricos: veja [Erros comuns](#erros-comuns).
+`cargo` fora de `administrador|editorial|financeiro|auditoria` → **422**. Erros 401/403 genéricos: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="DELETE /admin/panel-access/members/{member_id}">
@@ -542,7 +507,7 @@ curl -X POST "https://admin-api.pujante.com.br/admin/panel-access/log-login" \
 (sem corpo — registro é best-effort, nunca falha a chamada)
 ```
 
-Erros 401/403: veja [Erros comuns](#erros-comuns).
+Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 </AccordionGroup>
 
@@ -587,7 +552,7 @@ curl "https://admin-api.pujante.com.br/admin/cobranca-notes/a1b2c3d4-e5f6-4a7b-8
 { "detail": "Erro ao acessar as anotações de cobrança." }
 ```
 
-Erros 401/403: veja [Erros comuns](#erros-comuns).
+Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="POST /admin/cobranca-notes/{subscriber_id}">
@@ -618,7 +583,7 @@ Nota só com espaços em branco (passa no Pydantic, falha no strip):
 { "detail": "falha ao gravar anotacao" }
 ```
 
-Erros 401/403/422 genéricos: veja [Erros comuns](#erros-comuns).
+Erros 401/403/422 genéricos: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="DELETE /admin/cobranca-notes/note/{note_id}">
@@ -631,7 +596,7 @@ curl -X DELETE "https://admin-api.pujante.com.br/admin/cobranca-notes/note/n_5f6
 (sem corpo)
 ```
 
-Erros 401/403: veja [Erros comuns](#erros-comuns).
+Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 </AccordionGroup>
 
@@ -712,7 +677,7 @@ curl "https://admin-api.pujante.com.br/admin/custos/taxonomias" \
 }
 ```
 
-Erros 401/403: veja [Erros comuns](#erros-comuns).
+Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="GET /admin/custos/kpis">
@@ -734,7 +699,7 @@ curl "https://admin-api.pujante.com.br/admin/custos/kpis?mes=2026-06" \
 }
 ```
 
-`mes` fora do formato `YYYY-MM` retorna **422** (validação de pattern). Erros 401/403: veja [Erros comuns](#erros-comuns).
+`mes` fora do formato `YYYY-MM` retorna **422** (validação de pattern). Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="GET /admin/custos">
@@ -770,7 +735,7 @@ curl "https://admin-api.pujante.com.br/admin/custos?mes=2026-06&frente=Editorial
 ]
 ```
 
-Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+Erros 401/403/422: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="POST /admin/custos">
@@ -876,7 +841,7 @@ curl -X PATCH "https://admin-api.pujante.com.br/admin/custos/c_2b3c4d5e-6f7a-8b9
 { "detail": "custo nao encontrado" }
 ```
 
-Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+Erros 401/403/422: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="PATCH /admin/custos/{id}/pagar">
@@ -925,7 +890,7 @@ curl -X DELETE "https://admin-api.pujante.com.br/admin/custos/c_2b3c4d5e-6f7a-8b
 (sem corpo)
 ```
 
-Erros 401/403: veja [Erros comuns](#erros-comuns).
+Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 </AccordionGroup>
 
@@ -943,7 +908,7 @@ A chave criada concede acesso read-only (somente `GET`) aos endpoints marcados J
 
 <AccordionGroup>
 <Accordion title="POST /admin/api-keys">
-Escrita: **somente JWT** — uma API key não pode criar outra chave (403, veja [Erros comuns](#erros-comuns)).
+Escrita: **somente JWT** — uma API key não pode criar outra chave (403, veja [Erros comuns](/admin/convencoes#erros-comuns)).
 
 ```bash title="Requisição (JWT)"
 curl -X POST "https://admin-api.pujante.com.br/admin/api-keys" \
@@ -967,7 +932,7 @@ curl -X POST "https://admin-api.pujante.com.br/admin/api-keys" \
 }
 ```
 
-Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+Erros 401/403/422: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="GET /admin/api-keys">
@@ -992,7 +957,7 @@ curl "https://admin-api.pujante.com.br/admin/api-keys" \
 ]
 ```
 
-Erros 401/403: veja [Erros comuns](#erros-comuns).
+Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="DELETE /admin/api-keys/{key_id}">
@@ -1009,7 +974,7 @@ curl -X DELETE "https://admin-api.pujante.com.br/admin/api-keys/f3a9c1d2-5e6b-4a
 { "detail": "API key nao encontrada" }
 ```
 
-Erros 401/403: veja [Erros comuns](#erros-comuns).
+Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 </AccordionGroup>
 
@@ -1081,11 +1046,11 @@ curl "https://admin-api.pujante.com.br/admin/system/health" \
 }
 ```
 
-Erros 401/403: veja [Erros comuns](#erros-comuns).
+Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="POST /admin/system/webhooks/{webhook_id}/retry">
-Escrita: **somente JWT** (API key recebe 403 — veja [Erros comuns](#erros-comuns)).
+Escrita: **somente JWT** (API key recebe 403 — veja [Erros comuns](/admin/convencoes#erros-comuns)).
 
 ```bash title="Requisição (JWT)"
 curl -X POST "https://admin-api.pujante.com.br/admin/system/webhooks/wh_8a9b0c1d/retry" \
@@ -1165,11 +1130,11 @@ curl "https://admin-api.pujante.com.br/admin/launches?origin=site&limit=50" \
 }
 ```
 
-`kind` aceita `post`, `news`, `newsletter`, `bulletin`, `lesson`, `track`, `event`, `broadcast`; `status` aceita `all`, `draft`, `scheduled`, `delegated`, `published`, `failed` (outros valores → **422**). Erros 401/403: veja [Erros comuns](#erros-comuns).
+`kind` aceita `post`, `news`, `newsletter`, `bulletin`, `lesson`, `track`, `event`, `broadcast`; `status` aceita `all`, `draft`, `scheduled`, `delegated`, `published`, `failed` (outros valores → **422**). Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="POST /admin/launches">
-Escrita delegada: **somente JWT** (API key recebe 403 — veja [Erros comuns](#erros-comuns)). O body é uma união discriminada por `kind` — a origem é derivada do tipo (`post`/`news`/`newsletter`/`bulletin` → site; `lesson`/`track`/`event`/`broadcast` → escola).
+Escrita delegada: **somente JWT** (API key recebe 403 — veja [Erros comuns](/admin/convencoes#erros-comuns)). O body é uma união discriminada por `kind` — a origem é derivada do tipo (`post`/`news`/`newsletter`/`bulletin` → site; `lesson`/`track`/`event`/`broadcast` → escola).
 
 ```bash title="Requisição (JWT) — artigo do Site"
 curl -X POST "https://admin-api.pujante.com.br/admin/launches" \
@@ -1211,7 +1176,7 @@ Quando o backend de destino falha, o registro fica como `failed` na auditoria e 
 }
 ```
 
-Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+Erros 401/403/422: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 </AccordionGroup>
 
@@ -1251,7 +1216,7 @@ Erros próprios do proxy (não do upstream):
 { "detail": "ESCOLA_API_URL não configurada no backend Pujante-Admin" }
 ```
 
-Erros 401/403 do próprio Admin (antes de proxiar): veja [Erros comuns](#erros-comuns). Erros 4xx/5xx vindos da Escola são repassados como estão.
+Erros 401/403 do próprio Admin (antes de proxiar): veja [Erros comuns](/admin/convencoes#erros-comuns). Erros 4xx/5xx vindos da Escola são repassados como estão.
 </Accordion>
 
 <Accordion title="GET/POST/PUT/PATCH/DELETE /admin/agropujante/{path}">
@@ -1276,6 +1241,6 @@ Erros próprios do proxy (não do upstream):
 { "detail": "AGROPUJANTE_API_URL não configurada no backend Pujante-Admin" }
 ```
 
-Erros 401/403 do próprio Admin: veja [Erros comuns](#erros-comuns). Erros 4xx/5xx vindos do AgroPujante são repassados como estão.
+Erros 401/403 do próprio Admin: veja [Erros comuns](/admin/convencoes#erros-comuns). Erros 4xx/5xx vindos do AgroPujante são repassados como estão.
 </Accordion>
 </AccordionGroup>

@@ -1,6 +1,7 @@
 ---
 title: "Migrations"
 description: "Convenção NNN_description.sql, aplicação manual no SQL Editor do Supabase e arquivos dryrun"
+icon: "table-list"
 ---
 
 <Warning>
@@ -22,6 +23,9 @@ O AgroPujante **não tem runner automático de migrations**. Nada roda no deploy
   <Step title="Teste com dryrun">
     Crie um `NNN_description.dryrun.sql` correspondente: o mesmo DDL envolto em `BEGIN; ... ROLLBACK;`, com SELECTs de verificação no meio. Rode o dryrun primeiro no SQL Editor para validar contra os dados reais sem efeito permanente.
   </Step>
+  <Step title="Separe saneamento de dados da DDL">
+    Se a migration depende de limpar dados antes (deduplicar rows, preencher NULLs, corrigir órfãos), trate o saneamento como **etapa própria**, antes da DDL — não embuta o `DELETE`/`UPDATE` no meio do `ALTER TABLE`. Rode um `SELECT COUNT(*)` **antes e depois** de cada statement de limpeza e compare com o esperado; só avance para a DDL quando as contagens fecharem.
+  </Step>
   <Step title="Aplique em produção">
     Rode a migration real no SQL Editor do Supabase. Confira o resultado (constraints, índices, contagens).
   </Step>
@@ -29,6 +33,10 @@ O AgroPujante **não tem runner automático de migrations**. Nada roda no deploy
     Com o schema atualizado, suba o código no Railway.
   </Step>
 </Steps>
+
+<Warning>
+Antes de qualquer DDL **destrutiva** (`DROP`, `ALTER ... DROP COLUMN`, `DELETE` em massa, mudança de tipo), confirme que existe **snapshot/backup recente ou PITR habilitado** no projeto Supabase. O SQL Editor não tem undo: sem ponto de restauração, um statement errado em produção é irreversível.
+</Warning>
 
 ## Caso real: migration 017 (youtube_video_id)
 
@@ -46,3 +54,5 @@ A 017 foi aplicada em produção em 2026-06-02, seguindo esse fluxo (limpeza de 
 - Dados grandes: faça backfill em batches dentro da migration ou em script separado; o SQL Editor tem timeout.
 - Mudanças destrutivas: rode primeiro em transação com `ROLLBACK` e confira os SELECTs de verificação.
 - Mantenha o número sequencial mesmo para hotfixes — a ordem dos arquivos é a única fonte de verdade do histórico do schema.
+
+O checklist completo de mudanças de banco (válido para todo o ecossistema) está em [Convenções de banco](/convencoes-banco).

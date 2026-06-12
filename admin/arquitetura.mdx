@@ -1,9 +1,26 @@
 ---
 title: "Arquitetura"
 description: "Como o Pujante Admin agrega leitura, delega escrita e mantém materialized views atualizadas."
+icon: "sitemap"
 ---
 
 O backend do Pujante Admin é um **agregador**: ele não é dono dos dados dos produtos, mas lê de todas as fontes e consolida. A escrita que pertence aos produtos é delegada por HTTP.
+
+## Visão geral
+
+```mermaid
+graph TD
+  FE["Frontend React 19 + Vite<br/>(TanStack Query)"] -->|"JWT Bearer (Supabase Auth)"| BE["Backend FastAPI<br/>agregador read-mostly"]
+  EXT["Integrações externas"] -.->|"X-API-Key (read-only, só GET)"| BE
+
+  BE -->|"leitura agregada +<br/>escrita própria (admin_*, gantt_*, custos)"| DB[("Supabase PostgreSQL<br/>schema pujante<br/>MVs admin_mv_*")]
+  BE -->|"proxy /admin/agropujante/* +<br/>delegação de launches"| AGRO["API AgroPujante<br/>(AGROPUJANTE_API_URL)"]
+  BE -->|"proxy /admin/escola/* +<br/>delegação de launches"| ESC["API Escola<br/>(ESCOLA_API_URL)"]
+  BE -->|"insights de anúncios"| META["Meta Marketing API"]
+  BE -->|"NerdGraph (GraphQL)"| NR["New Relic"]
+
+  SCHED["APScheduler"] -->|"refresh MVs a cada 15 min +<br/>sync Meta a cada 60 min"| BE
+```
 
 ## Fontes de dados
 
@@ -62,6 +79,35 @@ Os dashboards mais pesados (DAU/MAU, financeiro, assinantes) leem de materialize
 - `MV_REFRESH_ON_STARTUP` controla refresh no boot do serviço.
 - `SCHEDULER_ENABLED` liga/desliga o scheduler como um todo.
 
+<Warning>
+Os dashboards leem das MVs — os dados podem estar **até 15 minutos defasados** (`MV_REFRESH_MINUTES`). Se precisar do dado fresco agora, force com `POST /admin/mvs/refresh`.
+</Warning>
+
+### Catálogo das MVs
+
+MVs confirmadas nas migrations do repositório (`backend/migrations/`). Convenção: o prefixo `admin_mv_` faz a view ser auto-listada por `pujante.admin_list_materialized_views()` e entrar no refresh automático; toda MV tem UNIQUE INDEX para suportar `REFRESH CONCURRENTLY`. Staleness máxima de todas: **15 min** (`MV_REFRESH_MINUTES`).
+
+| MV | O que agrega | Fonte |
+|---|---|---|
+| `admin_mv_mrr_monthly` | MRR mensal dos últimos 12 meses, por origem | `site_subscriptions` + `site_plan_prices` (Site); `subscriptions` + `subscription_payments` (Escola) |
+| `admin_mv_subscribers_monthly` | Assinantes ativos no fim de cada mês, por origem | Mesmas fontes do MRR |
+| `admin_mv_churn_daily` | Churn diário dos últimos 30 dias, por origem | Mesmas fontes do MRR |
+| `admin_mv_cash_daily` | Caixa diário dos últimos 7 dias, por origem (só Escola popula; Site fica em 0 por design) | `subscription_payments` PAID (Escola) |
+| `admin_mv_funnel_snapshot` | Funil de 5 etapas (visitante → cadastrado → trial → pro → supporter) | `post_views`, `users`/`members`, `site_subscriptions`, `subscriptions` |
+| `admin_mv_user_actions_top` | 8 ações (4 Site + 4 Escola) com % de adoção em 30d | `post_likes`, `post_comments`, atividade de lessons etc. |
+| `admin_mv_newsletter_daily` | Newsletter consolidada Site + Escola por dia (30d): inscritos, sent/delivered/opened/clicked/bounced | `site_newsletter_subscribers`, `newsletter_subscribers`, `email_sends` |
+| `admin_mv_gateway_breakdown` | Receita PAID por gateway (Asaas/Pagar.me/Hotmart) por mês, com origem | `site_subscription_payments`, `subscription_payments`, `external_payments` |
+| `admin_mv_dau_daily` | DAU por dia dos últimos 30 dias, por origem | `admin_users_v.last_seen_at` |
+| `admin_mv_mau_rolling` | MAU rolling (snapshot atual, 30 dias para trás), por origem | `admin_users_v.last_seen_at` |
+| `admin_mv_conversions_by_product_daily` | Signups, paid_subs e GMV por (dia, origem, utm_source, produto) | `site_subscriptions` + pagamentos + UTMs |
+| `admin_mv_roas_by_channel` | Spend Meta + receita + ROAS por (dia, utm_source, origem, produto) | `meta_ads_insights` + receita por UTM |
+| `admin_mv_user_lifetime_value` | LTV estimado por (usuário, origem): coorte de signup → total pago, churn | `users` + pagamentos |
+| `admin_mv_page_views_daily` | Visitas (page views) por (dia, utm_source, origem) — KPI "Visitas" do Marketing | `pujante.page_views` |
+
+<Note>
+A lista viva (com `is_populated`, tamanho e `refreshed_at` de cada MV) está sempre em `GET /admin/mvs` — é a fonte de verdade caso uma migration nova adicione MVs depois desta página.
+</Note>
+
 ### Refresh manual
 
 | Método | Path | Descrição | Auth |
@@ -85,7 +131,4 @@ A integração usa uma **USER API key** (não license key) contra a API GraphQL 
 
 ## Convenções da API
 
-- **Paginação** por `limit`/`offset` nas listas.
-- **Erros** seguem o padrão FastAPI: `HTTPException` com body `{"detail": "..."}`.
-- **Sem rate limiting** implementado no momento.
-- OpenAPI em `/api/openapi.json` e docs interativas em `/api/docs`, protegidos por API key (abertos em dev/debug).
+Shape de erro, paginação, parâmetro `origin` e rate limiting estão centralizados em [Convenções](/admin/convencoes). OpenAPI em `/api/openapi.json` e docs interativas em `/api/docs`, protegidos por API key (abertos fora de produção).

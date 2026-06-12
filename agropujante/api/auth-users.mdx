@@ -1,48 +1,14 @@
 ---
-title: "API: auth e usuários"
-description: "Endpoints de autenticação, usuários, perfis públicos e reset de senha"
+title: "Auth e usuários"
+description: "Login, registro, OAuth Google, perfis públicos, reset de senha e access check do paywall"
+icon: "key"
 ---
 
 Base: `/api/v1`. Roles: ver [Autenticação](/agropujante/autenticacao).
 
 ## Erros comuns
 
-O handler global (`core/exceptions.py`) adiciona o campo `code` ao body de qualquer `HTTPException`. Shapes que se repetem em todos os endpoints:
-
-```json title="401 Unauthorized — sem credencial (pipeline admin)"
-{ "detail": "Não autenticado", "code": "http_error" }
-```
-
-```json title="401 Unauthorized — sem credencial (pipeline /users)"
-{ "detail": "Token de autenticação não fornecido", "code": "http_error" }
-```
-
-```json title="401 Unauthorized — token ruim"
-{ "detail": "Token inválido ou expirado", "code": "http_error" }
-```
-
-```json title="403 Forbidden — role insuficiente"
-{ "detail": "Acesso negado — permissão insuficiente", "code": "http_error" }
-```
-
-```json title="422 Unprocessable Entity — validação Pydantic (shape padrão FastAPI)"
-{
-  "detail": [
-    {
-      "type": "missing",
-      "loc": ["body", "email"],
-      "msg": "Field required",
-      "input": {}
-    }
-  ]
-}
-```
-
-Vários endpoints desta página são rate-limited (slowapi). Ao estourar o limite:
-
-```json title="429 Too Many Requests — slowapi"
-{ "error": "Rate limit exceeded: 10 per 1 minute" }
-```
+Shapes de erro (`{detail, code}`), 422 do Pydantic e 429 do slowapi seguem as [convenções da API](/agropujante/convencoes). Específico desta página: um detalhe de mensagem — o 401 sem credencial diz `"Não autenticado"` nos endpoints admin e `"Token de autenticação não fornecido"` no pipeline `/users`. Vários endpoints aqui têm rate limit próprio (indicado em cada accordion).
 
 ## Auth (`/auth`)
 
@@ -76,7 +42,7 @@ curl -X POST "https://api.agropujante.com.br/api/v1/auth/login" \
 }
 ```
 
-Erros genéricos (422, 429): ver [Erros comuns](#erros-comuns).
+Erros genéricos (422, 429): ver [convenções da API](/agropujante/convencoes).
 </Accordion>
 
 <Accordion title="POST /api/v1/auth/refresh">
@@ -111,7 +77,7 @@ curl -X POST "https://api.agropujante.com.br/api/v1/auth/logout" \
 (sem body)
 ```
 
-Erros genéricos (401): ver [Erros comuns](#erros-comuns).
+Erros genéricos (401): ver [convenções da API](/agropujante/convencoes).
 </Accordion>
 
 <Accordion title="GET /api/v1/auth/me">
@@ -129,7 +95,7 @@ curl "https://api.agropujante.com.br/api/v1/auth/me" \
 }
 ```
 
-Erros genéricos (401): ver [Erros comuns](#erros-comuns).
+Erros genéricos (401): ver [convenções da API](/agropujante/convencoes).
 </Accordion>
 </AccordionGroup>
 
@@ -151,6 +117,10 @@ Erros genéricos (401): ver [Erros comuns](#erros-comuns).
 <Warning>
 Antes de depurar falha de login de **apoiador**, leia o [gotcha dos 2 pipelines](/agropujante/autenticacao#gotcha-os-2-pipelines-de-auth-de-apoiador): contas com `password_hash = 'supabase_managed'` não logam por senha do portal.
 </Warning>
+
+<Note>
+O bloco `escola` no payload de `UserPublic` (`has_access`, `user_type`, `role`, `subscription_active`) reflete a situação do usuário na **Escola Pujante** — é a base do handoff entre os produtos. A auth do lado da Escola está em [Escola: API de auth](/escola/api/auth); a visão geral da integração, em [Ecossistema](/ecossistema).
+</Note>
 
 <AccordionGroup>
 <Accordion title="POST /api/v1/users/register">
@@ -216,7 +186,7 @@ curl -X POST "https://api.agropujante.com.br/api/v1/users/register" \
 { "detail": "Este email já está cadastrado", "code": "http_error" }
 ```
 
-`terms_accepted: false` falha na validação Pydantic (422). Erros genéricos: ver [Erros comuns](#erros-comuns).
+`terms_accepted: false` falha na validação Pydantic (422). Erros genéricos: ver [convenções da API](/agropujante/convencoes).
 </Accordion>
 
 <Accordion title="POST /api/v1/users/login">
@@ -298,7 +268,7 @@ curl "https://api.agropujante.com.br/api/v1/users/me" \
 }
 ```
 
-Shape completo de `UserPublic` em `POST /users/register`. Erros genéricos (401): ver [Erros comuns](#erros-comuns).
+Shape completo de `UserPublic` em `POST /users/register`. Erros genéricos (401): ver [convenções da API](/agropujante/convencoes).
 </Accordion>
 
 <Accordion title="PATCH /api/v1/users/me">
@@ -422,7 +392,7 @@ curl "https://api.agropujante.com.br/api/v1/users/me/saved-posts?page=1&page_siz
 }
 ```
 
-Erros genéricos (401): ver [Erros comuns](#erros-comuns).
+Erros genéricos (401): ver [convenções da API](/agropujante/convencoes).
 </Accordion>
 
 <Accordion title="POST /api/v1/users/me/saved-posts/{post_id}">
@@ -556,7 +526,7 @@ curl -X POST "https://api.agropujante.com.br/api/v1/users/password-reset/request
 { "message": "Se esse email estiver cadastrado, enviamos um código de verificação." }
 ```
 
-Erros genéricos (422, 429): ver [Erros comuns](#erros-comuns).
+Erros genéricos (422, 429): ver [convenções da API](/agropujante/convencoes).
 </Accordion>
 
 <Accordion title="POST /api/v1/users/password-reset/verify">

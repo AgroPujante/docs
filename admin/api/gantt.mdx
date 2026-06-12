@@ -1,6 +1,7 @@
 ---
-title: "API: Gantt"
+title: "Gantt"
 description: "Endpoints do Gantt de gestão do time: times, pessoas, macros, subs, membros e timeline de eventos."
+icon: "chart-gantt"
 ---
 
 O Gantt do Pujante Admin organiza o trabalho do time na hierarquia **Time &gt; Projeto (macro) &gt; Pessoa &gt; Task (sub)**. Os dados vivem no schema configurado por `GANTT_SCHEMA` (tabelas `gantt_teams`, `gantt_persons`, `gantt_macros`, `gantt_subs`, `gantt_macro_members`, `gantt_events`).
@@ -11,40 +12,49 @@ Todos os endpoints exigem **JWT Bearer** — API keys não têm acesso ao Gantt.
 A URL base `https://admin-api.pujante.com.br` usada nos exemplos é **ilustrativa** — a base real depende do deploy no Railway.
 </Note>
 
+## Hierarquia
+
+```mermaid
+graph TD
+  TEAM["Time<br/>(gantt_teams)"] -->|"agrupa"| MACRO["Macro / Projeto<br/>(gantt_macros)"]
+  MACRO -->|"contém"| SUB["Sub / Task<br/>(gantt_subs)"]
+
+  PESSOA["Pessoa<br/>(gantt_persons)"] -->|"líder do projeto<br/>(person_id)"| MACRO
+  PESSOA -->|"membro alocado<br/>(gantt_macro_members)"| MACRO
+  PESSOA -->|"responsável<br/>(person_id)"| SUB
+
+  PO["Pessoa em requested_by_id<br/>(quem pediu a entrega)"] -.->|"dono da conclusão:<br/>só ela move pra done"| MACRO
+  PO -.->|"dono da conclusão"| SUB
+```
+
+### Modelo de dados
+
+FKs confirmadas nas migrations (`backend/migrations/gantt/`):
+
+```mermaid
+erDiagram
+  gantt_teams ||--o{ gantt_macros : "team_id (ON DELETE SET NULL)"
+  gantt_macros ||--o{ gantt_subs : "macro_id (ON DELETE CASCADE)"
+  gantt_persons ||--o{ gantt_macros : "person_id lider (ON DELETE CASCADE)"
+  gantt_persons ||--o{ gantt_subs : "person_id responsavel (ON DELETE SET NULL)"
+  gantt_macros ||--o{ gantt_macro_members : "macro_id (ON DELETE CASCADE)"
+  gantt_persons ||--o{ gantt_macro_members : "person_id (ON DELETE CASCADE)"
+  gantt_persons ||..o{ gantt_macros : "requested_by_id (ON DELETE SET NULL)"
+  gantt_persons ||..o{ gantt_subs : "requested_by_id (ON DELETE SET NULL)"
+  gantt_macros ||..o{ gantt_events : "entity_id polimorfico (sem FK)"
+```
+
+<Warning>
+Deletar uma **pessoa** que é líder de macros apaga as macros em cascata (`gantt_macros.person_id` é `ON DELETE CASCADE`) — e cada macro apagada leva junto suas subs. Já como **responsável de task** (`gantt_subs.person_id`) ou **requested_by**, a remoção apenas anula o campo (`SET NULL`). É por essas FKs que inserts com ids inválidos retornam os **502** documentados abaixo.
+</Warning>
+
+<Info>
+`gantt_events` não tem FK para as entidades — `entity_type` + `entity_id` são polimórficos, então a timeline sobrevive à exclusão da entidade (eventos `deleted` continuam consultáveis).
+</Info>
+
 ## Erros comuns
 
-Shapes padrão do FastAPI, válidos para todos os endpoints desta página. Os exemplos por endpoint referenciam esta seção em vez de repeti-los.
-
-```json title="401 Unauthorized — sem credencial"
-{ "detail": "nao autenticado" }
-```
-
-```json title="401 Unauthorized — JWT inválido ou expirado"
-{ "detail": "token invalido: Signature has expired" }
-```
-
-```json title="403 Forbidden — email fora de ALLOWED_ADMIN_EMAILS"
-{ "detail": "usuario nao autorizado" }
-```
-
-Caso específico do Admin: API key tentando um método de **escrita** (POST/PATCH/DELETE) — a chave é read-only e nunca passa em escrita:
-
-```json title="403 Forbidden — API key em método de escrita"
-{ "detail": "API key e somente leitura — apenas requisicoes GET sao permitidas" }
-```
-
-```json title="422 Unprocessable Entity — validação de body/params"
-{
-  "detail": [
-    {
-      "type": "missing",
-      "loc": ["body", "title"],
-      "msg": "Field required",
-      "input": {}
-    }
-  ]
-}
-```
+Os shapes 401/403/422 são os padrões da API — veja [Convenções](/admin/convencoes#erros-comuns). Específicos desta página: erros de banco (PostgREST) em inserts/updates são repassados como **502** com o corpo cru no `detail`, e a trava "só o dono conclui" responde **403** com mensagem nomeando o dono (exemplos por endpoint abaixo).
 
 ## Regras de negócio
 
@@ -123,7 +133,7 @@ Lista de pessoas, cada uma com `macros[]` aninhadas (e cada macro com `subs[]` e
 ]
 ```
 
-Se as migrations base ainda não foram aplicadas, retorna **200** com `[]` (estado vazio, sem erro). Erros 401/403: veja [Erros comuns](#erros-comuns).
+Se as migrations base ainda não foram aplicadas, retorna **200** com `[]` (estado vazio, sem erro). Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 </AccordionGroup>
 
@@ -170,7 +180,7 @@ curl "https://admin-api.pujante.com.br/gantt/teams" \
 ]
 ```
 
-Schema indisponível (migration pendente) → **200** com `[]`. Erros 401/403: veja [Erros comuns](#erros-comuns).
+Schema indisponível (migration pendente) → **200** com `[]`. Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="POST /gantt/teams">
@@ -196,7 +206,7 @@ Erro do banco (PostgREST) é repassado como **502** com o corpo cru no `detail`:
 { "detail": "{'message': 'duplicate key value violates unique constraint \"gantt_teams_name_key\"', 'code': '23505'}" }
 ```
 
-A criação grava o evento `created` em `gantt_events`. Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+A criação grava o evento `created` em `gantt_events`. Erros 401/403/422: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="PATCH /gantt/teams/{id}">
@@ -224,7 +234,7 @@ curl -X PATCH "https://admin-api.pujante.com.br/gantt/teams/t_5a6b7c8d" \
 { "detail": "não encontrado" }
 ```
 
-Mudança real em `name` gera evento `updated` com o diff `{from, to}`. Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+Mudança real em `name` gera evento `updated` com o diff `{from, to}`. Erros 401/403/422: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="DELETE /gantt/teams/{id}">
@@ -237,7 +247,7 @@ curl -X DELETE "https://admin-api.pujante.com.br/gantt/teams/t_5a6b7c8d" \
 (sem corpo — projetos do time ficam sem time, FK on delete set null)
 ```
 
-Erros 401/403: veja [Erros comuns](#erros-comuns).
+Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 </AccordionGroup>
 
@@ -299,7 +309,7 @@ curl -X POST "https://admin-api.pujante.com.br/gantt/persons" \
 { "detail": "{'message': 'duplicate key value violates unique constraint \"gantt_persons_email_key\"', 'code': '23505'}" }
 ```
 
-Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+Erros 401/403/422: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="PATCH /gantt/persons/{id}">
@@ -341,7 +351,7 @@ curl -X DELETE "https://admin-api.pujante.com.br/gantt/persons/p_1a2b3c4d" \
 (sem corpo)
 ```
 
-Erros 401/403: veja [Erros comuns](#erros-comuns).
+Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 </AccordionGroup>
 
@@ -431,7 +441,7 @@ curl -X POST "https://admin-api.pujante.com.br/gantt/macros" \
 { "detail": "{'message': 'insert or update on table \"gantt_macros\" violates foreign key constraint \"gantt_macros_person_id_fkey\"', 'code': '23503'}" }
 ```
 
-Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+Erros 401/403/422: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="PATCH /gantt/macros/{id}">
@@ -482,7 +492,7 @@ Dono sem e-mail vinculado em `gantt_persons` (não dá pra verificar):
 { "detail": "não encontrado" }
 ```
 
-Mudanças reais geram evento `updated` em `gantt_events` com diff `{from, to}` por campo. Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+Mudanças reais geram evento `updated` em `gantt_events` com diff `{from, to}` por campo. Erros 401/403/422: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="DELETE /gantt/macros/{id}">
@@ -495,7 +505,7 @@ curl -X DELETE "https://admin-api.pujante.com.br/gantt/macros/m_9f8e7d6c" \
 (sem corpo — grava evento "deleted" na timeline)
 ```
 
-Erros 401/403: veja [Erros comuns](#erros-comuns).
+Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="POST /gantt/macros/{id}/members">
@@ -519,7 +529,7 @@ curl -X POST "https://admin-api.pujante.com.br/gantt/macros/m_9f8e7d6c/members" 
 { "detail": "{'message': 'insert or update on table \"gantt_macro_members\" violates foreign key constraint \"gantt_macro_members_person_id_fkey\"', 'code': '23503'}" }
 ```
 
-Grava evento `member_added`. Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+Grava evento `member_added`. Erros 401/403/422: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="DELETE /gantt/macros/{id}/members/{person_id}">
@@ -532,7 +542,7 @@ curl -X DELETE "https://admin-api.pujante.com.br/gantt/macros/m_9f8e7d6c/members
 (sem corpo — as tasks da pessoa nesse projeto ficam com person_id null; grava evento "member_removed")
 ```
 
-Erros 401/403: veja [Erros comuns](#erros-comuns).
+Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 </AccordionGroup>
 
@@ -616,7 +626,7 @@ curl -X POST "https://admin-api.pujante.com.br/gantt/subs" \
 { "detail": "{'message': 'insert or update on table \"gantt_subs\" violates foreign key constraint \"gantt_subs_macro_id_fkey\"', 'code': '23503'}" }
 ```
 
-Grava evento `created` na timeline da task. Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+Grava evento `created` na timeline da task. Erros 401/403/422: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 
 <Accordion title="PATCH /gantt/subs/{id}">
@@ -675,7 +685,7 @@ curl -X DELETE "https://admin-api.pujante.com.br/gantt/subs/s_2c3d4e5f" \
 (sem corpo — grava evento "deleted" na timeline)
 ```
 
-Erros 401/403: veja [Erros comuns](#erros-comuns).
+Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
 </Accordion>
 </AccordionGroup>
 
@@ -742,6 +752,6 @@ curl "https://admin-api.pujante.com.br/gantt/events?entity_type=project&entity_i
 ]
 ```
 
-`entity_type` ou `entity_id` ausentes → **422** (veja [Erros comuns](#erros-comuns)). Se a tabela `gantt_events` ainda não existe (migration pendente), retorna **200** com `[]`.
+`entity_type` ou `entity_id` ausentes → **422** (veja [Erros comuns](/admin/convencoes#erros-comuns)). Se a tabela `gantt_events` ainda não existe (migration pendente), retorna **200** com `[]`.
 </Accordion>
 </AccordionGroup>

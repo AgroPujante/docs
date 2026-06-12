@@ -1,0 +1,110 @@
+---
+title: "Quickstart"
+description: "Rode a Escola Pujante localmente: backend FastAPI, frontend Vite e verificação no Swagger"
+icon: "rocket"
+---
+
+Este guia sobe o ambiente local completo: backend FastAPI em `backend/` e frontend React (Vite) na raiz do repositório.
+
+<Info>
+O backend NestJS legado (`/api/*`) **não** é necessário para desenvolver nos módulos já migrados — o frontend fala com o FastAPI em `/api/v2`. Veja [Arquitetura](/escola/arquitetura) para entender o padrão strangler.
+</Info>
+
+## Backend (FastAPI)
+
+<Steps>
+  <Step title="Criar o virtualenv e instalar dependências">
+    ```bash
+    cd backend
+    python -m venv .venv
+    source .venv/Scripts/activate  # Git Bash no Windows; em Linux/macOS: source .venv/bin/activate
+    pip install -r requirements.txt
+    ```
+  </Step>
+  <Step title="Configurar o .env">
+    ```bash
+    cp .env.example .env
+    ```
+
+    Preencha o mínimo para subir (os valores vivem no painel do Supabase — nunca commite o `.env`):
+
+    ```bash title=".env mínimo"
+    SUPABASE_URL=
+    SUPABASE_ANON_KEY=
+    SUPABASE_SERVICE_ROLE_KEY=
+    SUPABASE_JWT_SECRET=
+    SUPABASE_SCHEMA=pujante
+
+    DEBUG=true
+    PORT=8001
+    ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5174
+    ```
+
+    As demais variáveis (gateways, Bunny, OpenAI, etc.) só são necessárias para os módulos que as usam — veja [Variáveis de ambiente](/escola/variaveis-ambiente).
+  </Step>
+  <Step title="Subir o servidor">
+    ```bash
+    uvicorn app.main:app --reload --port 8001
+    ```
+
+    <Note>
+    A porta padrão do backend é **8001** (`config.py` e Procfile usam `PORT=8001`). O `.env.example` do frontend, porém, vem apontando para `localhost:8765` — o que importa é que `--port` e `VITE_API_BASE_URL` estejam alinhados na mesma porta.
+    </Note>
+  </Step>
+</Steps>
+
+## Frontend (React + Vite)
+
+<Steps>
+  <Step title="Instalar dependências">
+    Na raiz do repositório:
+
+    ```bash
+    npm install
+    ```
+  </Step>
+  <Step title="Configurar o .env">
+    ```bash title=".env"
+    VITE_API_BASE_URL=http://localhost:8001/api/v2
+    VITE_SUPABASE_URL=
+    VITE_SUPABASE_ANON_KEY=
+    ```
+
+    `VITE_SUPABASE_*` usam as mesmas credenciais do backend (a anon key é pública por design).
+
+    <Tip>
+    O `vite.config.ts` também define um proxy de `/api/v2` para a API de **produção** — ele só entra em cena para chamadas com path relativo. Com `VITE_API_BASE_URL` apontando para o backend local, o frontend fala direto com ele.
+    </Tip>
+  </Step>
+  <Step title="Subir o dev server">
+    ```bash
+    npm run dev
+    ```
+
+    O Vite sobe em `http://localhost:5173` (origem já liberada no `ALLOWED_ORIGINS` padrão do backend).
+  </Step>
+</Steps>
+
+## Verificação
+
+<Steps>
+  <Step title="Health check">
+    ```bash
+    curl http://localhost:8001/health
+    ```
+  </Step>
+  <Step title="Swagger UI">
+    Com `DEBUG=true`, abra `http://localhost:8001/api/docs` (ReDoc em `/api/redoc`, especificação em `/api/openapi.json`). Em produção, `DEBUG=false` desliga os três.
+  </Step>
+  <Step title="Login pelo frontend">
+    Acesse `http://localhost:5173` e faça login — o token Supabase emitido vale para o backend local, que valida via JWKS do mesmo projeto. Detalhes em [Autenticação](/escola/autenticacao).
+  </Step>
+</Steps>
+
+## Testes do backend
+
+```bash
+cd backend
+pytest
+pytest --cov=app --cov-report=term-missing
+```

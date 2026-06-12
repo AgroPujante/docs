@@ -1,6 +1,7 @@
 ---
 title: "Visão geral"
 description: "O que é o AgroPujante, stack de produção e tipos de conteúdo do portal editorial"
+icon: "newspaper"
 ---
 
 O **AgroPujante** é o portal jurídico do agronegócio: um veículo de conteúdo editorial em produção com cerca de **3 mil visitas por dia**. Você está documentando um produto vivo — toda decisão técnica aqui assume tráfego real.
@@ -56,6 +57,9 @@ Quando alguém pedir algo sobre "jurisprudência", confirme qual dos três é o 
 ## Mapa da documentação
 
 <CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/agropujante/quickstart">
+    Rodar backend e frontend localmente em minutos.
+  </Card>
   <Card title="Arquitetura" icon="sitemap" href="/agropujante/arquitetura">
     Backend, frontend, OG proxy, cache, rate limiting e RLS.
   </Card>
@@ -65,7 +69,10 @@ Quando alguém pedir algo sobre "jurisprudência", confirme qual dos três é o 
   <Card title="Modelos de dados" icon="database" href="/agropujante/modelos">
     Entidades do schema `pujante` por domínio.
   </Card>
-  <Card title="Fluxos de negócio" icon="diagram-project" href="/agropujante/fluxos">
+  <Card title="Fluxos de negócio" icon="arrow-progress" href="/agropujante/fluxos">
     Trial → PRO, apoiador, publicação, boletim e campanhas de email.
+  </Card>
+  <Card title="Convenções da API" icon="ruler" href="/agropujante/convencoes">
+    Shape de erro, níveis de auth, paginação e rate limiting da `/api/v1`.
   </Card>
 </CardGroup>

@@ -1,49 +1,79 @@
 ---
 title: Documentação Pujante
-description: Documentação técnica do ecossistema Pujante — AgroPujante, Escola Pujante, Pujante Admin e Pujante Mobile
+description: 4 produtos, 1 schema, 1 auth — a referência técnica completa do ecossistema Pujante
+icon: house
 ---
 
-## Bem-vindo
-
-Esta é a documentação técnica do ecossistema **Pujante**. Aqui você encontra a referência completa de APIs, arquitetura, autenticação, modelos de dados e integrações de cada produto.
+**4 produtos, 1 schema, 1 auth.** AgroPujante, Escola Pujante, Pujante Admin e Pujante Mobile compartilham o mesmo banco Supabase (schema `pujante`) e a mesma autenticação (JWT ES256 via Supabase Auth) — esta documentação cobre as APIs, a arquitetura e as fronteiras entre eles.
 
 ## Produtos
 
 <CardGroup cols={2}>
-  <Card title="AgroPujante (Portal)" icon="newspaper" href="/agropujante/overview">
+  <Card title="AgroPujante (Portal)" icon="newspaper" color="#16a34a" href="/agropujante/overview">
     Portal jurídico do agro com conteúdo editorial — notícias, artigos, julgados, boletins de jurisprudência e podcasts. ~3 mil visitas/dia em produção.
   </Card>
-  <Card title="Escola Pujante" icon="graduation-cap" href="/escola/overview">
-    LMS + mentoria para advogados do agro. Trilhas, imersões, testes comportamentais, acompanhamento de mentorados e gestão financeira.
+  <Card title="Escola Pujante" icon="graduation-cap" color="#7c3aed" href="/escola/overview">
+    LMS + mentoria para advogados do agro. Trilhas, imersões, testes comportamentais, acompanhamento de mentorados (GDA) e gestão financeira.
   </Card>
-  <Card title="Pujante Admin" icon="gauge-high" href="/admin/overview">
+  <Card title="Pujante Admin" icon="gauge-high" color="#2563eb" href="/admin/overview">
     Painel admin unificado que agrega dados do Portal e da Escola — dashboards, financeiro, marketing, Gantt de projetos e observabilidade.
   </Card>
-  <Card title="Pujante Mobile" icon="mobile-screen" href="/mobile/overview">
+  <Card title="Pujante Mobile" icon="mobile-screen" color="#ea580c" href="/mobile/overview">
     App mobile (Expo + React Native) que consome as APIs do Portal e da Escola, com gateway duplo e handoff de autenticação.
   </Card>
 </CardGroup>
 
+## Operação & incidentes
+
+<CardGroup cols={2}>
+  <Card title="Mapa de produção" icon="map" href="/operacao/mapa-producao">
+    O que roda onde: serviços, domínios, deploys no Railway e dependências externas.
+  </Card>
+  <Card title="Troubleshooting" icon="bug" href="/operacao/troubleshooting">
+    Sintoma → causa → correção para os problemas recorrentes do ecossistema.
+  </Card>
+  <Card title="Runbooks" icon="list-check" href="/operacao/runbooks">
+    Procedimentos passo a passo para operações sensíveis e recuperação de incidentes.
+  </Card>
+  <Card title="Observabilidade" icon="chart-line" href="/operacao/observabilidade">
+    Logs, métricas, materialized views do Admin e onde olhar quando algo quebra.
+  </Card>
+</CardGroup>
+
+## Para quem chegou agora
+
+<Steps>
+  <Step title="Entenda o ecossistema">
+    Leia a [arquitetura do ecossistema](/ecossistema): como os 4 produtos se conectam, o handoff de auth Portal→Escola e o banco compartilhado.
+  </Step>
+  <Step title="Faça o quickstart do seu produto">
+    Vá direto ao produto em que você vai trabalhar: [AgroPujante](/agropujante/quickstart), [Escola](/escola/quickstart), [Admin](/admin/quickstart) ou [Mobile](/mobile/quickstart).
+  </Step>
+  <Step title="Aprenda as convenções">
+    Antes de tocar no banco, leia as [convenções de banco](/convencoes-banco) e o [mapa de propriedade de tabelas](/propriedade-tabelas) — o schema é compartilhado e mudanças têm raio de explosão. O [glossário](/glossario) resolve a terminologia.
+  </Step>
+  <Step title="Consulte a referência">
+    Cada produto tem referência completa de endpoints com exemplos — comece por [auth do Portal](/agropujante/api/auth-users) e [auth da Escola](/escola/api/auth).
+  </Step>
+</Steps>
+
 ## Visão rápida das APIs
 
-| Produto | Base URL | Stack | Prefixo |
-|---------|----------|-------|---------|
-| AgroPujante | `api.agropujante.com.br` | FastAPI | `/api/v1` |
-| Escola Pujante | `api.escolapujante.com.br` | FastAPI (novo) + NestJS (legado) | `/api/v2` e `/api` |
-| Pujante Admin | backend próprio (Railway) | FastAPI agregador | `/admin`, `/gantt` |
-| Pujante Mobile | — (cliente) | Expo + React Native | consome v1 e v2 |
+<CardGroup cols={2}>
+  <Card title="AgroPujante" icon="newspaper" color="#16a34a" href="/agropujante/overview">
+    `api.agropujante.com.br` — FastAPI, prefixo `/api/v1`
+  </Card>
+  <Card title="Escola Pujante" icon="graduation-cap" color="#7c3aed" href="/escola/overview">
+    `api.escolapujante.com.br` — FastAPI `/api/v2` (novo) + NestJS `/api` (legado, strangler)
+  </Card>
+  <Card title="Pujante Admin" icon="gauge-high" color="#2563eb" href="/admin/overview">
+    Backend próprio no Railway — FastAPI agregador, prefixos `/admin` e `/gantt`
+  </Card>
+  <Card title="Pujante Mobile" icon="mobile-screen" color="#ea580c" href="/mobile/overview">
+    Cliente (Expo + React Native) — consome `/api/v1` e `/api/v2`
+  </Card>
+</CardGroup>
 
 <Note>
 Todos os produtos compartilham o mesmo banco Supabase (PostgreSQL, schema `pujante`) e autenticação baseada em Supabase Auth (JWT ES256 validado via JWKS).
 </Note>
-
-## Comece por aqui
-
-<CardGroup cols={2}>
-  <Card title="Arquitetura do ecossistema" icon="diagram-project" href="/ecossistema">
-    Como os 4 produtos se conectam: banco compartilhado, handoff de auth, proxies e delegação.
-  </Card>
-  <Card title="Autenticação" icon="key" href="/escola/autenticacao">
-    Fluxo de JWT compartilhado, roles e os pipelines de auth de cada produto.
-  </Card>
-</CardGroup>

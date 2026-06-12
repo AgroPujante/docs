@@ -1,0 +1,104 @@
+---
+title: Convenções de banco
+description: PKs, naming, RLS, status enums e o checklist de migration segura do schema pujante
+icon: database
+---
+
+Convenções válidas para **todo o schema `pujante`** — independente do produto. Quem é dono de cada tabela está no [mapa de propriedade](/propriedade-tabelas).
+
+## Chaves primárias: `text`/CUID vs `uuid`
+
+Existem dois regimes de PK no schema, e isso é **decisão histórica, não acidente**:
+
+| Regime | Onde | Exemplo |
+|--------|------|---------|
+| `id text` com CUID | Tabelas legadas da Escola (herança do Nest/Prisma) | `clx3k9d2f0001mk08yq4w7d1z` |
+| `id uuid` com `uuid_generate_v4()` (extensão `uuid-ossp`) | Portal e tabelas novas em geral | `a1b2c3d4-...` |
+
+**Regra para tabela nova:** use `uuid DEFAULT uuid_generate_v4()` — **a menos que** a tabela precise de FK para uma entidade legada com PK `text` (nesse caso a coluna de FK acompanha o tipo do alvo, e avalie se a PK da nova tabela também precisa ser `text` por consistência do agregado).
+
+<Note>
+Nem toda tabela `pujante.*` tem default de PK no banco — parte do legado Prisma gera o ID na aplicação. Confira o DDL real antes de assumir que um `INSERT` sem `id` funciona.
+</Note>
+
+## Timestamps
+
+- `created_at` e `updated_at` em **`TIMESTAMPTZ`** (nunca `TIMESTAMP` sem fuso).
+- `created_at TIMESTAMPTZ NOT NULL DEFAULT now()`.
+- `updated_at` atualizado pela aplicação ou por trigger — no legado da Escola, o `@updatedAt` do Prisma fazia isso na aplicação; tabelas novas devem garantir o comportamento explicitamente.
+
+## Naming
+
+- **`snake_case`** para tabelas e colunas, sempre.
+- **Prefixo de namespace** identifica o produto dono:
+
+| Prefixo | Produto |
+|---------|---------|
+| `admin_*`, `gantt_*` | Pujante Admin |
+| `lms_*`, `noticia_*`, `bling_*`, `mentored_*`, `career_*` | Escola Pujante |
+| `newsletter_*`, `email_sends`/`email_click_events`, `site_*` | AgroPujante (Portal) |
+| sem prefixo | varia — consulte o [mapa de propriedade](/propriedade-tabelas) |
+
+Tabela nova de produto específico **deve** levar o prefixo do produto. Só fica sem prefixo o que for genuinamente compartilhado (e isso exige conversa entre os times).
+
+## RLS (Row Level Security)
+
+**RLS é obrigatória em qualquer tabela exposta via PostgREST** no Portal (acesso com anon key do navegador). A escrita editorial **não** passa por RLS: ela vai pelo backend FastAPI com **service role**, que ignora as policies.
+
+Template de policy típico:
+
+```sql
+-- Habilita RLS (sem isso, as policies abaixo não valem nada)
+ALTER TABLE pujante.minha_tabela ENABLE ROW LEVEL SECURITY;
+
+-- Leitura pública: anon só enxerga conteúdo publicado
+CREATE POLICY "anon_select_published"
+  ON pujante.minha_tabela FOR SELECT
+  TO anon
+  USING (status = 'published');
+
+-- Usuário autenticado atualiza apenas as próprias linhas
+CREATE POLICY "authenticated_update_own"
+  ON pujante.minha_tabela FOR UPDATE
+  TO authenticated
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+```
+
+<Warning>
+O comportamento **default-deny** (sem policy = nada passa) **só vale com RLS habilitada**. Tabela sem `ENABLE ROW LEVEL SECURITY` exposta via PostgREST fica inteiramente legível/escrevível pela anon key. Habilitar RLS é o primeiro comando, não o último.
+</Warning>
+
+## Status enums (soft-state, não soft-delete)
+
+Conteúdo usa colunas de status como máquina de estados leve — `draft` / `published` / `archived` (e variações por domínio). **Não há soft-delete generalizado** (`deleted_at` em tudo): arquivar é estado de negócio; deletar é `DELETE` mesmo, com a devida cautela. Não introduza `deleted_at` em tabela nova sem necessidade concreta.
+
+## Checklist de migration segura
+
+Migrations são aplicadas **à mão no SQL Editor do Supabase**, antes do deploy — num schema compartilhado por 4 produtos. Siga o checklist:
+
+<Steps>
+  <Step title="Snapshot antes de destrutivo">
+    Para `DROP`, `ALTER ... TYPE`, `DELETE` em massa: confirme que o PITR/backup do Supabase cobre o ponto atual antes de executar.
+  </Step>
+  <Step title="Validação prévia dos dados">
+    Rode SELECTs de verificação antes do DDL: FKs órfãs antes de criar constraint, `COUNT(*) WHERE col IS NULL` antes de `NOT NULL`, duplicados antes de índice único. Caso real: a migration `017` do Portal (índice único em `youtube_video_id`) exigiu limpar podcasts duplicados antes de aplicar.
+  </Step>
+  <Step title="Dry-run em transação">
+    Execute primeiro dentro de `BEGIN; ... ROLLBACK;` para validar sintaxe e efeito. O Portal versiona esses ensaios como `*.dryrun.sql` ao lado da migration.
+  </Step>
+  <Step title="Backfill em batches acima de ~100k linhas">
+    `UPDATE` em massa estoura o timeout do SQL Editor. Quebre em batches (por faixa de ID ou `LIMIT` + loop) e acompanhe o progresso.
+  </Step>
+  <Step title="CREATE INDEX CONCURRENTLY fora de transação">
+    Em tabela grande e quente, use `CREATE INDEX CONCURRENTLY` — que **não pode** rodar dentro de `BEGIN/COMMIT`. Execute como statement isolado.
+  </Step>
+  <Step title="Rollback documentado">
+    Toda migration destrutiva ou de alto impacto inclui no próprio arquivo (comentário) o caminho de volta — o SQL inverso ou a observação de que é irreversível.
+  </Step>
+  <Step title="Aplicar ANTES do deploy do código">
+    A ordem é sempre: migration no SQL Editor → conferir → deploy do backend que depende dela. Código novo em produção apontando para coluna que ainda não existe é incidente garantido.
+  </Step>
+</Steps>
+
+Para o passo a passo operacional do Portal (numeração, dryrun, histórico), veja [Migrations do AgroPujante](/agropujante/migrations).

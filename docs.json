@@ -14,11 +14,34 @@
       "dark": "#0B1410"
     }
   },
+  "seo": {
+    "metatags": {
+      "og:site_name": "Pujante Docs",
+      "og:description": "Documentação técnica do ecossistema Pujante — AgroPujante, Escola Pujante, Pujante Admin e Pujante Mobile"
+    }
+  },
   "navigation": {
     "tabs": [
       {
         "tab": "Início",
-        "pages": ["index", "ecossistema"]
+        "pages": [
+          "index",
+          "ecossistema",
+          "propriedade-tabelas",
+          "convencoes-banco",
+          "glossario",
+          "changelog"
+        ]
+      },
+      {
+        "tab": "Operação",
+        "pages": [
+          "operacao/mapa-producao",
+          "operacao/troubleshooting",
+          "operacao/runbooks",
+          "operacao/observabilidade",
+          "operacao/seguranca"
+        ]
       },
       {
         "tab": "AgroPujante",
@@ -27,8 +50,10 @@
             "group": "Produto",
             "pages": [
               "agropujante/overview",
+              "agropujante/quickstart",
               "agropujante/arquitetura",
               "agropujante/autenticacao",
+              "agropujante/convencoes",
               "agropujante/modelos",
               "agropujante/fluxos",
               "agropujante/integracoes",
@@ -46,6 +71,10 @@
               "agropujante/api/marketing",
               "agropujante/api/admin"
             ]
+          },
+          {
+            "group": "Playground (beta)",
+            "openapi": "openapi/agropujante.json"
           }
         ]
       },
@@ -56,8 +85,10 @@
             "group": "Produto",
             "pages": [
               "escola/overview",
+              "escola/quickstart",
               "escola/arquitetura",
               "escola/autenticacao",
+              "escola/convencoes",
               "escola/modelos",
               "escola/integracoes",
               "escola/variaveis-ambiente"
@@ -69,10 +100,12 @@
               "escola/api/auth",
               "escola/api/users-members-offices",
               "escola/api/assinaturas",
+              "escola/api/financeiro-dashboards",
+              "escola/api/billing",
+              "escola/api/nfse",
               "escola/api/lms",
               "escola/api/mentoria",
               "escola/api/editorial",
-              "escola/api/financeiro",
               "escola/api/comunicacao",
               "escola/api/sistema"
             ]
@@ -86,15 +119,20 @@
             "group": "Produto",
             "pages": [
               "admin/overview",
+              "admin/quickstart",
               "admin/arquitetura",
               "admin/autenticacao",
+              "admin/convencoes",
               "admin/variaveis-ambiente"
             ]
           },
           {
             "group": "Referência da API",
             "pages": [
-              "admin/api/dashboards",
+              "admin/api/visao-geral",
+              "admin/api/financeiro",
+              "admin/api/marketing",
+              "admin/api/observability",
               "admin/api/operacional",
               "admin/api/gantt"
             ]
@@ -103,13 +141,24 @@
       },
       {
         "tab": "Pujante Mobile",
-        "pages": [
-          "mobile/overview",
-          "mobile/arquitetura",
-          "mobile/autenticacao",
-          "mobile/api-consumida",
-          "mobile/telas",
-          "mobile/build-deploy"
+        "groups": [
+          {
+            "group": "Produto",
+            "pages": [
+              "mobile/overview",
+              "mobile/quickstart",
+              "mobile/arquitetura",
+              "mobile/autenticacao",
+              "mobile/telas",
+              "mobile/build-deploy"
+            ]
+          },
+          {
+            "group": "Integração",
+            "pages": [
+              "mobile/api-consumida"
+            ]
+          }
         ]
       }
     ]

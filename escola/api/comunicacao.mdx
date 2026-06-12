@@ -6,31 +6,7 @@ icon: "envelope"
 
 ## Erros comuns
 
-Todos os endpoints autenticados podem retornar os shapes abaixo (FastAPI + handler global, que acrescenta o campo `code`):
-
-```json title="401 Unauthorized — sem token"
-{ "detail": "Token de autenticacao nao fornecido", "code": "http_error" }
-```
-
-```json title="401 Unauthorized — token inválido ou usuário não mapeado"
-{ "detail": "Token invalido ou expirado", "code": "http_error" }
-```
-
-Também pode ocorrer `{ "detail": "Usuario nao mapeado. Contate o suporte." }` quando o JWT é válido mas não há registro em `pujante.users`.
-
-```json title="403 Forbidden — role insuficiente (MANAGER/ADMIN)"
-{ "detail": "Acesso restrito", "code": "http_error" }
-```
-
-```json title="422 Unprocessable Entity — validação Pydantic"
-{
-  "detail": [
-    { "type": "missing", "loc": ["body", "subject"], "msg": "Field required", "input": {} }
-  ]
-}
-```
-
-Validações de negócio (ex.: "Subject obrigatorio.") também respondem 422, mas com `{ "detail": "...", "code": "validation_error" }`. Nos accordions abaixo, os erros genéricos não são repetidos — apenas os específicos de cada endpoint.
+Os erros genéricos da API v2 (401/403/422, shape `{detail, code}`) estão em [Convenções da API](/escola/convencoes) — abaixo, apenas os específicos de cada endpoint.
 
 ## Email campaigns (`/email-campaigns`)
 

@@ -1,6 +1,7 @@
 ---
 title: "Visão geral"
 description: "O que é o Pujante Admin: painel administrativo unificado do AgroPujante e da Escola Pujante."
+icon: "gauge-high"
 ---
 
 O **Pujante Admin** é o painel administrativo unificado dos produtos Pujante. Ele consolida em um único lugar os dados do **AgroPujante** (portal) e da **Escola Pujante** (LMS): receita, assinantes, funil, marketing, observabilidade e operação do time.
@@ -38,26 +39,46 @@ O deploy roda no **Railway**. Backend e frontend sobem como serviços do projeto
 ## Como navegar nesta seção
 
 <CardGroup cols={2}>
-  <Card title="Arquitetura" icon="diagram-project" href="/admin/arquitetura">
+  <Card title="Quickstart" icon="rocket" href="/admin/quickstart">
+    Rode backend e frontend localmente em poucos passos.
+  </Card>
+  <Card title="Arquitetura" icon="sitemap" href="/admin/arquitetura">
     Agregação de dados, proxy HTTP, delegação de escrita e refresh de MVs.
   </Card>
   <Card title="Autenticação" icon="lock" href="/admin/autenticacao">
     JWT Supabase, API Keys read-only, RBAC por cargo e auditoria.
   </Card>
-  <Card title="API: dashboards" icon="chart-line" href="/admin/api/dashboards">
-    Overview, financeiro, assinantes, funil, marketing, Meta Ads, observabilidade.
-  </Card>
-  <Card title="API: operacional" icon="clipboard-list" href="/admin/api/operacional">
-    Tickets, reuniões, acessos do painel, custos, API keys, launches e proxy.
-  </Card>
-  <Card title="API: Gantt" icon="bars-staggered" href="/admin/api/gantt">
-    Times, pessoas, macros, subs, membros e timeline de eventos.
+  <Card title="Convenções" icon="ruler" href="/admin/convencoes">
+    Shape de erro, paginação, parâmetro origin e rate limiting.
   </Card>
   <Card title="Variáveis de ambiente" icon="gear" href="/admin/variaveis-ambiente">
     Configuração completa, incluindo comportamento dos opt-ins vazios.
   </Card>
 </CardGroup>
 
+### Referência da API
+
+<CardGroup cols={2}>
+  <Card title="Visão geral e saúde" icon="gauge" href="/admin/api/visao-geral">
+    Health, identidade, materialized views, KPIs e DAU/MAU.
+  </Card>
+  <Card title="Financeiro" icon="chart-line" href="/admin/api/financeiro">
+    MRR/ARR, assinantes, funil, usuários e newsletter.
+  </Card>
+  <Card title="Marketing" icon="bullhorn" href="/admin/api/marketing">
+    Aquisição, UTMs, cliques de email e Meta Ads.
+  </Card>
+  <Card title="Observabilidade" icon="wave-pulse" href="/admin/api/observability">
+    Métricas, erros e logs via New Relic NerdGraph.
+  </Card>
+  <Card title="Operacional" icon="clipboard-list" href="/admin/api/operacional">
+    Tickets, reuniões, acessos do painel, custos, API keys, launches e proxy.
+  </Card>
+  <Card title="Gantt" icon="chart-gantt" href="/admin/api/gantt">
+    Times, pessoas, macros, subs, membros e timeline de eventos.
+  </Card>
+</CardGroup>
+
 <Note>
-A API não tem rate limiting implementado hoje. Se você expõe uma API key para integrações externas, trate o consumo com responsabilidade no cliente.
+A API não tem rate limiting implementado hoje — veja [Convenções](/admin/convencoes#rate-limiting).
 </Note>

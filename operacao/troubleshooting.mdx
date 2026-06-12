@@ -1,0 +1,112 @@
+---
+title: "Troubleshooting"
+description: "Problemas comuns em produção: sintoma, onde olhar, causa provável e ação"
+icon: "bug"
+---
+
+Cada seção segue o mesmo formato: **sintoma → onde olhar → causa provável → ação**. Antes de tudo, abra `GET /admin/system/health` no Pujante-Admin — ele consolida status dos gateways, falhas de webhook, jobs e latência num lugar só.
+
+## Apoiador não consegue logar
+
+**Onde olhar:** tabela `users` no Supabase (schema `pujante`):
+
+```sql
+SELECT id, email, user_type, password_hash, supabase_auth_id
+FROM pujante.users
+WHERE email = 'email@exemplo.com';
+```
+
+**Causa provável:** a conta de apoiador vive em **dois pipelines de auth incompatíveis** no Portal:
+
+| `password_hash` | Pipeline | Como loga |
+|---|---|---|
+| Começa com `$2b$` | Portal-nativo (bcrypt) | Login por senha no Portal |
+| `'supabase_managed'` (+ `supabase_auth_id` preenchido, `user_type = OFFICE_SUPPORTER`) | Supabase Auth | Sessão Supabase — login por senha no Portal **falha por design** |
+
+As senhas **não se cruzam**: reset de senha num pipeline não afeta o outro. O caso clássico é o usuário `supabase_managed` tentando senha no fluxo nativo (ou vice-versa).
+
+**Ação:** identifique o pipeline pelo `password_hash` e direcione o reset/login pelo fluxo correto. Não tente "consertar" copiando hash entre pipelines.
+
+## Webhook Asaas não confirmou pagamento
+
+**Onde olhar:**
+
+1. `GET /admin/system/health` → seção `webhook_failures`.
+2. Portal: `site_subscription_events` + logs do Railway (não há tabela de auditoria de webhook no Portal).
+3. Escola: `asaas_webhook_events` (payload, status de processamento, erro).
+
+**Causa provável:** os endpoints de webhook respondem **`200` mesmo quando o processamento interno falha** — então o painel do Asaas mostra "entregue" e o pagamento fica sem efeito. Outras causas: token do header `asaas-access-token` divergente do env, ou o webhook nem chegou (URL errada no painel).
+
+**Ação:**
+
+<Steps>
+  <Step title="Confirme se o evento chegou">
+    Escola: procure o evento em `asaas_webhook_events`. Portal: procure o efeito esperado em `site_subscription_events` e o request nos logs do Railway (rota `/api/v1/subscriptions/webhook`).
+  </Step>
+  <Step title="Se chegou e falhou, reprocesse">
+    Pegue o `id` da falha em `GET /admin/system/health` → `webhook_failures` e dispare `POST /admin/system/webhooks/{id}/retry`. Veja o [runbook completo](/operacao/runbooks#reprocessar-webhook-que-falhou).
+  </Step>
+  <Step title="Se não chegou, confira o painel do Asaas">
+    URL e token do webhook (veja as URLs exatas no [mapa de produção](/operacao/mapa-producao#webhooks-registrados)).
+  </Step>
+</Steps>
+
+<Note>
+No Portal existe uma rede de segurança: o job diário `reconcile_pending_redemptions` (13:00 UTC) consulta o Asaas diretamente para resgates pendentes há mais de 24h — cobre webhook que nunca chegou, mas só para esse fluxo.
+</Note>
+
+## Deploy ok mas API retorna erro de tabela/coluna inexistente
+
+**Onde olhar:** logs do Railway do serviço (erro PostgREST/Postgres de relação ou coluna inexistente) e a pasta `backend/migrations/` do repo.
+
+**Causa provável:** **migration manual não aplicada antes do deploy**. Nenhum projeto Pujante tem runner automático — toda migration roda à mão no SQL Editor do Supabase, e a ordem certa é migration primeiro, deploy depois.
+
+**Ação:** aplique a migration pendente no SQL Editor (de preferência testando o `.dryrun.sql` antes) e confira se o erro some — geralmente não precisa de redeploy. Fluxo completo em [migrations do AgroPujante](/agropujante/migrations).
+
+## Supabase travado após Spend Cap
+
+**Sintoma:** projeto Supabase pausado/inacessível depois de desabilitar (ou estourar) o Spend Cap; todas as APIs que dependem do banco caem juntas.
+
+**Causa provável:** o auto-resume do Supabase **falha com frequência** nesse cenário.
+
+**Ação:** no dashboard do Supabase, tente o **Restart manual do projeto antes de abrir ticket**. Só escale para o suporte se o restart não resolver.
+
+## Dashboard do Admin com número velho
+
+**Onde olhar:** `GET /admin/mvs` (estado das materialized views) e `GET /admin/system/health` (jobs).
+
+**Causa provável:** não é bug — as MVs `admin_mv_*` são atualizadas pelo APScheduler a cada `MV_REFRESH_MINUTES` (15 min). **Dados podem estar até 15 minutos defasados por design.**
+
+**Ação:** se precisar do dado fresco agora, force o refresh: `POST /admin/mvs/refresh?concurrent=true`. Se a defasagem passar muito de 15 min, o job pode ter parado — confira `SCHEDULER_ENABLED` e os logs do serviço.
+
+## Meta Ads / Observability vazios no Admin
+
+**Sintoma:** telas de Meta Ads ou Observability retornam vazio com um aviso.
+
+**Causa provável:** **não é bug** — as duas integrações são **opt-in por env**. Com `META_*` ou `NEW_RELIC_USER_KEY`/`NEW_RELIC_ACCOUNT_ID` vazios, os endpoints respondem payload vazio + aviso, e os jobs de sync não rodam.
+
+**Ação:** se a integração deveria estar ligada, preencha as envs no Railway e redeploy. Se está desligada de propósito, nada a fazer.
+
+## E-mail não chegou
+
+**Onde olhar:**
+
+| Produto | Auditoria local | Externo |
+|---|---|---|
+| Portal | `email_sends` (envio) e `email_click_events` (cliques) | Dashboard do Resend (entrega, bounce, spam) |
+| Escola | `email_campaign_logs` | Dashboard do Resend |
+
+**Causa provável:** em ordem de frequência: e-mail nunca foi disparado (job não rodou ou usuário não era elegível — confira `scheduled_job_runs` no Portal), falha no envio (linha com erro na auditoria), ou problema de entrega (bounce/spam — só aparece no Resend).
+
+**Ação:** confirme primeiro se existe linha na tabela de auditoria. Se existe e o status é ok, o problema é entrega → Resend dashboard. Se não existe, o problema é no disparo → logs do job + `scheduled_job_runs`.
+
+---
+
+<CardGroup cols={2}>
+  <Card title="Mapa de produção" icon="map" href="/operacao/mapa-producao">
+    URLs, webhooks, schedulers e domínios de tudo que roda em produção.
+  </Card>
+  <Card title="Runbooks" icon="list-check" href="/operacao/runbooks">
+    Procedimentos passo a passo: retry de webhook, PRO manual, migrations e mais.
+  </Card>
+</CardGroup>

@@ -1,0 +1,148 @@
+---
+title: "Runbooks"
+description: "Procedimentos operacionais passo a passo: PRO manual, retry de webhook, migrations, refresh de MVs, API keys e impersonação"
+icon: "list-check"
+---
+
+Procedimentos prontos para executar sob pressão. Cada um assume que você tem acesso ao Supabase (schema `pujante`), ao Railway e ao Pujante-Admin.
+
+## Conceder PRO manualmente
+
+Dá acesso PRO do Portal sem passar pelo checkout/Asaas.
+
+<Warning>
+**Apoiador e PRO não coexistem** — é uma assinatura por usuário, e **apoiador ativo já inclui acesso PRO** (via `users.is_subscriber`). Se o usuário já é apoiador ativo, não conceda nada: ele já tem PRO.
+</Warning>
+
+<Steps>
+  <Step title="Verifique o estado atual do usuário">
+    Antes de mexer, confira se já existe assinatura (de qualquer tipo):
+
+    ```sql
+    SELECT u.id, u.email, u.is_subscriber,
+           s.id AS sub_id, s.status, s.billing_type, s.current_period_end
+    FROM pujante.users u
+    LEFT JOIN pujante.site_subscriptions s ON s.user_id = u.id
+    WHERE u.email = 'email@exemplo.com';
+    ```
+
+    Se houver assinatura de apoiador ativa, **pare aqui**.
+  </Step>
+  <Step title="Upsert em site_subscriptions com billing_type MANUAL">
+    Crie/atualize a assinatura com `billing_type = 'MANUAL'`, status ativo e o período desejado (`current_period_end` no futuro). Lembre: é uma sub por usuário — atualize a existente em vez de inserir duplicada.
+  </Step>
+  <Step title="Marque users.is_subscriber = true">
+    ```sql
+    UPDATE pujante.users SET is_subscriber = true WHERE id = '<user_id>';
+    ```
+  </Step>
+  <Step title="Valide">
+    Refaça o SELECT do passo 1 e, se possível, confirme com o usuário que o conteúdo PRO abriu. Via API REST do Supabase, lembre do header `Accept-Profile: pujante`.
+  </Step>
+</Steps>
+
+<Note>
+Acesso direto ao banco: a `DATABASE_URL` de produção fica em `Pujante-Admin\backend\.env` (gitignored), via pooler em modo session. Teste statements destrutivos dentro de `BEGIN; ... ROLLBACK;` primeiro.
+</Note>
+
+## Reprocessar webhook que falhou
+
+<Steps>
+  <Step title="Liste as falhas">
+    `GET /admin/system/health` → seção `webhook_failures`. Anote o `id` do evento que falhou.
+  </Step>
+  <Step title="Entenda a falha antes do retry">
+    Escola: consulte o payload e o erro em `asaas_webhook_events` / `pagarme_webhook_events`. Se a causa for um bug de código, o retry vai falhar de novo — corrija primeiro.
+  </Step>
+  <Step title="Dispare o retry">
+    `POST /admin/system/webhooks/{id}/retry`
+  </Step>
+  <Step title="Confirme o efeito">
+    Verifique se o evento sumiu de `webhook_failures` e se o efeito de negócio aconteceu (ex.: assinatura ativada, `site_subscription_events` no Portal).
+  </Step>
+</Steps>
+
+<Note>
+No Portal não há tabela de auditoria de webhook — se a falha for de um webhook do Portal, o diagnóstico é por `site_subscription_events` + logs do Railway.
+</Note>
+
+## Aplicar migration em produção
+
+Resumo do fluxo — o detalhe completo está em [migrations do AgroPujante](/agropujante/migrations).
+
+<Warning>
+Migrations rodam **à mão no SQL Editor do Supabase, ANTES do deploy** do código que depende delas. Não existe runner automático em nenhum projeto Pujante.
+</Warning>
+
+<Steps>
+  <Step title="Rode o dryrun">
+    Execute a versão `.dryrun.sql` (mesmo DDL dentro de `BEGIN; ... ROLLBACK;` com SELECTs de verificação) no SQL Editor, contra os dados reais.
+  </Step>
+  <Step title="Snapshot antes de DDL destrutiva">
+    Se a migration dropa/altera coluna, deleta dados ou cria constraint sobre dados existentes, **tire um snapshot/backup antes** (backup do Supabase ou `CREATE TABLE ..._bak AS SELECT ...` da tabela afetada).
+  </Step>
+  <Step title="Aplique a migration real">
+    Rode o SQL no SQL Editor e confira o resultado (constraints, índices, contagens).
+  </Step>
+  <Step title="Só então faça o deploy">
+    Com o schema atualizado, suba o código (push → auto-deploy do Railway).
+  </Step>
+</Steps>
+
+## Forçar refresh de MVs do Admin
+
+<Steps>
+  <Step title="Dispare o refresh">
+    `POST /admin/mvs/refresh?concurrent=true`
+
+    O parâmetro `concurrent=true` usa `REFRESH MATERIALIZED VIEW CONCURRENTLY` — não bloqueia leituras durante o refresh.
+  </Step>
+  <Step title="Confirme">
+    `GET /admin/mvs` lista as MVs e seus metadados. Lembre que o refresh automático roda a cada `MV_REFRESH_MINUTES` (15 min) — só force quando precisar do dado agora.
+  </Step>
+</Steps>
+
+## Rotacionar/revogar API key
+
+Vale para as API keys do Portal (`/api/v1/admin/api-keys`) e do Admin (`/admin/api-keys`). Elas são **read-only (só GET)**.
+
+<Steps>
+  <Step title="Crie a key nova primeiro (rotação)">
+    `POST` no endpoint de API keys do serviço.
+
+    <Warning>
+    O valor em claro aparece **somente na resposta da criação** — depois disso só prefixo e metadados ficam visíveis. Copie e entregue ao consumidor na hora.
+    </Warning>
+  </Step>
+  <Step title="Atualize o consumidor">
+    Troque a key antiga pela nova em quem a consome e confirme que as chamadas continuam funcionando.
+  </Step>
+  <Step title="Revogue a antiga">
+    `DELETE /{key_id}` no mesmo endpoint. Para revogação de emergência (key vazada), pule direto para este passo — veja [segurança](/operacao/seguranca#runbook-token-vazou).
+  </Step>
+</Steps>
+
+## Impersonar usuário para suporte (Escola)
+
+<Steps>
+  <Step title="Impersone">
+    Logado como ADMIN na Escola, chame `POST /api/v2/auth/impersonate` com o usuário alvo (o frontend tem o atalho na tela de usuários). O token de impersonação fica em **sessionStorage** — vale só para aquela aba e morre quando ela fecha.
+  </Step>
+  <Step title="Reproduza o problema">
+    Navegue como o usuário e colete o que precisar (prints, erros `{detail, code}`).
+  </Step>
+  <Step title="Encerre a sessão ao terminar">
+    Faça **logout (ou feche a aba) ao terminar** — não deixe uma sessão impersonada aberta. Ações feitas impersonando afetam dados reais do usuário.
+  </Step>
+</Steps>
+
+---
+
+<CardGroup cols={2}>
+  <Card title="Troubleshooting" icon="bug" href="/operacao/troubleshooting">
+    Não sabe qual runbook usar? Comece pelo sintoma.
+  </Card>
+  <Card title="Segurança operacional" icon="shield-halved" href="/operacao/seguranca">
+    Runbook de token vazado e inventário de secrets.
+  </Card>
+</CardGroup>

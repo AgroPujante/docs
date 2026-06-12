@@ -1,9 +1,38 @@
 ---
 title: "Autenticação"
 description: "Login no Portal, hidratação no cold start e handoff de sessão pra Escola"
+icon: "lock"
 ---
 
 O app tem duas sessões independentes: a do **Portal** (token nativo do AgroPujante) e a da **Escola** (JWT Supabase). O usuário só digita a senha uma vez — a sessão da Escola é derivada da do Portal via handoff.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as Usuário
+    participant App as App mobile
+    participant SS as Secure Store
+    participant P as Portal /api/v1
+    participant E as Escola /api/v2
+
+    U->>App: email + senha
+    App->>P: POST /users/login
+    P-->>App: TokenResponse (access_token + user)
+    App->>SS: grava token do Portal
+    alt user.escola.has_access = true
+        App->>P: GET /escola/handoff-token (Bearer Portal)
+        P-->>App: JWT Supabase + refresh token
+        App->>App: store escola (escolaSyncStatus = ok)
+        App->>E: requests /api/v2 (Bearer JWT Supabase)
+    else handoff falha (best-effort)
+        App->>App: escolaSyncStatus = failed
+        Note over App,E: login manual disponível em /escola/login<br/>(POST /auth/check-email + POST /auth/login)
+    end
+```
+
+<Info>
+  Os contratos completos dos endpoints envolvidos estão nas referências de API: [login e handoff-token do Portal](/agropujante/api/auth-users), [check-email e login da Escola](/escola/api/auth). Pra visão geral do handoff entre os produtos, veja [Ecossistema](/ecossistema).
+</Info>
 
 ## Login no Portal
 
@@ -42,7 +71,7 @@ Quando o usuário tem acesso à Escola, o app troca a sessão do Portal por uma 
     Após login ou hidratação, o app checa `user.escola.has_access`.
   </Step>
   <Step title="Troca de token">
-    Chama `GET /escola/handoff-token` (autenticado com o token do Portal) e recebe um token Supabase + refresh token da Escola.
+    Chama `GET /escola/handoff-token` (autenticado com o token do Portal) e recebe um token Supabase + refresh token da Escola. Contrato completo em [API: auth e usuários](/agropujante/api/auth-users).
   </Step>
   <Step title="Sessão da Escola">
     Os tokens entram na store `escola` e passam a autenticar o `escolaClient` (`/api/v2`).
@@ -58,7 +87,7 @@ O handoff é **best-effort**: falha no handoff não derruba o login do Portal. O
 | `skipped` | Usuário sem `escola.has_access`, handoff nem foi tentado |
 
 <Note>
-  Se o handoff falhar (`failed`), o módulo Escola oferece login manual em `/escola/login`, que usa `POST /auth/check-email` + `POST /auth/login` da API `/api/v2`.
+  Se o handoff falhar (`failed`), o módulo Escola oferece login manual em `/escola/login`, que usa `POST /auth/check-email` + `POST /auth/login` da API `/api/v2` — contratos em [Escola: Auth](/escola/api/auth).
 </Note>
 
 ## Logout
@@ -80,5 +109,5 @@ O logout limpa **tudo**, nas duas sessões:
 | Nova senha | `POST /users/password-reset/confirm` |
 
 <Note>
-  A requisição de reset retorna resposta genérica independentemente do email existir ou não — a API não vaza existência de conta.
+  A requisição de reset retorna resposta genérica independentemente do email existir ou não — a API não vaza existência de conta. Os contratos completos desses fluxos estão em [API: auth e usuários](/agropujante/api/auth-users).
 </Note>

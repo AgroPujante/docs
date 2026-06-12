@@ -1,40 +1,14 @@
 ---
-title: "API: jurisprudência e boletins"
-description: "Consulta de jurisprudência (jurisprudencias.ai), boletins em PDF, pastas do usuário e decisões"
+title: "Jurisprudência e boletins"
+description: "Consulta de decisões via jurisprudencias.ai, boletins em PDF, pastas do usuário e decisões públicas"
+icon: "scale-balanced"
 ---
 
 Base: `/api/v1`.
 
 ## Erros comuns
 
-O handler global adiciona `code` ao body. Shapes que se repetem:
-
-```json title="401 Unauthorized — sem credencial"
-{ "detail": "Token de autenticação não fornecido", "code": "http_error" }
-```
-
-```json title="401 Unauthorized — token ruim"
-{ "detail": "Token inválido ou expirado", "code": "http_error" }
-```
-
-```json title="403 Forbidden — role insuficiente (admin)"
-{ "detail": "Acesso negado — permissão insuficiente", "code": "http_error" }
-```
-
-```json title="422 Unprocessable Entity — validação Pydantic (shape padrão FastAPI)"
-{
-  "detail": [
-    {
-      "type": "missing",
-      "loc": ["query", "tribunal_code"],
-      "msg": "Field required",
-      "input": null
-    }
-  ]
-}
-```
-
-A busca de jurisprudência é rate-limited: o 429 vem como `HTTPException` de regra de negócio (limite mensal do plano ou limite diário do provedor), com `detail` específico — exemplos no accordion do endpoint. O shape do slowapi (`{"error": "Rate limit exceeded: ..."}`) também pode aparecer em endpoints com limite por IP.
+Shapes de erro (`{detail, code}`), 422 do Pydantic e o 429 do slowapi seguem as [convenções da API](/agropujante/convencoes). **Específico desta página**: a busca de jurisprudência tem 429 **de regra de negócio** além do slowapi — limite mensal do plano e limite diário do provedor vêm como `HTTPException` no shape `{detail, code}`, com mensagens distintas (exemplos no accordion de `/jurisprudencia/search`).
 
 <Warning>
 **Três conceitos distintos** — não os misture ao trabalhar nesses routers:
@@ -163,6 +137,10 @@ A URL assinada expira em 5 minutos.
 </AccordionGroup>
 
 ## Boletins — admin (`/admin/boletins`)
+
+<Info>
+Os exemplos de POST/PATCH/DELETE abaixo são ilustrativos — confirme o ambiente antes de rodar em produção: `publish` dispara a criação de campanha de newsletter e `archive`/`DELETE` tiram boletim do ar.
+</Info>
 
 | Método | Path | Descrição | Auth |
 |---|---|---|---|

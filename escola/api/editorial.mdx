@@ -8,31 +8,7 @@ Base: `/api/v2/noticias`. Módulo usado pelo time editorial (role `EDITORIAL` te
 
 ## Erros comuns
 
-Todos os endpoints autenticados podem retornar os shapes abaixo (FastAPI + handler global, que acrescenta o campo `code`):
-
-```json title="401 Unauthorized — sem token"
-{ "detail": "Token de autenticacao nao fornecido", "code": "http_error" }
-```
-
-```json title="401 Unauthorized — token inválido ou usuário não mapeado"
-{ "detail": "Token invalido ou expirado", "code": "http_error" }
-```
-
-Também pode ocorrer `{ "detail": "Usuario nao mapeado. Contate o suporte." }` quando o JWT é válido mas não há registro em `pujante.users`.
-
-```json title="403 Forbidden — role insuficiente (MANAGER/ADMIN)"
-{ "detail": "Acesso restrito", "code": "http_error" }
-```
-
-```json title="422 Unprocessable Entity — validação Pydantic"
-{
-  "detail": [
-    { "type": "missing", "loc": ["body", "campo"], "msg": "Field required", "input": {} }
-  ]
-}
-```
-
-Nos accordions abaixo, esses três erros genéricos não são repetidos — apenas os erros específicos de cada endpoint.
+Os erros genéricos da API v2 (401/403/422, shape `{detail, code}`) estão em [Convenções da API](/escola/convencoes) — abaixo, apenas os específicos de cada endpoint.
 
 ## Notícias
 

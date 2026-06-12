@@ -1,0 +1,117 @@
+---
+title: "Convenções da API"
+description: "Padrões transversais: shape de erro, autenticação dupla, paginação, parâmetro origin e rate limiting."
+icon: "ruler"
+---
+
+Padrões que valem para **toda** a API do Pujante Admin. As páginas de referência linkam para cá em vez de repetir.
+
+## Shape de erro: `{detail}` sem `code`
+
+O Admin usa a `HTTPException` pura do FastAPI — o body de erro tem **apenas** o campo `detail`:
+
+```json title="Erro do Admin"
+{ "detail": "usuario nao autorizado" }
+```
+
+<Info>
+Isso é **diferente** do Portal (AgroPujante) e da Escola, cujos backends têm exception handler próprio que injeta um campo `code` (`http_error`, `validation_error`, `not_found`...). Se o seu cliente consome os três produtos, não espere `code` nas respostas do Admin — trate erro por **status HTTP + detail**.
+</Info>
+
+Em erros de validação (422), `detail` vira uma **lista** de objetos do Pydantic em vez de string:
+
+```json title="422 — detail é lista"
+{
+  "detail": [
+    { "type": "missing", "loc": ["body", "title"], "msg": "Field required", "input": {} }
+  ]
+}
+```
+
+### Mensagens minúsculas e sem acento
+
+As mensagens de erro do backend são, por propriedade, **minúsculas e sem acento** (`"nao autenticado"`, `"usuario nao autorizado"`, `"chamado nao encontrado"`, `"falha ao criar custo"`). Não normalize nem "corrija" essas strings no cliente — compare literalmente.
+
+<Note>
+Exceção pontual: algumas mensagens do Gantt usam acentuação normal (ex.: `"não encontrado"`, `"Só Ana Beatriz (quem pediu) pode marcar como concluído."`). Na dúvida, não faça matching por conteúdo de mensagem — use o status HTTP.
+</Note>
+
+## Erros comuns
+
+Shapes padrão, válidos para todos os endpoints autenticados:
+
+```json title="401 Unauthorized — sem credencial"
+{ "detail": "nao autenticado" }
+```
+
+```json title="401 Unauthorized — JWT inválido ou expirado"
+{ "detail": "token invalido: Signature has expired" }
+```
+
+```json title="401 Unauthorized — JWT sem claim de email"
+{ "detail": "token sem email" }
+```
+
+```json title="401 Unauthorized — API key inválida, revogada ou expirada"
+{ "detail": "API key invalida ou expirada" }
+```
+
+```json title="403 Forbidden — email fora de ALLOWED_ADMIN_EMAILS"
+{ "detail": "usuario nao autorizado" }
+```
+
+```json title="403 Forbidden — API key em método de escrita"
+{ "detail": "API key e somente leitura — apenas requisicoes GET sao permitidas" }
+```
+
+```json title="422 Unprocessable Entity — validação de parâmetros"
+{
+  "detail": [
+    {
+      "type": "less_than_equal",
+      "loc": ["query", "days"],
+      "msg": "Input should be less than or equal to 30",
+      "input": "90",
+      "ctx": { "le": 30 }
+    }
+  ]
+}
+```
+
+## Duas formas de autenticação
+
+| Mecanismo | Como enviar | Alcance |
+|---|---|---|
+| **JWT Bearer** (Supabase) | `Authorization: Bearer <jwt>` | Tudo — leitura e escrita |
+| **API Key read-only** | `X-API-Key: <key>` ou `?api_key=` | **Somente `GET`** nos endpoints marcados JWT/Key |
+
+Qualquer `POST`, `PUT`, `PATCH` ou `DELETE` com API key responde **403** com o detail de read-only acima. Endpoints marcados só **JWT** (Gantt, operação) não aceitam API key nem em GET. Detalhes em [Autenticação](/admin/autenticacao).
+
+## Paginação
+
+Listas paginam por **`limit`/`offset`**:
+
+- `limit` — itens por página (default e teto variam por endpoint, tipicamente 50/200).
+- `offset` — deslocamento (default `0`).
+
+A resposta traz `total`, `limit`, `offset` e `items` — não há cursor nem header de paginação.
+
+## Parâmetro `origin`
+
+Vários endpoints de dashboard aceitam `?origin` para filtrar por produto:
+
+| Valor | Significado |
+|---|---|
+| `all` | Site + Escola consolidados (**default** na maioria) |
+| `site` | Só AgroPujante (portal) |
+| `escola` | Só Escola Pujante (LMS) |
+
+## Rate limiting
+
+<Warning>
+A API **não tem rate limiting** implementado hoje. Se você expõe uma API key para integrações externas, controle o consumo no cliente — um loop descontrolado bate direto no banco e nas integrações.
+</Warning>
+
+## URL base
+
+A URL `https://admin-api.pujante.com.br` usada nos exemplos das páginas de API é **ilustrativa** — a base real depende do deploy no Railway.

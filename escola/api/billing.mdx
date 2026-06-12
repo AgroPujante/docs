@@ -1,0 +1,412 @@
+---
+title: "Billing"
+description: "Billing unificado dos gateways: saldo, histórico, chargebacks, links de pagamento e inadimplência"
+icon: "file-invoice-dollar"
+---
+
+Grupo `/dashboard` — visão unificada de Asaas e PagarMe: saldo, extrato, recebíveis, histórico de pagamentos, chargebacks, links de pagamento e inadimplência de apoiadores. Métricas de negócio estão em [Financeiro — dashboards](/escola/api/financeiro-dashboards) e NFSe em [NFSe (Bling)](/escola/api/nfse).
+
+## Erros comuns
+
+Os erros genéricos da API v2 (401/403/422, shape `{detail, code}`) estão em [Convenções da API](/escola/convencoes) — abaixo, apenas os específicos de cada endpoint.
+
+## Dashboard billing (`/dashboard`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/dashboard/balance` | Saldo unificado dos gateways | MANAGER |
+| GET | `/dashboard/balance/extract` | Extrato (`?dateFrom`, `?dateTo`) | MANAGER |
+| GET | `/dashboard/balance/receivables` | Recebíveis (`?dateFrom`, `?dateTo`) | MANAGER |
+| GET | `/dashboard/balance/cash-flow` | Fluxo de caixa (`?dateFrom`, `?dateTo`) | MANAGER |
+| GET | `/dashboard/billing-rules` | Regras de cobrança | MANAGER |
+| PATCH | `/dashboard/billing-rules/{rule_id}` | Atualizar regra | MANAGER |
+| GET | `/dashboard/chargebacks` | Chargebacks (`?page`, `?limit`) | MANAGER |
+| POST | `/dashboard/chargebacks/{chargeback_id}/dispute` | Contestar chargeback | MANAGER |
+| GET | `/dashboard/history` | Histórico de pagamentos (`?dateFrom`, `?dateTo`, `?status`, `?gateway`, `?limit`) | MANAGER |
+| GET | `/dashboard/payments` | Alias de `/history` | MANAGER |
+| GET | `/dashboard/payments/failures` | Falhas de pagamento (`?dateFrom`, `?dateTo`) | MANAGER |
+| GET | `/dashboard/payments/refunds` | Reembolsos (`?dateFrom`, `?dateTo`) | MANAGER |
+| POST | `/dashboard/payments/refund` | Executar reembolso | MANAGER |
+| GET | `/dashboard/payment-links` | Links de pagamento (`?page`, `?limit`) | MANAGER |
+| POST | `/dashboard/payment-links` | Criar link de pagamento | MANAGER |
+| DELETE | `/dashboard/payment-links/{link_id}` | Remover link | MANAGER |
+| POST | `/dashboard/subscription-mgmt/{subscription_id}/sync` | Sync com gateway | MANAGER |
+| POST | `/dashboard/subscription-mgmt/{subscription_id}/update-card` | Atualizar cartão | MANAGER |
+| POST | `/dashboard/subscription-mgmt/{subscription_id}/retry-payment` | Reprocessar pagamento | MANAGER |
+| GET | `/financial/office-delinquency` | Inadimplência de apoiadores (rota vive no router `/financial`) | MANAGER |
+
+<Warning>
+Retornam **501 — não implementado**: `GET/PATCH /billing-rules*`, `POST /chargebacks/{id}/dispute`, `POST /payments/refund`, `POST /payment-links`, `DELETE /payment-links/{link_id}` e os três `POST /subscription-mgmt/{id}/*` (essas operações ainda vivem no NestJS legado).
+</Warning>
+
+<AccordionGroup>
+<Accordion title="GET /api/v2/dashboard/balance">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/balance" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "received": 184230.50,
+  "pending": 6240.00,
+  "overdue": 3120.00,
+  "failed": 1890.00,
+  "refunded": 740.00
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/balance/extract">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/balance/extract?dateFrom=2026-05-01&dateTo=2026-05-31" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "items": [
+    {
+      "id": "pay_9f3a2b",
+      "subscriptionId": "sub_44c1e0",
+      "value": 130.00,
+      "normalizedStatus": "PAID",
+      "gateway": "asaas",
+      "paymentDate": "2026-05-12T10:01:00+00:00",
+      "dueDate": "2026-05-12T00:00:00+00:00",
+      "createdAt": "2026-05-01T03:00:00+00:00"
+    }
+  ],
+  "total": 1
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/balance/receivables">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/balance/receivables?dateFrom=2026-06-01&dateTo=2026-06-30" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "items": [
+    {
+      "id": "pay_7a1b9c",
+      "subscriptionId": "sub_44c1e0",
+      "value": 130.00,
+      "status": "PENDING",
+      "gateway": "asaas",
+      "dueDate": "2026-06-20T00:00:00+00:00"
+    }
+  ],
+  "totalValue": 6240.00,
+  "count": 48
+}
+```
+
+Considera apenas pagamentos `PENDING`/`OVERDUE`.
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/balance/cash-flow">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/balance/cash-flow?dateFrom=2026-01-01&dateTo=2026-05-31" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "byMonth": [
+    { "month": "2026-04", "received": 17890.00 },
+    { "month": "2026-05", "received": 18240.50 }
+  ]
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/billing-rules">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/billing-rules" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{
+  "detail": "Listagem de regras de notificacao depende de tabela nao mapeada. Bloqueado por rotacao de chaves. Use Nest legado.",
+  "code": "http_error"
+}
+```
+</Accordion>
+
+<Accordion title="PATCH /api/v2/dashboard/billing-rules/{rule_id}">
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/dashboard/billing-rules/rule_01" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Update de billing rule. Bloqueado por rotacao de chaves. Use Nest legado.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/chargebacks">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/chargebacks?page=1&limit=20" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "items": [ "..." ], "total": 2, "page": 1, "limit": 20 }
+```
+
+Se a tabela `chargebacks` não estiver acessível, retorna `items: []` com `"note": "Tabela chargebacks nao acessivel — verificar Nest legado."`.
+</Accordion>
+
+<Accordion title="POST /api/v2/dashboard/chargebacks/{chargeback_id}/dispute">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/dashboard/chargebacks/cb_123/dispute" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Disputa de chargeback faz HTTP pra PagarMe/Asaas. Bloqueado por rotacao de chaves. Use Nest legado.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/history">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/history?dateFrom=2026-05-01&dateTo=2026-05-31&status=PAID&gateway=asaas&limit=100" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "items": [
+    {
+      "id": "pay_9f3a2b",
+      "subscriptionId": "sub_44c1e0",
+      "value": 130.00,
+      "normalizedStatus": "PAID",
+      "status": "RECEIVED",
+      "gateway": "asaas",
+      "paymentDate": "2026-05-12T10:01:00+00:00",
+      "dueDate": "2026-05-12T00:00:00+00:00",
+      "createdAt": "2026-05-01T03:00:00+00:00"
+    }
+  ],
+  "count": 1
+}
+```
+
+`status` (query) filtra pelo `normalized_status` (`PAID`, `PENDING`, `OVERDUE`, `FAILED`, `REFUNDED`...).
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/payments">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/payments?status=PAID&limit=100" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "items": [ "..." ], "count": 100 }
+```
+
+Alias exato de `GET /dashboard/history` — mesmo shape e mesmos filtros.
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/payments/failures">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/payments/failures?dateFrom=2026-05-01&dateTo=2026-05-31" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "items": [
+    {
+      "id": "pay_5e8d11",
+      "subscriptionId": "sub_91aa07",
+      "value": 130.00,
+      "status": "card_declined",
+      "gateway": "pagarme",
+      "paymentDate": null,
+      "createdAt": "2026-05-18T08:30:00+00:00"
+    }
+  ],
+  "count": 1
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/payments/refunds">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/payments/refunds?dateFrom=2026-05-01&dateTo=2026-05-31" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "items": [
+    {
+      "id": "pay_2c4f90",
+      "subscriptionId": "sub_18bb32",
+      "value": 130.00,
+      "gateway": "asaas",
+      "paymentDate": "2026-05-03T14:00:00+00:00",
+      "createdAt": "2026-05-03T14:00:00+00:00"
+    }
+  ],
+  "count": 1
+}
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/dashboard/payments/refund">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/dashboard/payments/refund" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Refund chama Asaas/PagarMe. Bloqueado por rotacao de chaves. Use Nest legado.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/payment-links">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/payment-links?page=1&limit=20" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "data": [
+    {
+      "id": "pl_88aa12",
+      "name": "Clube de Membros — Anual",
+      "description": "Assinatura anual com desconto",
+      "value": 1297.00,
+      "billingType": "CREDIT_CARD",
+      "url": "https://www.asaas.com/c/abc123",
+      "active": true,
+      "createdAt": "2026-04-02T12:00:00+00:00",
+      "linkType": "assinatura",
+      "productGroup": "Clube de Membros",
+      "isPrimary": true
+    }
+  ],
+  "total": 7,
+  "page": 1,
+  "limit": 20,
+  "grouped": {
+    "Clube de Membros": [ "..." ],
+    "Outros": [ "..." ]
+  }
+}
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/dashboard/payment-links">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/dashboard/payment-links" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Criar link de pagamento chama Asaas/PagarMe. Bloqueado por rotacao de chaves. Use Nest legado.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v2/dashboard/payment-links/{link_id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.escolapujante.com.br/api/v2/dashboard/payment-links/pl_88aa12" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Cancelar link de pagamento chama Asaas/PagarMe. Bloqueado por rotacao de chaves. Use Nest legado.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/dashboard/subscription-mgmt/{subscription_id}/sync">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/dashboard/subscription-mgmt/sub_44c1e0/sync" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Sync com Asaas/PagarMe. Bloqueado por rotacao de chaves. Use Nest legado.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/dashboard/subscription-mgmt/{subscription_id}/update-card">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/dashboard/subscription-mgmt/sub_44c1e0/update-card" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Atualizacao de cartao chama Asaas/PagarMe. Bloqueado por rotacao de chaves. Use Nest legado.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/dashboard/subscription-mgmt/{subscription_id}/retry-payment">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/dashboard/subscription-mgmt/sub_44c1e0/retry-payment" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Retry de pagamento chama gateway. Bloqueado por rotacao de chaves. Use Nest legado.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/financial/office-delinquency">
+<Note>
+Apesar de listado junto do dashboard, no FastAPI v2 esta rota vive sob o prefixo `/financial` (não `/dashboard`).
+</Note>
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/financial/office-delinquency" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "totalActive": 78,
+  "delinquentCount": 9,
+  "delinquencyRate": 11.54,
+  "totalOverdueAmount": 3120.00,
+  "brackets": [
+    { "label": "0-30", "count": 5, "amount": 1300.00 },
+    { "label": "31-60", "count": 2, "amount": 520.00 },
+    { "label": "61-90", "count": 1, "amount": 260.00 },
+    { "label": "90+", "count": 4, "amount": 1040.00 }
+  ],
+  "offices": [
+    {
+      "officeId": "off_3d9e21",
+      "officeName": "Prado & Almeida Advocacia Agrária",
+      "officeEmail": "contato@pradoealmeida.adv.br",
+      "officePhone": "+5562999990000",
+      "totalOverdue": 780.00,
+      "overdueCount": 3,
+      "maxDaysLate": 94
+    }
+  ]
+}
+```
+</Accordion>
+</AccordionGroup>

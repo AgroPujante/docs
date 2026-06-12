@@ -1,48 +1,18 @@
 ---
-title: "API: admin e operação"
-description: "Analytics, métricas de receita e email, gestão de admins e usuários, api-keys, storage, webhooks e integração com a Escola"
+title: "Admin e operação"
+description: "Analytics, receita, gestão de admins e usuários, API keys, storage, webhooks e integração com a Escola"
+icon: "user-gear"
 ---
 
 Base: `/api/v1`.
 
 ## Erros comuns
 
-O handler global adiciona `code` ao body. Shapes que se repetem:
+Shapes de erro (`{detail, code}`), 422 do Pydantic e o 429 do slowapi seguem as [convenções da API](/agropujante/convencoes). Específico desta página: usar **API key em método de escrita** devolve 403 com `"API key é somente leitura — apenas requisições GET são permitidas"`, e `POST /analytics/pageview` é limitado a `60/minute` por IP.
 
-```json title="401 Unauthorized — sem credencial"
-{ "detail": "Não autenticado", "code": "http_error" }
-```
-
-```json title="401 Unauthorized — token ruim"
-{ "detail": "Token inválido ou expirado", "code": "http_error" }
-```
-
-```json title="403 Forbidden — role insuficiente"
-{ "detail": "Acesso negado — permissão insuficiente", "code": "http_error" }
-```
-
-```json title="403 Forbidden — API key em método de escrita"
-{ "detail": "API key é somente leitura — apenas requisições GET são permitidas", "code": "http_error" }
-```
-
-```json title="422 Unprocessable Entity — validação Pydantic (shape padrão FastAPI)"
-{
-  "detail": [
-    {
-      "type": "missing",
-      "loc": ["query", "year"],
-      "msg": "Field required",
-      "input": null
-    }
-  ]
-}
-```
-
-`POST /analytics/pageview` é rate-limited (slowapi, `60/minute` por IP):
-
-```json title="429 Too Many Requests — slowapi"
-{ "error": "Rate limit exceeded: 60 per 1 minute" }
-```
+<Info>
+Os exemplos de POST/PATCH/DELETE desta página alteram permissões, chaves e arquivos reais (admin-users, api-keys, storage). São ilustrativos — confirme o ambiente antes de rodar em produção.
+</Info>
 
 ## Analytics (`/analytics`)
 
@@ -110,7 +80,7 @@ curl "https://api.agropujante.com.br/api/v1/analytics/summary" \
 }
 ```
 
-Erros genéricos (401, 403): ver [Erros comuns](#erros-comuns).
+Erros genéricos (401, 403): ver [convenções da API](/agropujante/convencoes).
 </Accordion>
 
 <Accordion title="GET /api/v1/analytics/top-posts">
@@ -367,7 +337,7 @@ curl "https://api.agropujante.com.br/api/v1/admin/revenue/summary" \
 }
 ```
 
-Erros genéricos (401, 403): ver [Erros comuns](#erros-comuns).
+Erros genéricos (401, 403): ver [convenções da API](/agropujante/convencoes).
 </Accordion>
 
 <Accordion title="GET /api/v1/admin/revenue/mrr-history">
@@ -909,7 +879,7 @@ curl -X POST "https://api.agropujante.com.br/api/v1/storage/upload?bucket=images
 { "url": "https://xyz.supabase.co/storage/v1/object/public/images/2026/06/9f3a1b2c4d5e6f7a8b9c0d1e2f3a4b5c.jpg" }
 ```
 
-Erros genéricos (401, 403, 422): ver [Erros comuns](#erros-comuns).
+Erros genéricos (401, 403, 422): ver [convenções da API](/agropujante/convencoes).
 </Accordion>
 
 <Accordion title="DELETE /api/v1/storage">

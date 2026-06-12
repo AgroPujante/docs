@@ -9,12 +9,23 @@
 
 ## Structure
 
-- `index.mdx` — home with product cards
-- `ecossistema.mdx` — how the 4 products connect (shared Supabase, auth handoff, proxies)
-- `agropujante/` — Portal editorial (FastAPI `/api/v1`)
-- `escola/` — LMS + mentoria (FastAPI `/api/v2` + NestJS legado)
-- `admin/` — Painel admin unificado (FastAPI agregador)
+- `index.mdx` — home with product cards + onboarding trail
+- `ecossistema.mdx` — how the 4 products connect (Mermaid, handoff, entidades homônimas, matriz de padrões)
+- `propriedade-tabelas.mdx` / `convencoes-banco.mdx` / `glossario.mdx` / `changelog.mdx` — transversais
+- `operacao/` — mapa de produção, troubleshooting, runbooks, observabilidade, segurança
+- `agropujante/` — Portal editorial (FastAPI `/api/v1`); inclui quickstart e convencoes
+- `escola/` — LMS + mentoria (FastAPI `/api/v2` + NestJS legado); financeiro dividido em financeiro-dashboards/billing/nfse
+- `admin/` — Painel admin unificado; dashboards dividido em visao-geral/financeiro/marketing/observability
 - `mobile/` — App Expo/React Native (cliente das APIs v1 e v2)
+- `openapi/agropujante.json` — spec gerado do FastAPI (playground beta); regenerar quando a API mudar:
+  `cd AgroPujante-LP/backend && .venv/Scripts/python -c "from app.main import app; import json; json.dump(app.openapi(), open('../../docs/openapi/agropujante.json','w',encoding='utf-8'), ensure_ascii=False)"` (reinjetar `servers`)
+
+## Conventions added in this docs
+
+- Cada página tem `icon` no frontmatter; descriptions ≤ ~120 chars
+- Páginas de API linkam pra `<produto>/convencoes` em vez de repetir "Erros comuns"
+- Diagramas em Mermaid (não ASCII art); `<Tip>`/`<Info>` pra contexto, `<Warning>` só pra risco real
+- Atualize `changelog.mdx` (componente `<Update>`) a cada release de doc
 
 ## Terminology
 

@@ -38,13 +38,16 @@ O backend está em migração via padrão **strangler**: o FastAPI serve a API n
 | Ambiente | API | Observação |
 |---|---|---|
 | Produção | `https://api.escolapujante.com.br/api/v2` | Swagger/ReDoc desativados (`DEBUG=false`) |
-| Desenvolvimento | `http://localhost:8767/api/v2` | OpenAPI em `/api/openapi.json`, Swagger em `/api/docs`, ReDoc em `/api/redoc` (apenas com `DEBUG=true`) |
+| Desenvolvimento | `http://localhost:8001/api/v2` (porta padrão do backend) | OpenAPI em `/api/openapi.json`, Swagger em `/api/docs`, ReDoc em `/api/redoc` (apenas com `DEBUG=true`) |
 
 O frontend aponta para a API através da variável `VITE_API_BASE_URL`.
 
 ## Para onde ir
 
 <CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/escola/quickstart">
+    Suba backend e frontend localmente em minutos.
+  </Card>
   <Card title="Arquitetura" icon="sitemap" href="/escola/arquitetura">
     Padrão strangler, estrutura de pastas, padrão de resposta e scheduler.
   </Card>
@@ -53,6 +56,9 @@ O frontend aponta para a API através da variável `VITE_API_BASE_URL`.
   </Card>
   <Card title="Modelos" icon="database" href="/escola/modelos">
     Entidades do schema `pujante` por domínio.
+  </Card>
+  <Card title="Convenções da API" icon="ruler" href="/escola/convencoes">
+    Shape de erro, paginação, IDs legados e casing dos bodies.
   </Card>
   <Card title="API v2" icon="code" href="/escola/api/auth">
     Referência completa de endpoints por módulo.

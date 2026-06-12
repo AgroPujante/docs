@@ -8,21 +8,9 @@ Base: `/api/v2/auth`. Entenda o fluxo completo em [Autenticação](/escola/auten
 
 ## Erros comuns
 
-Erros de `HTTPException`/`AppException` saem com `detail` + `code` (handler global em `core/exceptions.py`). O 422 de validação segue o shape padrão do FastAPI.
+Os erros genéricos da API v2 (401/403/422, shape `{detail, code}`) estão em [Convenções da API](/escola/convencoes) — abaixo, apenas os específicos de cada endpoint.
 
-```json title="401 Unauthorized"
-{ "detail": "Token de autenticacao nao fornecido", "code": "http_error" }
-```
-
-Outras mensagens 401 possíveis: `"Token invalido ou expirado"`, `"Token sem subject"`, `"Usuario nao mapeado. Contate o suporte."`.
-
-```json title="403 Forbidden"
-{ "detail": "Acesso restrito", "code": "http_error" }
-```
-
-```json title="422 Unprocessable Entity"
-{ "detail": [{ "loc": ["body", "email"], "msg": "field required", "type": "missing" }] }
-```
+Específico deste módulo: além das mensagens 401 padrão, pode ocorrer `"Token sem subject"`.
 
 ## Endpoints de auth
 
@@ -416,6 +404,10 @@ curl -X POST "https://api.escolapujante.com.br/api/v2/auth/password-reset/confir
 <Note>
 Exige header com o `INTERNAL_API_TOKEN` — não use a partir do frontend.
 </Note>
+
+<Info>
+Este endpoint é a ponta Escola do handoff entre os dois sistemas: quem chama é o backend do AgroPujante (após o usuário ativar PRO Anual). Veja a outra ponta em [AgroPujante: Auth e users](/agropujante/api/auth-users) e o desenho completo do fluxo em [Ecossistema](/ecossistema).
+</Info>
 
 ### POST /auth/password-reset/verify
 

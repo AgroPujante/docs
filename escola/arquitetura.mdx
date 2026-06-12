@@ -8,6 +8,19 @@ icon: "sitemap"
 
 A Escola Pujante convive com dois backends durante a migração:
 
+```mermaid
+graph LR
+    FE["Frontend React<br/>(Vite)"]
+    V2["FastAPI novo<br/>/api/v2/*"]
+    NEST["NestJS legado<br/>/api/*"]
+    SB[("Supabase PostgreSQL<br/>schema pujante")]
+
+    FE -->|"módulos migrados"| V2
+    FE -->|"billing e legado"| NEST
+    V2 --> SB
+    NEST --> SB
+```
+
 | Backend | Prefixo | Status | Responsabilidades |
 |---|---|---|---|
 | FastAPI (novo) | `/api/v2` | Em expansão | Toda a API documentada nesta seção |
@@ -58,11 +71,13 @@ backend/app/
     ```
   </Tab>
   <Tab title="Erro">
-    Status HTTP adequado + corpo padrão do FastAPI:
+    Status HTTP adequado + `{detail, code}` do handler global:
 
     ```json
-    { "detail": "mensagem de erro" }
+    { "detail": "Acesso restrito", "code": "http_error" }
     ```
+
+    Tabela completa de codes e exceções em [Convenções da API](/escola/convencoes).
   </Tab>
 </Tabs>
 
@@ -72,7 +87,11 @@ Endpoints ainda não migrados respondem **`501 Not Implemented`**. Nesta documen
 
 ## Rate limiting
 
-O backend usa **slowapi** com limite configurável via `RATE_LIMIT_PER_MINUTE` (padrão: **60 requisições/minuto**). Requisições acima do limite recebem `429 Too Many Requests`.
+A dependência **slowapi** está declarada e o limite é configurável via `RATE_LIMIT_PER_MINUTE` (padrão: **60 requisições/minuto**).
+
+<Note>
+O limiter global ainda não está registrado no `main.py` — hoje a proteção efetiva é por endpoint: o fluxo de password reset limita solicitações por email (3/hora) e tentativas por código OTP (5), respondendo `429 Too Many Requests` quando excedido. Detalhes em [Convenções da API](/escola/convencoes).
+</Note>
 
 ## Scheduler
 

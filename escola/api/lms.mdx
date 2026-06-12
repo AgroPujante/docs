@@ -8,21 +8,9 @@ Base: `/api/v2/lms` (certificados em `/api/v2/lessons` e `/api/v2/certificates`)
 
 ## Erros comuns
 
-Erros de `HTTPException`/`AppException` saem com `detail` + `code` (handler global em `core/exceptions.py`). O 422 de validação segue o shape padrão do FastAPI.
+Os erros genéricos da API v2 (401/403/422, shape `{detail, code}`) estão em [Convenções da API](/escola/convencoes) — abaixo, apenas os específicos de cada endpoint.
 
-```json title="401 Unauthorized"
-{ "detail": "Token de autenticacao nao fornecido", "code": "http_error" }
-```
-
-```json title="403 Forbidden (rota MANAGER sem role ADMIN/COMMUNITY_MANAGER)"
-{ "detail": "Acesso restrito", "code": "http_error" }
-```
-
-```json title="422 Unprocessable Entity"
-{ "detail": [{ "loc": ["body", "name"], "msg": "field required", "type": "missing" }] }
-```
-
-Uploads dependem do Bunny: se não configurado, retornam `503 { "detail": "Bunny Storage não configurado" }` (ou `"Bunny Stream não configurado"` no upload de vídeo).
+Específico deste módulo: uploads dependem do Bunny — se não configurado, retornam `503 { "detail": "Bunny Storage não configurado" }` (ou `"Bunny Stream não configurado"` no upload de vídeo).
 
 ## Catálogo (aluno)
 
@@ -198,6 +186,15 @@ Retorna `[]` se o aluno nunca acessou nenhuma aula.
 | DELETE | `/lms/tracks/{track_id}` | Remover | MANAGER |
 | POST | `/lms/tracks/{track_id}/cover` | Upload de cover (multipart) | MANAGER |
 
+### POST /lms/tracks
+
+<ParamField body="name" type="string" required>Nome da trilha.</ParamField>
+<ParamField body="kind" type="string" required>`TRILHA`, `IMERSAO` ou `CURSO_DO_MES`.</ParamField>
+<ParamField body="description" type="string">Descrição.</ParamField>
+<ParamField body="coverImageUrl" type="string">URL da capa.</ParamField>
+<ParamField body="order" type="number">Ordem de exibição.</ParamField>
+<ParamField body="active" type="boolean">Ativa no catálogo.</ParamField>
+
 ### Exemplos
 
 <AccordionGroup>
@@ -312,15 +309,6 @@ Resposta 200: objeto track com `coverImageUrl` apontando pro CDN do Bunny.
 
 </AccordionGroup>
 
-### POST /lms/tracks
-
-<ParamField body="name" type="string" required>Nome da trilha.</ParamField>
-<ParamField body="kind" type="string" required>`TRILHA`, `IMERSAO` ou `CURSO_DO_MES`.</ParamField>
-<ParamField body="description" type="string">Descrição.</ParamField>
-<ParamField body="coverImageUrl" type="string">URL da capa.</ParamField>
-<ParamField body="order" type="number">Ordem de exibição.</ParamField>
-<ParamField body="active" type="boolean">Ativa no catálogo.</ParamField>
-
 ## Courses (admin)
 
 | Método | Path | Descrição | Auth |
@@ -330,6 +318,13 @@ Resposta 200: objeto track com `coverImageUrl` apontando pro CDN do Bunny.
 | PATCH | `/lms/courses/{course_id}` | Atualizar | MANAGER |
 | DELETE | `/lms/courses/{course_id}` | Remover | MANAGER |
 | POST | `/lms/courses/{course_id}/cover` | Upload de cover (multipart) | MANAGER |
+
+### POST /lms/courses
+
+<ParamField body="trackId" type="string" required>Trilha à qual o curso pertence.</ParamField>
+<ParamField body="title" type="string" required>Título.</ParamField>
+<ParamField body="description" type="string">Descrição.</ParamField>
+<ParamField body="status" type="string">Status de publicação.</ParamField>
 
 ### Exemplos
 
@@ -423,13 +418,6 @@ Resposta 200: objeto course com `coverImageUrl` atualizado. Erros: `503 { "detai
 </Accordion>
 
 </AccordionGroup>
-
-### POST /lms/courses
-
-<ParamField body="trackId" type="string" required>Trilha à qual o curso pertence.</ParamField>
-<ParamField body="title" type="string" required>Título.</ParamField>
-<ParamField body="description" type="string">Descrição.</ParamField>
-<ParamField body="status" type="string">Status de publicação.</ParamField>
 
 ## Lessons (admin)
 
@@ -633,6 +621,12 @@ curl "https://api.escolapujante.com.br/api/v2/lms/lessons/c3d4e5f6-a7b8-4c9d-0e1
 | PATCH | `/lms/teachers/{teacher_id}` | Atualizar | MANAGER |
 | DELETE | `/lms/teachers/{teacher_id}` | Remover | MANAGER |
 
+### POST /lms/teachers
+
+<ParamField body="name" type="string" required>Nome do professor.</ParamField>
+<ParamField body="bio" type="string">Biografia.</ParamField>
+<ParamField body="avatarUrl" type="string">URL do avatar.</ParamField>
+
 ### Exemplos
 
 <AccordionGroup>
@@ -716,12 +710,6 @@ curl -X DELETE "https://api.escolapujante.com.br/api/v2/lms/teachers/d4e5f6a7-b8
 </Accordion>
 
 </AccordionGroup>
-
-### POST /lms/teachers
-
-<ParamField body="name" type="string" required>Nome do professor.</ParamField>
-<ParamField body="bio" type="string">Biografia.</ParamField>
-<ParamField body="avatarUrl" type="string">URL do avatar.</ParamField>
 
 ## AI agents
 
@@ -954,6 +942,20 @@ curl -X DELETE "https://api.escolapujante.com.br/api/v2/lms/ai-agents/f6a7b8c9-d
 | GET | `/lms/catalog/lessons/{lesson_id}/progress` | Progresso de vídeo | JWT |
 | PATCH | `/lms/catalog/lessons/{lesson_id}/progress` | Atualizar progresso de vídeo | JWT |
 
+### POST /lms/catalog/lessons/\{lesson_id\}/ai-chat
+
+<ParamField body="message" type="string" required>Mensagem do aluno para o agente de IA da aula.</ParamField>
+
+### PATCH /lms/catalog/lessons/\{lesson_id\}/topics-progress
+
+<ParamField body="checkedTopicKeys" type="string[]" required>Chaves dos tópicos marcados como concluídos.</ParamField>
+
+### PATCH /lms/catalog/lessons/\{lesson_id\}/progress
+
+<ParamField body="watchedSeconds" type="number">Segundos assistidos acumulados.</ParamField>
+<ParamField body="lastPositionSeconds" type="number">Posição atual do player.</ParamField>
+<ParamField body="completed" type="boolean">Aula concluída.</ParamField>
+
 ### Exemplos
 
 <AccordionGroup>
@@ -1108,20 +1110,6 @@ curl -X PATCH "https://api.escolapujante.com.br/api/v2/lms/catalog/lessons/c3d4e
 
 </AccordionGroup>
 
-### POST /lms/catalog/lessons/\{lesson_id\}/ai-chat
-
-<ParamField body="message" type="string" required>Mensagem do aluno para o agente de IA da aula.</ParamField>
-
-### PATCH /lms/catalog/lessons/\{lesson_id\}/progress
-
-<ParamField body="watchedSeconds" type="number">Segundos assistidos acumulados.</ParamField>
-<ParamField body="lastPositionSeconds" type="number">Posição atual do player.</ParamField>
-<ParamField body="completed" type="boolean">Aula concluída.</ParamField>
-
-### PATCH /lms/catalog/lessons/\{lesson_id\}/topics-progress
-
-<ParamField body="checkedTopicKeys" type="string[]" required>Chaves dos tópicos marcados como concluídos.</ParamField>
-
 ## Comentários
 
 | Método | Path | Descrição | Auth |
@@ -1132,6 +1120,11 @@ curl -X PATCH "https://api.escolapujante.com.br/api/v2/lms/catalog/lessons/c3d4e
 | GET | `/lms/admin/comments/unanswered-count` | Contar não respondidos | MANAGER |
 | POST | `/lms/admin/comments/{comment_id}/reply` | Responder comentário | MANAGER |
 | DELETE | `/lms/admin/comments/{comment_id}` | Deletar comentário | MANAGER |
+
+### POST /lms/catalog/lessons/\{lesson_id\}/comments
+
+<ParamField body="content" type="string" required>Texto do comentário.</ParamField>
+<ParamField body="parentId" type="string">ID do comentário pai (para reply).</ParamField>
 
 ### Exemplos
 
@@ -1305,11 +1298,6 @@ curl -X DELETE "https://api.escolapujante.com.br/api/v2/lms/admin/comments/d0e1f
 </Accordion>
 
 </AccordionGroup>
-
-### POST /lms/catalog/lessons/\{lesson_id\}/comments
-
-<ParamField body="content" type="string" required>Texto do comentário.</ParamField>
-<ParamField body="parentId" type="string">ID do comentário pai (para reply).</ParamField>
 
 ## Certificados
 

@@ -6,21 +6,9 @@ icon: "users"
 
 ## Erros comuns
 
-Erros de `HTTPException`/`AppException` saem com `detail` + `code` (handler global em `core/exceptions.py`). O 422 de validação segue o shape padrão do FastAPI.
+Os erros genéricos da API v2 (401/403/422, shape `{detail, code}`) estão em [Convenções da API](/escola/convencoes) — abaixo, apenas os específicos de cada endpoint.
 
-```json title="401 Unauthorized"
-{ "detail": "Token de autenticacao nao fornecido", "code": "http_error" }
-```
-
-```json title="403 Forbidden (rota MANAGER sem role ADMIN/COMMUNITY_MANAGER)"
-{ "detail": "Acesso restrito", "code": "http_error" }
-```
-
-```json title="422 Unprocessable Entity"
-{ "detail": [{ "loc": ["body", "memberId"], "msg": "field required", "type": "missing" }] }
-```
-
-Rotas `my-*` exigem user com member vinculado — sem isso: `400 { "detail": "Usuario nao vinculado a member — sem dados de mentoria.", "code": "http_error" }`.
+Específico deste módulo: rotas `my-*` exigem user com member vinculado — sem isso, `400 { "detail": "Usuario nao vinculado a member — sem dados de mentoria.", "code": "http_error" }`.
 
 ## Mentored tracking (`/mentored-tracking`)
 

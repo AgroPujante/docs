@@ -1,0 +1,295 @@
+---
+title: "Visão geral e saúde"
+description: "Health checks, identidade do chamador, materialized views e KPIs consolidados com DAU/MAU."
+icon: "gauge"
+---
+
+Endpoints de saúde do serviço, identidade e a visão consolidada que abre o painel. Quase todos aceitam **JWT Bearer ou API Key read-only** (coluna Auth = JWT/Key). Veja [Autenticação](/admin/autenticacao).
+
+<Note>
+A URL base `https://admin-api.pujante.com.br` usada nos exemplos é **ilustrativa** — a base real depende do deploy no Railway.
+</Note>
+
+<Note>
+O parâmetro `origin` aparece em vários endpoints e filtra por produto: `site` (AgroPujante), `escola` ou `all` (default na maioria) — veja [Convenções](/admin/convencoes#parametro-origin).
+</Note>
+
+## Erros comuns
+
+Os shapes 401/403/422 são os padrões da API — veja [Convenções](/admin/convencoes#erros-comuns). Os exemplos por endpoint referenciam essa página em vez de repeti-los.
+
+## Health
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/health` | Health check básico | Nenhuma |
+| GET | `/health/deep` | Health profundo: valida JWKS e estado das MVs | Nenhuma |
+
+<AccordionGroup>
+<Accordion title="GET /health">
+```bash title="Requisição (sem auth)"
+curl "https://admin-api.pujante.com.br/health"
+```
+
+```json title="200 OK"
+{
+  "status": "ok",
+  "ts": "2026-06-12T14:03:21.482910+00:00"
+}
+```
+</Accordion>
+
+<Accordion title="GET /health/deep">
+```bash title="Requisição (sem auth)"
+curl "https://admin-api.pujante.com.br/health/deep"
+```
+
+```json title="200 OK"
+{
+  "status": "ok",
+  "checks": { "jwks": true, "mvs": true, "mvs_count": 9 },
+  "ts": "2026-06-12T14:03:24.118273+00:00"
+}
+```
+
+Se o JWKS estiver inacessível ou as MVs não puderem ser listadas, `status` vira `"degraded"` (a resposta continua **200**):
+
+```json title="200 OK — degradado"
+{
+  "status": "degraded",
+  "checks": { "jwks": false, "mvs": true, "mvs_count": 9 },
+  "ts": "2026-06-12T14:03:24.118273+00:00"
+}
+```
+</Accordion>
+</AccordionGroup>
+
+## Me
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/me` | Dados do usuário autenticado (`sub`, `email`, `role`) | JWT/Key |
+
+<AccordionGroup>
+<Accordion title="GET /me">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/me" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/me" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK — via JWT"
+{
+  "sub": "8d4c2a1e-7f3b-4e9a-b6d5-1c2e3f4a5b6c",
+  "email": "pedro@pujante.com.br",
+  "role": "authenticated"
+}
+```
+
+Via API key, o principal é sintético (prefixo `api_key:` + id da chave):
+
+```json title="200 OK — via API key"
+{
+  "sub": "api_key:f3a9c1d2-5e6b-4a7c-8d9e-0f1a2b3c4d5e",
+  "email": "api_key:f3a9c1d2-5e6b-4a7c-8d9e-0f1a2b3c4d5e",
+  "role": "api_key"
+}
+```
+
+Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
+</Accordion>
+</AccordionGroup>
+
+## Materialized views
+
+<Tip>
+A lista completa de MVs (o que cada uma agrega, fontes e staleness) está documentada em [Arquitetura](/admin/arquitetura#catalogo-das-mvs).
+</Tip>
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/mvs` | Lista MVs `admin_mv_*` e status de refresh | JWT/Key |
+| POST | `/admin/mvs/refresh` | Força refresh (`?concurrent=true` para não travar leituras) | JWT/Key |
+
+<AccordionGroup>
+<Accordion title="GET /admin/mvs">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/mvs" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/mvs" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK"
+{
+  "count": 2,
+  "views": [
+    {
+      "name": "admin_mv_kpis_monthly",
+      "is_populated": true,
+      "size_bytes": 245760,
+      "refreshed_at": "2026-06-12T03:00:04+00:00"
+    },
+    {
+      "name": "admin_mv_subscribers",
+      "is_populated": true,
+      "size_bytes": 1048576,
+      "refreshed_at": "2026-06-12T03:00:09+00:00"
+    }
+  ]
+}
+```
+
+Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
+</Accordion>
+
+<Accordion title="POST /admin/mvs/refresh">
+Escrita: **somente JWT**. Uma API key recebe **403** (veja [Erros comuns](/admin/convencoes#erros-comuns)).
+
+```bash title="Requisição (JWT)"
+curl -X POST "https://admin-api.pujante.com.br/admin/mvs/refresh?concurrent=true" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "count": 2,
+  "results": [
+    { "name": "admin_mv_kpis_monthly", "status": "ok", "error": null },
+    { "name": "admin_mv_subscribers", "status": "ok", "error": null }
+  ]
+}
+```
+
+Falhas de refresh em uma MV não derrubam a chamada — vêm linha a linha em `results` com `status != "ok"` e o `error` preenchido.
+</Accordion>
+</AccordionGroup>
+
+## Overview
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/overview` | KPIs consolidados + sparklines + últimos lançamentos | JWT/Key |
+| GET | `/admin/overview/dau-mau` | DAU/MAU rolling + stickiness | JWT/Key |
+
+### GET /admin/overview/dau-mau
+
+<ParamField query="origin" type="string" default="all">
+Filtra por produto: `site`, `escola` ou `all`.
+</ParamField>
+
+<ParamField query="days" type="integer" default="30">
+Janela em dias, entre 7 e 30.
+</ParamField>
+
+<AccordionGroup>
+<Accordion title="GET /admin/overview">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/overview?origin=all" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/overview?origin=all" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK"
+{
+  "origin": "all",
+  "refreshed_at": "2026-06-12T03:00:04+00:00",
+  "has_data": true,
+  "note": null,
+  "mrr": {
+    "label": "MRR",
+    "value": 48750.0,
+    "unit": "BRL",
+    "delta_pct": 4.2,
+    "delta_abs": 1962.5,
+    "trend": "up",
+    "series": [
+      { "label": "2026-05", "value": 46787.5 },
+      { "label": "2026-06", "value": 48750.0 }
+    ]
+  },
+  "subscribers": {
+    "label": "Assinantes ativos",
+    "value": 1280,
+    "unit": "count",
+    "delta_pct": 2.1,
+    "delta_abs": 26,
+    "trend": "up",
+    "series": []
+  },
+  "churn_30d": {
+    "label": "Churn 30d",
+    "value": 3.4,
+    "unit": "percent",
+    "delta_pct": -0.5,
+    "delta_abs": -0.02,
+    "trend": "down",
+    "series": []
+  },
+  "cash_7d": {
+    "label": "Caixa 7d",
+    "value": 12480.0,
+    "unit": "BRL",
+    "delta_pct": 8.7,
+    "delta_abs": 998.4,
+    "trend": "up",
+    "series": []
+  },
+  "mrr_by_origin": [
+    { "period_month": "2026-05", "site": 31200.0, "escola": 15587.5 },
+    { "period_month": "2026-06", "site": 32500.0, "escola": 16250.0 }
+  ],
+  "recent_launches": [
+    {
+      "id": "9b2f4e61-3c5d-4a8e-9f0a-1b2c3d4e5f6a",
+      "at": "2026-06-11T18:30:00+00:00",
+      "origin": "site",
+      "kind": "post",
+      "title": "Marco legal do agro: o que muda em 2026"
+    }
+  ]
+}
+```
+
+Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
+</Accordion>
+
+<Accordion title="GET /admin/overview/dau-mau">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/overview/dau-mau?origin=site&days=30" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/overview/dau-mau?origin=site&days=30" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK"
+{
+  "origin": "site",
+  "refreshed_at": "2026-06-12T03:00:04+00:00",
+  "points": [
+    { "day": "2026-06-10", "dau": 412, "mau": 3120, "stickiness_pct": 13.2 },
+    { "day": "2026-06-11", "dau": 425, "mau": 3150, "stickiness_pct": 13.5 }
+  ],
+  "current_dau": 425,
+  "current_mau": 3150,
+  "current_stickiness_pct": 13.5
+}
+```
+
+`days` fora de 7–30 retorna **422** (veja [Erros comuns](/admin/convencoes#erros-comuns)).
+</Accordion>
+</AccordionGroup>

@@ -1,38 +1,18 @@
 ---
-title: "API: monetização"
+title: "Monetização"
 description: "Assinaturas PRO, checkout de apoiador, tokens de cartão, créditos e leads de apoiador"
+icon: "credit-card"
 ---
 
 Base: `/api/v1`. Pagamentos via **Asaas** — ver [Integrações](/agropujante/integracoes#asaas-pagamentos).
 
 ## Erros comuns
 
-O handler global adiciona `code` ao body. Shapes que se repetem:
+Shapes de erro (`{detail, code}`) e 422 do Pydantic seguem as [convenções da API](/agropujante/convencoes). Específico desta página: `billing_type` só aceita `PIX` ou `CREDIT_CARD` — qualquer outro valor (ex.: `BOLETO`) vira 422 de `literal_error`.
 
-```json title="401 Unauthorized — sem credencial"
-{ "detail": "Token de autenticação não fornecido", "code": "http_error" }
-```
-
-```json title="401 Unauthorized — token ruim"
-{ "detail": "Token inválido ou expirado", "code": "http_error" }
-```
-
-```json title="403 Forbidden — role insuficiente (endpoints admin+)"
-{ "detail": "Acesso negado — permissão insuficiente", "code": "http_error" }
-```
-
-```json title="422 Unprocessable Entity — validação Pydantic (shape padrão FastAPI)"
-{
-  "detail": [
-    {
-      "type": "literal_error",
-      "loc": ["body", "billing_type"],
-      "msg": "Input should be 'PIX' or 'CREDIT_CARD'",
-      "input": "BOLETO"
-    }
-  ]
-}
-```
+<Warning>
+Os exemplos de checkout e webhook desta página criam **cobranças e assinaturas reais** se rodados contra produção com `ASAAS_BASE_URL` de produção. Use o sandbox do Asaas em desenvolvimento e confirme o ambiente antes de executar qualquer POST.
+</Warning>
 
 ## Subscriptions (`/subscriptions`)
 
@@ -285,6 +265,10 @@ curl "https://api.agropujante.com.br/api/v1/supporter-checkout/upgrade-preview" 
 <Accordion title="POST /api/v1/checkout/cards">
 Tokeniza o cartão no Asaas — o PAN nunca é persistido no banco.
 
+<Info>
+O número de cartão abaixo (`5162306219378829`) é um **cartão de teste do sandbox do Asaas** — não é um PAN real. Nunca coloque dados de cartão reais em exemplos, logs ou documentação.
+</Info>
+
 ```bash title="Requisição"
 curl -X POST "https://api.agropujante.com.br/api/v1/checkout/cards" \
   -H "Authorization: Bearer <TOKEN>" \
@@ -381,7 +365,7 @@ curl "https://api.agropujante.com.br/api/v1/credits/balance" \
 }
 ```
 
-Erros genéricos (401): ver [Erros comuns](#erros-comuns).
+Erros genéricos (401): ver [convenções da API](/agropujante/convencoes).
 </Accordion>
 
 <Accordion title="POST /api/v1/credits/track-share">
@@ -461,7 +445,7 @@ curl -X POST "https://api.agropujante.com.br/api/v1/supporter-leads" \
 }
 ```
 
-Erros genéricos (422): ver [Erros comuns](#erros-comuns).
+Erros genéricos (422): ver [convenções da API](/agropujante/convencoes).
 </Accordion>
 
 <Accordion title="GET /api/v1/supporter-leads">
@@ -486,7 +470,7 @@ curl "https://api.agropujante.com.br/api/v1/supporter-leads" \
 ]
 ```
 
-O router também expõe `GET /supporter-leads/unread-count`, `PATCH /supporter-leads/{lead_id}/read` e `PATCH /supporter-leads/read-all` (todos admin+). Erros genéricos (401, 403): ver [Erros comuns](#erros-comuns).
+O router também expõe `GET /supporter-leads/unread-count`, `PATCH /supporter-leads/{lead_id}/read` e `PATCH /supporter-leads/read-all` (todos admin+). Erros genéricos (401, 403): ver [convenções da API](/agropujante/convencoes).
 </Accordion>
 </AccordionGroup>
 

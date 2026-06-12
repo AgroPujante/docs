@@ -1,0 +1,84 @@
+---
+title: "Convenções da API"
+description: "Shape de erro {detail, code}, níveis de auth, paginação, rate limiting, UUIDs e datas na /api/v1"
+icon: "ruler"
+---
+
+Convenções que valem para **toda** a `/api/v1` do Portal. As páginas de [Referência da API](/agropujante/api/auth-users) assumem tudo daqui e documentam só o que é específico de cada endpoint.
+
+## Shape de erro
+
+O handler global (`core/exceptions.py`) padroniza qualquer erro em:
+
+```json
+{ "detail": "Post não encontrado", "code": "not_found" }
+```
+
+| `code` | Origem | Status típico |
+|---|---|---|
+| `http_error` | Qualquer `HTTPException` levantada nos routers | 400, 401, 403, 404, 409, 429... |
+| `not_found` | `NotFoundException` (exceptions de domínio) | 404 |
+| `forbidden` | `ForbiddenException` | 403 |
+| `conflict` | `ConflictException` | 409 |
+| `app_error` | `AppException` genérica de domínio | 400 |
+| `internal_error` | Exceção não tratada (logada com traceback) | 500 |
+
+Duas exceções ao shape:
+
+- **422 de validação** — o Pydantic responde com o shape padrão do FastAPI (`detail` é uma **lista** de erros de campo, sem `code`):
+
+  ```json
+  { "detail": [ { "type": "missing", "loc": ["body", "email"], "msg": "Field required", "input": {} } ] }
+  ```
+
+- **429 do slowapi** — o middleware de rate limit responde com `error` em vez de `detail`:
+
+  ```json
+  { "error": "Rate limit exceeded: 10 per 1 minute" }
+  ```
+
+### Mensagens em pt-BR, com acento
+
+As mensagens de `detail` são em português **com acentuação normal** ("Usuário não encontrado", "Você já possui uma assinatura ativa").
+
+<Info>
+Isso é diferente da Escola e do Admin, que evitam acento nas mensagens de erro. Ao portar código entre projetos, não "normalize" as mensagens — cada backend tem sua convenção, e há front e testes comparando strings exatas. (Alguns endpoints mais antigos do Portal, como boletins, ainda têm mensagens sem acento — a convenção vale para código novo.)
+</Info>
+
+## Níveis de auth
+
+Nas tabelas de endpoints, a coluna **Auth** usa esta escala:
+
+| Nível | O que significa |
+|---|---|
+| **Público** | Sem credencial (alguns aceitam Bearer opcional para personalizar a resposta) |
+| **JWT** | `Authorization: Bearer <access_token>` do Supabase Auth |
+| **editor+** | JWT cujo user tem role ≥ `editor` em `admin_users` |
+| **gestor+** | JWT com role ≥ `gestor` |
+| **admin+** | JWT com role `administrador` |
+| **API key (read-only)** | Header `X-API-Key` (ou `?api_key=`) — **só funciona em GET**; escrita devolve 403 |
+
+Detalhes do RBAC e do gotcha dos 2 pipelines de apoiador em [Autenticação](/agropujante/autenticacao).
+
+## Paginação
+
+Listagens paginadas usam query params `page` (1-based) e `page_size`, e respondem em envelope:
+
+```json
+{ "items": [ ... ], "total": 42, "page": 1, "page_size": 10 }
+```
+
+Endpoints de lista curta (catálogos como `/tags`, `/books`) devolvem array direto, sem envelope.
+
+## Rate limiting
+
+O backend usa **slowapi** com limite por IP. Há um limite global (`RATE_LIMIT_PER_MINUTE`) e limites próprios mais agressivos em endpoints sensíveis (login `10/minute`, newsletter subscribe `5/minute`, password reset `10/hour`...). Estourou → **429** com o shape `{"error": ...}` acima.
+
+<Note>
+A busca de jurisprudência tem **dois** 429 distintos: o do slowapi e os de regra de negócio (limite mensal do plano / limite diário do provedor), que vêm como `HTTPException` no shape `{detail, code}` — ver [Jurisprudência e boletins](/agropujante/api/jurisprudencia).
+</Note>
+
+## IDs e datas
+
+- **IDs** são UUID v4 (`uuid-ossp`), como `c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f`. Exceção: recursos externos mantêm o id do provedor (número de processo na jurisprudência, `pay_*`/`sub_*` do Asaas).
+- **Datas** são `TIMESTAMPTZ` serializadas em ISO 8601 com offset: `2026-06-12T15:00:00+00:00`. Sempre UTC no banco; conversão de fuso é responsabilidade do cliente (exceção documentada: `/analytics/peak-hours` agrega em UTC-3).

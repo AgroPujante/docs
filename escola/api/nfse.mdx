@@ -1,0 +1,382 @@
+---
+title: "NFSe (Bling)"
+description: "Emissão de NFSe via Bling: OAuth, notas, KPIs, configuração fiscal e automação"
+icon: "receipt"
+---
+
+Grupo `/bling` — emissão e gestão de notas fiscais de serviço via Bling: conexão OAuth, NFe, KPIs e estatísticas sobre `bling_invoices`, configuração fiscal (NFSe e por produto) e automação de emissão. Dashboards de receita estão em [Financeiro — dashboards](/escola/api/financeiro-dashboards) e o billing dos gateways em [Billing](/escola/api/billing).
+
+## Erros comuns
+
+Os erros genéricos da API v2 (401/403/422, shape `{detail, code}`) estão em [Convenções da API](/escola/convencoes) — abaixo, apenas os específicos de cada endpoint.
+
+## Bling / NFSe (`/bling`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/bling/authorize` | Iniciar OAuth Bling | ADMIN |
+| GET | `/bling/callback` | Callback OAuth | Público |
+| GET | `/bling/status` | Status da conexão | ADMIN |
+| POST | `/bling/nfe` | Criar NFe | ADMIN |
+| POST | `/bling/nfe/{id}/enviar` | Enviar NFe | ADMIN |
+| POST | `/bling/nfe/{id}/cancelar` | Cancelar NFe | ADMIN |
+| GET | `/bling/nfe/{id}` | Detalhe NFe | ADMIN |
+| GET | `/bling/nfe` | Listar NFe | ADMIN |
+| GET | `/bling/invoices/kpis` | KPIs de notas | MANAGER |
+| GET | `/bling/invoices/monthly-stats` | Stats mensais | MANAGER |
+| GET | `/bling/invoices` | Listar notas (`?page`, `?limit`, `?status`, `?search`, `?dateFrom`, `?dateTo`) | MANAGER |
+| GET | `/bling/nfse-config` | Configuração NFSe | ADMIN |
+| PUT | `/bling/nfse-config` | Atualizar config NFSe | ADMIN |
+| GET | `/bling/product-configs` | Configs fiscais por produto | ADMIN |
+| PUT | `/bling/product-configs/{product_id}` | Upsert de config fiscal | ADMIN |
+| GET | `/bling/automation/config` | Config da automação | ADMIN |
+| PUT | `/bling/automation/config` | Atualizar automação | ADMIN |
+| GET | `/bling/automation/logs` | Logs da automação (`?page`, `?limit`) | ADMIN |
+| POST | `/bling/webhook` | Webhook Bling | Público |
+
+<Warning>
+Retornam **501 — não implementado**: `/authorize`, `/callback`, `/status`, todas as rotas `/nfe*` e `POST /webhook`.
+</Warning>
+
+Os endpoints 501 deste grupo respondem com o template:
+
+```json title="501 Not Implemented (template)"
+{ "detail": "Endpoint Bling nao migrado. Use Nest legado. Equivalente: BlingService.<metodo>", "code": "http_error" }
+```
+
+### PUT /bling/nfse-config
+
+<ParamField body="cnpj" type="string">CNPJ do emissor.</ParamField>
+<ParamField body="razaoSocial" type="string">Razão social.</ParamField>
+<ParamField body="inscricaoMunicipal" type="string">Inscrição municipal — além de demais campos fiscais (CNAE, código de serviço, alíquota ISS, código NBS).</ParamField>
+
+### PUT /bling/product-configs/\{product_id\}
+
+<ParamField body="fiscalDescription" type="string">Descrição fiscal do serviço.</ParamField>
+<ParamField body="serviceCode" type="string">Código de serviço municipal.</ParamField>
+<ParamField body="codigoNbs" type="string">Código NBS.</ParamField>
+<ParamField body="active" type="boolean">Emissão ativa para o produto.</ParamField>
+
+### PUT /bling/automation/config
+
+<ParamField body="enabled" type="boolean">Automação de emissão ligada.</ParamField>
+<ParamField body="products" type="array">Produtos incluídos na automação.</ParamField>
+
+### Exemplos
+
+<AccordionGroup>
+<Accordion title="GET /api/v2/bling/authorize">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/bling/authorize" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `BlingService.getAuthorizationUrl`.
+</Accordion>
+
+<Accordion title="GET /api/v2/bling/callback">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/bling/callback?code=abc123"
+```
+
+**501** — template acima com `BlingService.exchangeCodeForTokens`. (Rota pública, sem auth.)
+</Accordion>
+
+<Accordion title="GET /api/v2/bling/status">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/bling/status" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `BlingService.getConnectionStatus`.
+</Accordion>
+
+<Accordion title="POST /api/v2/bling/nfe">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/bling/nfe" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `BlingService.createNfe / createAndSendNfe`.
+</Accordion>
+
+<Accordion title="POST /api/v2/bling/nfe/{id}/enviar">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/bling/nfe/987654321/enviar" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `BlingService.sendNfeToSefaz`.
+</Accordion>
+
+<Accordion title="POST /api/v2/bling/nfe/{id}/cancelar">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/bling/nfe/987654321/cancelar" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `BlingService.cancelNfe`.
+</Accordion>
+
+<Accordion title="GET /api/v2/bling/nfe/{id}">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/bling/nfe/987654321" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `BlingService.getNfe`.
+</Accordion>
+
+<Accordion title="GET /api/v2/bling/nfe">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/bling/nfe?page=1&status=6&dateFrom=2026-05-01&dateTo=2026-05-31" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `BlingService.listNfes`.
+</Accordion>
+
+<Accordion title="GET /api/v2/bling/invoices/kpis">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/bling/invoices/kpis" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "emittedCount": 64,
+  "emittedCountChange": 6,
+  "totalAmount": 9230.00,
+  "totalAmountChange": 820.00,
+  "pendingCount": 3,
+  "rejectedCount": 1
+}
+```
+
+Mês atual vs mês anterior, calculado sobre `bling_invoices`.
+</Accordion>
+
+<Accordion title="GET /api/v2/bling/invoices/monthly-stats">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/bling/invoices/monthly-stats" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  { "month": "2026-04", "count": 58, "total": 8410.00 },
+  { "month": "2026-05", "count": 64, "total": 9230.00 }
+]
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/bling/invoices">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/bling/invoices?page=1&limit=10&status=EMITTED&search=prado&dateFrom=2026-05-01&dateTo=2026-05-31" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "data": [
+    {
+      "id": "inv_5510aa",
+      "blingNfeId": "987654321",
+      "subscriptionId": "sub_44c1e0",
+      "paymentId": "pay_9f3a2b",
+      "clientName": "Prado & Almeida Advocacia Agrária",
+      "clientDocument": "12.345.678/0001-90",
+      "amount": 130.00,
+      "status": "EMITTED",
+      "blingStatus": 6,
+      "blingStatusLabel": "Autorizada",
+      "numero": "1042",
+      "serie": "1",
+      "chaveAcesso": "52260612345678000190550010000010421000010425",
+      "linkDanfe": "https://www.bling.com.br/danfe/...",
+      "linkPdf": "https://www.bling.com.br/pdf/...",
+      "error": null,
+      "createdAt": "2026-05-12T10:05:00+00:00",
+      "updatedAt": "2026-05-12T10:06:30+00:00"
+    }
+  ],
+  "total": 64,
+  "page": 1,
+  "limit": 10,
+  "totalPages": 7
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/bling/nfse-config">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/bling/nfse-config" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "cnpj": "12.345.678/0001-90",
+  "razaoSocial": "Escola Pujante Educação Ltda",
+  "inscricaoMunicipal": "123456",
+  "codigoMunicipio": "5208707",
+  "cnae": "8599-6/04",
+  "codigoServico": "8.02",
+  "codigoNbs": "123456000",
+  "aliquotaIss": "5.00",
+  "updatedAt": "2026-04-10T18:00:00+00:00"
+}
+```
+
+Sem config gravada, retorna todos os campos como string vazia e `updatedAt: null`.
+</Accordion>
+
+<Accordion title="PUT /api/v2/bling/nfse-config">
+```bash title="Requisição"
+curl -X PUT "https://api.escolapujante.com.br/api/v2/bling/nfse-config" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"cnpj": "12.345.678/0001-90", "razaoSocial": "Escola Pujante Educação Ltda", "aliquotaIss": "5.00"}'
+```
+
+```json title="200 OK"
+{
+  "cnpj": "12.345.678/0001-90",
+  "razaoSocial": "Escola Pujante Educação Ltda",
+  "inscricaoMunicipal": "123456",
+  "codigoMunicipio": "5208707",
+  "cnae": "8599-6/04",
+  "codigoServico": "8.02",
+  "codigoNbs": "123456000",
+  "aliquotaIss": "5.00",
+  "updatedAt": "2026-06-12T13:40:00+00:00"
+}
+```
+
+```json title="422 Unprocessable Entity — body sem nenhum campo conhecido"
+{ "detail": "Nenhum campo enviado.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/bling/product-configs">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/bling/product-configs" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "bpc_771c20",
+    "productId": "prod_clube01",
+    "fiscalDescription": "Serviço educacional — Clube de Membros",
+    "serviceCode": "8.02",
+    "codigoNbs": "123456000",
+    "active": true,
+    "createdAt": "2026-04-10T18:00:00+00:00",
+    "updatedAt": "2026-05-02T09:00:00+00:00"
+  }
+]
+```
+</Accordion>
+
+<Accordion title="PUT /api/v2/bling/product-configs/{product_id}">
+```bash title="Requisição"
+curl -X PUT "https://api.escolapujante.com.br/api/v2/bling/product-configs/prod_clube01" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"fiscalDescription": "Serviço educacional — Clube de Membros", "serviceCode": "8.02", "codigoNbs": "123456000", "active": true}'
+```
+
+```json title="200 OK"
+{
+  "id": "bpc_771c20",
+  "productId": "prod_clube01",
+  "fiscalDescription": "Serviço educacional — Clube de Membros",
+  "serviceCode": "8.02",
+  "codigoNbs": "123456000",
+  "active": true,
+  "createdAt": "2026-04-10T18:00:00+00:00",
+  "updatedAt": "2026-06-12T13:42:00+00:00"
+}
+```
+
+Upsert: cria a config se ainda não existir para o `product_id`.
+</Accordion>
+
+<Accordion title="GET /api/v2/bling/automation/config">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/bling/automation/config" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "id": "bac_001",
+  "enabled": true,
+  "products": ["prod_clube01", "prod_apoiador01"],
+  "updatedAt": "2026-05-02T09:00:00+00:00"
+}
+```
+
+Sem config gravada: `{ "id": null, "enabled": false, "products": [], "updatedAt": null }`.
+</Accordion>
+
+<Accordion title="PUT /api/v2/bling/automation/config">
+```bash title="Requisição"
+curl -X PUT "https://api.escolapujante.com.br/api/v2/bling/automation/config" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true, "products": ["prod_clube01", "prod_apoiador01"]}'
+```
+
+```json title="200 OK"
+{
+  "id": "bac_001",
+  "enabled": true,
+  "products": ["prod_clube01", "prod_apoiador01"],
+  "updatedAt": "2026-06-12T13:45:00+00:00"
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/bling/automation/logs">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/bling/automation/logs?page=1&limit=20" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "data": [
+    {
+      "id": "bal_4420fa",
+      "invoiceId": "inv_5510aa",
+      "paymentId": "pay_9f3a2b",
+      "clientName": "Prado & Almeida Advocacia Agrária",
+      "productName": "Escritório Apoiador",
+      "amount": 130.00,
+      "success": true,
+      "errorMessage": null,
+      "createdAt": "2026-05-12T10:06:35+00:00"
+    }
+  ],
+  "total": 64,
+  "page": 1,
+  "limit": 20,
+  "totalPages": 4
+}
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/bling/webhook">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/bling/webhook" \
+  -H "Content-Type: application/json" \
+  -H "x-bling-signature-256: sha256=<ASSINATURA>" \
+  -d '{"evento": "nfe.autorizada"}'
+```
+
+**501** — template acima com `BlingService.handleWebhook (verifyWebhookSignature)`. (Rota pública, validação por HMAC.)
+</Accordion>
+</AccordionGroup>

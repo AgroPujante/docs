@@ -1,0 +1,109 @@
+---
+title: "Quickstart"
+description: "Rode o Pujante Admin localmente: backend FastAPI na porta 8000 e frontend Vite na 5173."
+icon: "rocket"
+---
+
+Guia para subir o painel completo na sua máquina. Pré-requisitos: **Python 3.11+**, **Node 20.x** e acesso ao projeto Supabase (URL + chaves).
+
+<Steps>
+<Step title="Backend — ambiente e dependências">
+
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate     # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
+```
+
+O projeto instala como pacote editável (`pyproject.toml`) — FastAPI, uvicorn, supabase, APScheduler e as dev-deps (pytest, ruff) entram juntos.
+
+</Step>
+<Step title="Backend — .env mínimo">
+
+Copie o template e preencha:
+
+```bash
+cp .env.example .env
+```
+
+```bash title=".env mínimo para dev"
+ENV=development
+
+SUPABASE_URL=https://<seu-projeto>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+SUPABASE_ANON_KEY=<anon-key>
+
+JWT_JWKS_URL=https://<seu-projeto>.supabase.co/auth/v1/.well-known/jwks.json
+JWT_AUDIENCE=authenticated
+
+CORS_ORIGINS=http://localhost:5173
+
+# Em dev, evite o APScheduler disparando refresh de MVs e sync do Meta:
+SCHEDULER_ENABLED=false
+```
+
+<Note>
+`SCHEDULER_ENABLED` tem default `true` no código — desligar em dev é recomendação, não obrigação. Para conseguir **logar** no painel, seu email também precisa estar em `ALLOWED_ADMIN_EMAILS` (JWT válido com email fora da lista recebe 403).
+</Note>
+
+<Warning>
+A `SUPABASE_SERVICE_ROLE_KEY` dá acesso total ao schema `pujante` de produção. Nunca commite o `.env` e não compartilhe a chave.
+</Warning>
+
+</Step>
+<Step title="Backend — subir o servidor">
+
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+
+Comando confirmado no README do repositório. A API sobe em `http://localhost:8000`.
+
+</Step>
+<Step title="Frontend — instalar e configurar">
+
+```bash
+cd frontend
+npm install
+cp .env.example .env.local
+```
+
+```bash title=".env.local"
+VITE_SUPABASE_URL=https://<seu-projeto>.supabase.co
+VITE_SUPABASE_ANON_KEY=<anon-key>
+VITE_API_URL=http://localhost:8000
+```
+
+</Step>
+<Step title="Frontend — subir o Vite">
+
+```bash
+npm run dev
+```
+
+O painel abre em `http://localhost:5173` (origem já permitida pelo `CORS_ORIGINS` acima).
+
+</Step>
+<Step title="Verificar">
+
+```bash
+curl http://localhost:8000/health
+```
+
+```json title="200 OK"
+{ "status": "ok", "ts": "2026-06-12T14:03:21.482910+00:00" }
+```
+
+Com `ENV != production`, a documentação interativa fica **aberta** em `http://localhost:8000/api/docs` (em produção ela exige `X-API-Key`). Use `GET /health/deep` para validar JWKS e o estado das MVs.
+
+</Step>
+</Steps>
+
+<Tip>
+Dashboards vazios em dev geralmente significam MVs não populadas. Liste com `GET /admin/mvs` e force um refresh com `POST /admin/mvs/refresh` — veja [Arquitetura](/admin/arquitetura#materialized-views-e-refresh).
+</Tip>
+
+<Note>
+Não há banco local/seed: o backend aponta direto para o Supabase configurado no `.env`. Se você usa o projeto de produção, todas as leituras refletem dados reais — cuidado com endpoints de escrita.
+</Note>

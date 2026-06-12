@@ -1,7 +1,12 @@
 ---
 title: "API consumida"
 description: "Todos os endpoints que o app consome — AgroPujante /api/v1, Escola /api/v2 e ViaCEP"
+icon: "plug"
 ---
+
+<Note>
+  Esta página é a visão **"o que o app consome"** — um índice enxuto sob a ótica do mobile. Os contratos completos, com payloads e exemplos, vivem nas tabs de cada produto: no AgroPujante, [auth e usuários](/agropujante/api/auth-users), [conteúdo](/agropujante/api/conteudo), [jurisprudência e boletins](/agropujante/api/jurisprudencia), [monetização](/agropujante/api/monetizacao) e [marketing e site](/agropujante/api/marketing); na Escola, [Auth](/escola/api/auth), [LMS](/escola/api/lms), [Mentoria](/escola/api/mentoria), [Assinaturas](/escola/api/assinaturas) e [Comunicação](/escola/api/comunicacao).
+</Note>
 
 O app consome dois backends e um serviço externo. Auth **Sim** = exige Bearer token; **Não** = público; **Opcional** = o token enriquece a resposta quando presente.
 
@@ -10,6 +15,8 @@ O app consome dois backends e um serviço externo. Auth **Sim** = exige Bearer t
 Base: `https://api.agropujante.com.br/api/v1`. Bearer token nativo do Portal, lido do Expo Secure Store.
 
 ### Auth e conta
+
+Referência completa: [API: auth e usuários](/agropujante/api/auth-users).
 
 | Método | Endpoint | Auth | Descrição |
 |---|---|---|---|
@@ -46,6 +53,8 @@ Base: `https://api.agropujante.com.br/api/v1`. Bearer token nativo do Portal, li
 
 ### Conteúdo editorial
 
+Referência completa: [API: conteúdo](/agropujante/api/conteudo) (posts, autores, colunas, busca) e [API: jurisprudência e boletins](/agropujante/api/jurisprudencia) (boletins).
+
 | Método | Endpoint | Auth | Descrição |
 |---|---|---|---|
 | GET | `/posts` | Não | Lista com `?type`, `?category_slug`, `?featured`, `?column_id`, `?page`, `?page_size` |
@@ -63,6 +72,8 @@ Base: `https://api.agropujante.com.br/api/v1`. Bearer token nativo do Portal, li
 
 ### Interações sociais
 
+Referência completa: [API: conteúdo](/agropujante/api/conteudo) (comentários e likes).
+
 | Método | Endpoint | Auth | Descrição |
 |---|---|---|---|
 | GET | `/likes/posts/{postId}` | Opcional | `like_count` (+ estado do usuário se autenticado) |
@@ -71,6 +82,8 @@ Base: `https://api.agropujante.com.br/api/v1`. Bearer token nativo do Portal, li
 | POST | `/comments/` | Sim | `{post_id, author_name, author_email, content}` |
 
 ### Comunidade e institucional
+
+Referência completa: [API: marketing e site](/agropujante/api/marketing) (eventos, parceiros, apoiadores, newsletter).
 
 | Método | Endpoint | Auth | Descrição |
 |---|---|---|---|
@@ -81,6 +94,8 @@ Base: `https://api.agropujante.com.br/api/v1`. Bearer token nativo do Portal, li
 
 ### Push e gamificação
 
+Créditos na referência completa: [API: monetização](/agropujante/api/monetizacao).
+
 | Método | Endpoint | Auth | Descrição |
 |---|---|---|---|
 | POST | `/devices` | Sim | `{token (Expo push), platform}` — registra device pra push |
@@ -90,9 +105,11 @@ Base: `https://api.agropujante.com.br/api/v1`. Bearer token nativo do Portal, li
 
 ## Escola `/api/v2`
 
-Base configurável via `expo.extra.escolaApiUrl` (em dev local, `http://192.168.0.10:8765/api/v2` pro Expo Go). Bearer **JWT Supabase**, obtido via handoff ou login manual.
+Host configurável via `expo.extra.escolaApiUrl` (em dev local, o IP da máquina, ex. `http://192.168.0.10:8765`, pro Expo Go — o sufixo `/api/v2` é concatenado no código). Bearer **JWT Supabase**, obtido via handoff ou login manual.
 
 ### Auth e perfil
+
+Referência completa: [Escola: Auth](/escola/api/auth). O fluxo de handoff a partir do Portal está em [Autenticação](/mobile/autenticacao).
 
 | Método | Endpoint | Auth | Descrição |
 |---|---|---|---|
@@ -101,6 +118,8 @@ Base configurável via `expo.extra.escolaApiUrl` (em dev local, `http://192.168.
 | GET | `/users/profile/me` | Sim | `EscolaProfile` (role, status de mentoria, matrícula) |
 
 ### LMS
+
+Referência completa: [Escola: LMS](/escola/api/lms).
 
 | Método | Endpoint | Auth | Descrição |
 |---|---|---|---|
@@ -116,6 +135,8 @@ Base configurável via `expo.extra.escolaApiUrl` (em dev local, `http://192.168.
 
 ### Mentoria (mentored-tracking)
 
+Referência completa: [Escola: Mentoria](/escola/api/mentoria).
+
 | Método | Endpoint | Auth | Descrição |
 |---|---|---|---|
 | GET | `/mentored-tracking/my-tests-status` | Sim | Booleano por teste (DISC, Procrastinação, Socioemocional, Atenção/Memória) |
@@ -125,6 +146,8 @@ Base configurável via `expo.extra.escolaApiUrl` (em dev local, `http://192.168.
 | PUT | `/mentored-tracking/my-profile` | Sim | Perfil completo + payloads de resultados (`DiscResultPayload`, `ProcrastinationResultPayload`, `SocioemocionalResultPayload`, `AttentionMemoryResultPayload`) |
 
 ### Assinaturas, Exordial e calendário
+
+Referências completas: [Escola: Assinaturas e pagamentos](/escola/api/assinaturas) (subscriptions) e [Escola: Comunicação](/escola/api/comunicacao) (calendário).
 
 | Método | Endpoint | Auth | Descrição |
 |---|---|---|---|

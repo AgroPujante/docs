@@ -10,19 +10,7 @@ A **criação de cobranças recorrentes** nos gateways (Asaas/PagarMe) ainda viv
 
 ## Erros comuns
 
-Erros de `HTTPException`/`AppException` saem com `detail` + `code` (handler global em `core/exceptions.py`). O 422 de validação segue o shape padrão do FastAPI.
-
-```json title="401 Unauthorized"
-{ "detail": "Token de autenticacao nao fornecido", "code": "http_error" }
-```
-
-```json title="403 Forbidden (rota MANAGER/ADMIN sem role)"
-{ "detail": "Acesso restrito", "code": "http_error" }
-```
-
-```json title="422 Unprocessable Entity"
-{ "detail": [{ "loc": ["body", "productType"], "msg": "field required", "type": "missing" }] }
-```
+Os erros genéricos da API v2 (401/403/422, shape `{detail, code}`) estão em [Convenções da API](/escola/convencoes) — abaixo, apenas os específicos de cada endpoint.
 
 ## Products (`/products`)
 

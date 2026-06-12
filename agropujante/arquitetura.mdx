@@ -1,15 +1,31 @@
 ---
 title: "Arquitetura"
 description: "Estrutura do backend FastAPI, frontend React, OG proxy, deploy Railway, cache, rate limiting e RLS"
+icon: "sitemap"
 ---
 
 ## Visão de alto nível
 
-```
-Browser ──┬─> Express server.js (Railway) ──> assets do build Vite (SPA fallback)
-          │        └─ bots/crawlers ──> proxy /og/{type}/{slug} no FastAPI
-          ├─> FastAPI /api/v1 (Railway) ──> Supabase Postgres (schema pujante)
-          └─> PostgREST do Supabase (anon key + RLS, Accept-Profile: pujante)
+```mermaid
+graph LR
+    Browser["Browser / Crawler"]
+
+    subgraph Railway
+        Express["Express server.js<br/>(assets Vite + SPA fallback)"]
+        FastAPI["FastAPI /api/v1<br/>(lógica de negócio, cache, integrações)"]
+    end
+
+    subgraph Supabase
+        PostgREST["PostgREST<br/>(anon key + RLS,<br/>Accept-Profile: pujante)"]
+        Postgres[("Postgres<br/>schema pujante")]
+    end
+
+    Browser --> Express
+    Express -- "bots → proxy<br/>/og/{type}/{slug}" --> FastAPI
+    Browser -- "API /api/v1" --> FastAPI
+    Browser -- "leituras públicas<br/>e escritas via RLS" --> PostgREST
+    FastAPI -- "service role<br/>(bypassa RLS)" --> Postgres
+    PostgREST --> Postgres
 ```
 
 ## Backend (FastAPI)

@@ -1,0 +1,78 @@
+---
+title: "Segurança operacional"
+description: "Inventário de secrets por criticidade, runbook de token vazado, escopo das API keys e boas práticas"
+icon: "shield-halved"
+---
+
+<Warning>
+Esta documentação **nunca** contém valores de secrets — apenas nomes de variáveis e onde elas vivem. Valores ficam exclusivamente no Railway (envs dos serviços) e nos dashboards dos provedores.
+</Warning>
+
+## Inventário de secrets por criticidade
+
+| Secret (env) | Onde vive | Criticidade | Se vazar, o que fazer |
+|---|---|---|---|
+| `SUPABASE_ANON_KEY` | Frontends + backends | **Pública por design** — o RLS é quem protege os dados | Nada urgente por si só; mas se aparecer junto de bypass de RLS, trate como incidente e revise as policies |
+| `SUPABASE_SERVICE_ROLE_KEY` | Só backends (nunca no frontend) | **Crítica** — bypassa RLS, acesso total ao banco | Rotacionar imediatamente no dashboard do Supabase (API settings) e atualizar a env em **todos** os serviços do Railway que a usam |
+| `DATABASE_URL` (Postgres direto) | `Pujante-Admin\backend\.env` local (gitignored) | **Crítica** — acesso SQL direto a produção | Resetar a senha do banco no Supabase, atualizar a connection string onde for usada |
+| `INTERNAL_API_TOKEN` | Backends (chamadas serviço↔serviço) | **Alta** — autentica máquina↔máquina | Gerar valor novo, atualizar nos dois lados no Railway, redeploy |
+| `ASAAS_WEBHOOK_TOKEN` | Portal e Escola | **Alta** — quem o tiver consegue forjar confirmações de pagamento | Gerar valor novo, atualizar no painel Asaas **e** na env do Railway (os dois precisam bater) |
+| `PAGARME_WEBHOOK_TOKEN` | Escola | **Alta** — idem para Pagar.me | Idem: painel Pagar.me + env |
+| `RESEND_API_KEY` | Portal e Escola | **Alta** — permite enviar e-mail em nome do domínio | Revogar e recriar no dashboard do Resend, atualizar env |
+| `RESEND_WEBHOOK_SECRET` (`whsec_...`) | Portal e Escola | Média — permite forjar eventos de e-mail (cliques, bounces) | Recriar o endpoint/secret no Resend, atualizar env |
+| Chaves de gateway (Asaas/Pagar.me API keys) | Backends | **Crítica** — operações financeiras reais | Rotacionar no painel do gateway, atualizar env, auditar cobranças/estornos recentes |
+| `NEW_RELIC_USER_KEY`, `META_ACCESS_TOKEN`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` | Admin | Média — leitura de telemetria / custo de API | Revogar no painel do provedor, recriar, atualizar env |
+| API keys do Portal/Admin (geradas via endpoint) | Consumidores externos | Baixa/Média — **read-only, só GET** | `DELETE /{key_id}` no serviço emissor — revogação imediata, sem redeploy |
+
+<Note>
+Regra de bolso: **anon key é a única que pode aparecer em código de frontend.** Qualquer outra coisa no bundle do frontend é incidente.
+</Note>
+
+## Runbook: token vazou
+
+<Steps>
+  <Step title="Identifique o tipo e o raio de dano">
+    Use a tabela acima. Pergunta-chave: o token dá **escrita** (service role, gateway, internal token) ou só **leitura** (API key read-only, New Relic)? Escrita = trate como incidente ativo, siga em paralelo com os próximos passos.
+  </Step>
+  <Step title="Revogue/rotacione">
+    - **API key do Portal/Admin:** `DELETE /{key_id}` no endpoint de API keys — efeito imediato.
+    - **Env de serviço:** gere o valor novo na origem (dashboard do Supabase, Asaas, Pagar.me, Resend, New Relic, Meta), atualize a variável no Railway e redeploy. Para `SERVICE_ROLE_KEY`, a rotação é no dashboard do Supabase e afeta todos os backends de uma vez — atualize todos antes que quebrem.
+    - **Webhook tokens:** atualize **nos dois lados** (painel do gateway e env), senão os webhooks passam a ser rejeitados.
+  </Step>
+  <Step title="Audite uso indevido">
+    - `admin_activity_log` — ações de admin fora do padrão.
+    - Logs do Railway e New Relic (`/admin/observability/*`) — chamadas anômalas no período da exposição (IPs, rotas, volume).
+    - Se for token de gateway: confira no painel do Asaas/Pagar.me cobranças, estornos e alterações de webhook que você não reconhece.
+    - `asaas_webhook_events` / `pagarme_webhook_events` — eventos forjados (se o vazamento foi de webhook token).
+  </Step>
+  <Step title="Comunique e registre">
+    Avise o time, registre o incidente (o que vazou, janela de exposição, o que foi rotacionado, achados da auditoria) e, se dados de usuário foram acessados, avalie obrigações de comunicação.
+  </Step>
+</Steps>
+
+## Escopo das API keys
+
+As API keys emitidas pelo Portal (`/api/v1/admin/api-keys`) e pelo Admin (`/admin/api-keys`) são deliberadamente limitadas:
+
+- **Read-only: só métodos GET.** Não criam, alteram nem deletam nada.
+- O valor em claro aparece **somente na resposta da criação** — depois, só prefixo e metadados.
+- Revogação via `DELETE /{key_id}`, efeito imediato.
+
+Isso significa que uma API key vazada expõe leitura de dados, mas não permite mutação — ainda assim, revogue.
+
+## Boas práticas
+
+- **Impersonação (Escola):** o token de impersonação vive em **sessionStorage** — morre com a aba e não vaza entre abas. Faça logout ao terminar o atendimento; toda impersonação parte de `POST /api/v2/auth/impersonate` e exige ADMIN.
+- **Nunca commitar `.env`:** todos os repos já têm `.env` no `.gitignore` — mantenha assim. Se um `.env` for commitado por acidente, considere todos os valores dele vazados (o histórico do git preserva) e rode o runbook acima para cada um.
+- **Rotação periódica:** rotacione as secrets de criticidade alta/crítica periodicamente, não só quando vazam. A rotação planejada também serve de teste — você descobre em ambiente controlado quem depende de cada secret.
+- **Princípio do menor privilégio:** integrações de leitura usam keys de leitura (ex.: o Admin consulta o New Relic com a *User key* de leitura, não a license key de ingest).
+- **`service_role` nunca no frontend** — regra absoluta em todos os projetos.
+
+<CardGroup cols={2}>
+  <Card title="Runbooks" icon="list-check" href="/operacao/runbooks">
+    Rotação de API key passo a passo e demais procedimentos.
+  </Card>
+  <Card title="Mapa de produção" icon="map" href="/operacao/mapa-producao">
+    Onde cada serviço (e cada secret) está plugado.
+  </Card>
+</CardGroup>

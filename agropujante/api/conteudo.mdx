@@ -1,42 +1,18 @@
 ---
-title: "API: conteúdo"
-description: "Posts, autores, colunas, categorias, tags, podcasts, livros, anexos, submissions, comentários, likes e busca"
+title: "Conteúdo"
+description: "Posts, catálogos editoriais, podcasts, livros, anexos, submissions, comentários, likes e busca"
+icon: "file-lines"
 ---
 
 Base: `/api/v1`. `editor+`, `gestor+`, `admin+` = role mínimo via `admin_users`.
 
 ## Erros comuns
 
-O handler global adiciona `code` ao body (`http_error` para `HTTPException`; `not_found`/`forbidden`/`conflict` para as exceptions de domínio de `core/exceptions.py`):
+Shapes de erro (`{detail, code}`), 422 do Pydantic e roles seguem as [convenções da API](/agropujante/convencoes). Nesta página, os 404 de domínio usam `code: "not_found"` (ex.: `{"detail": "Post não encontrado", "code": "not_found"}`).
 
-```json title="401 Unauthorized — sem credencial"
-{ "detail": "Não autenticado", "code": "http_error" }
-```
-
-```json title="401 Unauthorized — token ruim"
-{ "detail": "Token inválido ou expirado", "code": "http_error" }
-```
-
-```json title="403 Forbidden — role insuficiente (editor+/gestor+/admin+)"
-{ "detail": "Acesso negado — permissão insuficiente", "code": "http_error" }
-```
-
-```json title="404 Not Found — recurso de domínio"
-{ "detail": "Post não encontrado", "code": "not_found" }
-```
-
-```json title="422 Unprocessable Entity — validação Pydantic (shape padrão FastAPI)"
-{
-  "detail": [
-    {
-      "type": "string_too_short",
-      "loc": ["body", "title"],
-      "msg": "String should have at least 1 character",
-      "input": ""
-    }
-  ]
-}
-```
+<Info>
+Os exemplos de POST/PATCH/DELETE desta página mutam o catálogo editorial de verdade. São **ilustrativos** — confirme o ambiente (local vs produção) antes de rodar, especialmente `DELETE /posts/{id}` e os CRUDs de catálogo.
+</Info>
 
 ## Posts (`/posts`)
 
@@ -196,7 +172,7 @@ curl "https://api.agropujante.com.br/api/v1/posts/admin/list?status=draft&page=1
 }
 ```
 
-Aceita `?type`, `?status` (`draft`/`review`/`published`/`rejected`/`archived`) e `?search`. Erros genéricos (401, 403): ver [Erros comuns](#erros-comuns).
+Aceita `?type`, `?status` (`draft`/`review`/`published`/`rejected`/`archived`) e `?search`. Erros genéricos (401, 403): ver [convenções da API](/agropujante/convencoes).
 </Accordion>
 
 <Accordion title="GET /api/v1/posts/admin/{post_id}">
@@ -270,7 +246,7 @@ curl -X POST "https://api.agropujante.com.br/api/v1/posts" \
 }
 ```
 
-Campos aceitos: os de `PostCreate` (`title`, `slug`, `excerpt`, `content`, `cover_image_url`, `type`, `category_id`, `is_featured`, `is_decision_highlight`, `decision_supporter_id`, `status`, `published_at`, `public_at`, `meta_title`, `meta_description`, `og_image_url`, `focus_keyphrase`, `column_id`). Erros genéricos (401, 403, 422): ver [Erros comuns](#erros-comuns).
+Campos aceitos: os de `PostCreate` (`title`, `slug`, `excerpt`, `content`, `cover_image_url`, `type`, `category_id`, `is_featured`, `is_decision_highlight`, `decision_supporter_id`, `status`, `published_at`, `public_at`, `meta_title`, `meta_description`, `og_image_url`, `focus_keyphrase`, `column_id`). Erros genéricos (401, 403, 422): ver [convenções da API](/agropujante/convencoes).
 </Accordion>
 
 <Accordion title="PATCH /api/v1/posts/{post_id}">
@@ -305,7 +281,7 @@ curl -X DELETE "https://api.agropujante.com.br/api/v1/posts/4e5f6a7b-8c9d-4e0f-1
 (sem body)
 ```
 
-Requer gestor+. Erros genéricos (401, 403): ver [Erros comuns](#erros-comuns).
+Requer gestor+. Erros genéricos (401, 403): ver [convenções da API](/agropujante/convencoes).
 </Accordion>
 
 <Accordion title="PUT /api/v1/posts/{post_id}/authors">
@@ -929,7 +905,7 @@ curl -X POST "https://api.agropujante.com.br/api/v1/attachments/c2d3e4f5-6a7b-4c
 }
 ```
 
-Erros genéricos (401, 403, 422): ver [Erros comuns](#erros-comuns).
+Erros genéricos (401, 403, 422): ver [convenções da API](/agropujante/convencoes).
 </Accordion>
 
 <Accordion title="PATCH /api/v1/attachments/{attachment_id}">
@@ -1224,7 +1200,7 @@ curl -X POST "https://api.agropujante.com.br/api/v1/comments" \
 { "message": "Comentário publicado!" }
 ```
 
-Erros genéricos (422): ver [Erros comuns](#erros-comuns).
+Erros genéricos (422): ver [convenções da API](/agropujante/convencoes).
 </Accordion>
 
 <Accordion title="PATCH /api/v1/comments/{comment_id}/approve">
@@ -1265,7 +1241,7 @@ curl -X POST "https://api.agropujante.com.br/api/v1/likes/posts/c2d3e4f5-6a7b-4c
 { "liked": true, "like_count": 27 }
 ```
 
-Erros genéricos (401): ver [Erros comuns](#erros-comuns).
+Erros genéricos (401): ver [convenções da API](/agropujante/convencoes).
 </Accordion>
 
 <Accordion title="GET /api/v1/likes/posts/{post_id}">

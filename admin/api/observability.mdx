@@ -1,0 +1,212 @@
+---
+title: "Observabilidade"
+description: "Métricas, drill-down de erros e logs do Site e da Escola via New Relic NerdGraph."
+icon: "wave-pulse"
+---
+
+Endpoints de observabilidade das aplicações Site e Escola, consultados via **New Relic NerdGraph**. Aceitam **JWT Bearer ou API Key read-only** (coluna Auth = JWT/Key). Veja [Autenticação](/admin/autenticacao).
+
+<Note>
+A URL base `https://admin-api.pujante.com.br` usada nos exemplos é **ilustrativa** — a base real depende do deploy no Railway.
+</Note>
+
+<Note>
+Aqui o parâmetro `origin` aceita apenas `site` ou `escola` (não há `all`) — ele resolve para o nome do app no New Relic (`NEW_RELIC_APP_SITE` / `NEW_RELIC_APP_ESCOLA`).
+</Note>
+
+## Erros comuns
+
+Os shapes 401/403/422 são os padrões da API — veja [Convenções](/admin/convencoes#erros-comuns). Os exemplos por endpoint referenciam essa página em vez de repeti-los.
+
+## Observability
+
+<Warning>
+Requer as variáveis `NEW_RELIC_*` configuradas. Sem elas, os endpoints retornam vazio com um aviso.
+</Warning>
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/observability/metrics` | KPIs, série de erros, top endpoints, distribuição de status | JWT/Key |
+| GET | `/admin/observability/error-occurrences` | Drill-down das ocorrências de um erro | JWT/Key |
+| GET | `/admin/observability/logs` | Logs via NerdGraph | JWT/Key |
+
+### GET /admin/observability/error-occurrences
+
+<ParamField query="uri" type="string" required>
+URI do endpoint com erro a detalhar.
+</ParamField>
+
+<ParamField query="origin" type="string">
+App de origem: `site` ou `escola`.
+</ParamField>
+
+<ParamField query="status" type="integer">
+Filtra por status HTTP.
+</ParamField>
+
+<ParamField query="method" type="string">
+Filtra por método HTTP.
+</ParamField>
+
+<ParamField query="minutes" type="integer">
+Janela em minutos, entre 1 e 1440.
+</ParamField>
+
+<ParamField query="limit" type="integer">
+Máximo de ocorrências, entre 1 e 200.
+</ParamField>
+
+### GET /admin/observability/logs
+
+<ParamField query="origin" type="string">
+App de origem: `site` ou `escola`.
+</ParamField>
+
+<ParamField query="level" type="string">
+Nível de log único (ex.: `error`).
+</ParamField>
+
+<ParamField query="levels" type="string">
+Múltiplos níveis, separados por vírgula.
+</ParamField>
+
+<ParamField query="minutes" type="integer">
+Janela em minutos.
+</ParamField>
+
+<ParamField query="query" type="string">
+Busca textual nos logs.
+</ParamField>
+
+<ParamField query="limit" type="integer">
+Máximo de linhas, entre 1 e 500.
+</ParamField>
+
+<ParamField query="since_ms" type="integer">
+Início da janela em epoch milliseconds (alternativa a `minutes`).
+</ParamField>
+
+<ParamField query="until_ms" type="integer">
+Fim da janela em epoch milliseconds.
+</ParamField>
+
+<AccordionGroup>
+<Accordion title="GET /admin/observability/metrics">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/observability/metrics?origin=site&minutes=180" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/observability/metrics?origin=site&minutes=180" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK"
+{
+  "available": true,
+  "refreshed_at": "2026-06-12T14:10:00+00:00",
+  "kpis": {
+    "requests": 48210,
+    "errors": 132,
+    "warnings": 540,
+    "p95_ms": 412.7,
+    "error_rate": 0.27
+  },
+  "error_series": [
+    { "t": "2026-06-12T13:50:00+00:00", "error": 6, "warning": 18 }
+  ],
+  "top_errors": [
+    {
+      "method": "GET",
+      "uri": "/api/v1/credits/balance",
+      "status": 401,
+      "message": "Token inválido ou expirado",
+      "count": 64
+    }
+  ],
+  "status_breakdown": [
+    { "bucket": "2xx", "count": 46900 },
+    { "bucket": "4xx", "count": 1178 },
+    { "bucket": "5xx", "count": 132 }
+  ],
+  "note": null,
+  "error": null
+}
+```
+
+Sem `NEW_RELIC_*` configurado, a resposta vem **200** com `available: false` e `note` explicativo. `origin` fora de `site|escola` retorna **422**. Erros 401/403: veja [Erros comuns](/admin/convencoes#erros-comuns).
+</Accordion>
+
+<Accordion title="GET /admin/observability/error-occurrences">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/observability/error-occurrences?uri=/api/v1/credits/balance&origin=site&status=401&minutes=180&limit=50" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/observability/error-occurrences?uri=/api/v1/credits/balance&status=401" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK"
+{
+  "available": true,
+  "refreshed_at": "2026-06-12T14:10:00+00:00",
+  "count": 1,
+  "occurrences": [
+    {
+      "timestamp": "2026-06-12T13:58:41+00:00",
+      "method": "GET",
+      "uri": "/api/v1/credits/balance",
+      "status": 401,
+      "message": "Token inválido ou expirado",
+      "user_agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X)",
+      "referer": "https://agropujante.com.br/jurisprudencia",
+      "host": "site-api-prod",
+      "duration_ms": 38.4,
+      "trace_id": "a1b2c3d4e5f60718"
+    }
+  ],
+  "note": null,
+  "error": null
+}
+```
+
+`uri` é obrigatório — sem ele a resposta é **422** (veja [Erros comuns](/admin/convencoes#erros-comuns)).
+</Accordion>
+
+<Accordion title="GET /admin/observability/logs">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/observability/logs?origin=escola&levels=ERROR,WARNING&minutes=30&limit=100" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/observability/logs?origin=escola&level=error&minutes=30" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK"
+{
+  "available": true,
+  "refreshed_at": "2026-06-12T14:10:00+00:00",
+  "count": 1,
+  "entries": [
+    {
+      "timestamp": "2026-06-12T14:02:17+00:00",
+      "level": "ERROR",
+      "message": "Falha ao processar webhook do Pagar.me: assinatura inválida",
+      "app": "Escola Pujante API",
+      "origin": "escola",
+      "hostname": "escola-api-prod"
+    }
+  ],
+  "note": null,
+  "error": null
+}
+```
+
+Sem `NEW_RELIC_*`, vem **200** com `available: false` e `note`. Falha de runtime no NerdGraph vem com `error` preenchido (shape estável, ainda **200**). Erros 401/403/422: veja [Erros comuns](/admin/convencoes#erros-comuns).
+</Accordion>
+</AccordionGroup>
