@@ -59,7 +59,7 @@ O Portal também concede trials da Escola via `POST /api/v2/trials/grant` (auten
 
 O Pujante Admin é **read-mostly**: lê direto do schema `pujante` (incluindo materialized views `admin_mv_*`) e **delega escrita** aos backends de origem:
 
-- `POST /admin/launches` roteia para o backend do Portal ou da Escola conforme o campo `origin`, repassando o Bearer token do admin.
+- `POST /admin/launches` roteia para o backend do Portal ou da Escola conforme o `kind` do lançamento (conteúdos editoriais → Portal; aulas/trilhas/eventos → Escola), repassando o Bearer token do admin.
 - Os proxies genéricos `/admin/escola/{path}` e `/admin/agropujante/{path}` repassam qualquer chamada autenticada ao upstream correspondente.
 
 ### Mobile → Portal e Escola

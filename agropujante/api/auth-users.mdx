@@ -5,6 +5,45 @@ description: "Endpoints de autenticação, usuários, perfis públicos e reset d
 
 Base: `/api/v1`. Roles: ver [Autenticação](/agropujante/autenticacao).
 
+## Erros comuns
+
+O handler global (`core/exceptions.py`) adiciona o campo `code` ao body de qualquer `HTTPException`. Shapes que se repetem em todos os endpoints:
+
+```json title="401 Unauthorized — sem credencial (pipeline admin)"
+{ "detail": "Não autenticado", "code": "http_error" }
+```
+
+```json title="401 Unauthorized — sem credencial (pipeline /users)"
+{ "detail": "Token de autenticação não fornecido", "code": "http_error" }
+```
+
+```json title="401 Unauthorized — token ruim"
+{ "detail": "Token inválido ou expirado", "code": "http_error" }
+```
+
+```json title="403 Forbidden — role insuficiente"
+{ "detail": "Acesso negado — permissão insuficiente", "code": "http_error" }
+```
+
+```json title="422 Unprocessable Entity — validação Pydantic (shape padrão FastAPI)"
+{
+  "detail": [
+    {
+      "type": "missing",
+      "loc": ["body", "email"],
+      "msg": "Field required",
+      "input": {}
+    }
+  ]
+}
+```
+
+Vários endpoints desta página são rate-limited (slowapi). Ao estourar o limite:
+
+```json title="429 Too Many Requests — slowapi"
+{ "error": "Rate limit exceeded: 10 per 1 minute" }
+```
+
 ## Auth (`/auth`)
 
 | Método | Path | Descrição | Auth |
@@ -14,6 +53,86 @@ Base: `/api/v1`. Roles: ver [Autenticação](/agropujante/autenticacao).
 | POST | `/auth/logout` | Invalida a sessão | JWT |
 | GET | `/auth/me` | Usuário atual | JWT |
 
+<AccordionGroup>
+<Accordion title="POST /api/v1/auth/login">
+Rate limit: `10/minute`.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "ana.carvalho@exemplo.com.br", "password": "S3nhaForte1"}'
+```
+
+```json title="200 OK"
+{
+  "access_token": "<TOKEN>",
+  "refresh_token": "<TOKEN>",
+  "token_type": "bearer",
+  "user": {
+    "id": "7f3b2c10-9d4e-4a8b-b1c2-5e6f7a8b9c0d",
+    "email": "ana.carvalho@exemplo.com.br",
+    "app_role": "editor"
+  }
+}
+```
+
+Erros genéricos (422, 429): ver [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="POST /api/v1/auth/refresh">
+Rate limit: `30/minute`. O Supabase rotaciona o refresh token a cada chamada — sempre persista o novo par.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/auth/refresh" \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token": "<TOKEN>"}'
+```
+
+```json title="200 OK"
+{
+  "access_token": "<TOKEN>",
+  "refresh_token": "<TOKEN>",
+  "token_type": "bearer"
+}
+```
+
+```json title="401 Unauthorized"
+{ "detail": "Refresh token inválido ou expirado", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/auth/logout">
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/auth/logout" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem body)
+```
+
+Erros genéricos (401): ver [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="GET /api/v1/auth/me">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/auth/me" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "id": "7f3b2c10-9d4e-4a8b-b1c2-5e6f7a8b9c0d",
+  "email": "ana.carvalho@exemplo.com.br",
+  "role": "authenticated",
+  "app_role": "administrador"
+}
+```
+
+Erros genéricos (401): ver [Erros comuns](#erros-comuns).
+</Accordion>
+</AccordionGroup>
+
 ## Users (`/users`)
 
 | Método | Path | Descrição | Auth |
@@ -21,17 +140,321 @@ Base: `/api/v1`. Roles: ver [Autenticação](/agropujante/autenticacao).
 | POST | `/users/register` | Registro de conta | Público |
 | POST | `/users/login` | Login alternativo | Público |
 | POST | `/users/google-login` | OAuth Google | Público |
-| GET | `/users/profile` | Perfil do usuário logado | JWT |
-| PATCH | `/users/profile` | Atualiza headline, bio, specialties... | JWT |
+| GET | `/users/me` | Perfil do usuário logado | JWT |
+| PATCH | `/users/me` | Atualiza dados do perfil | JWT |
 | GET | `/users/access-check` | Checa acesso a conteúdo gated (paywall) | JWT |
 | POST | `/users/track-read` | Registra leitura de post | JWT |
-| GET | `/users/saved-posts` | Posts salvos | JWT |
-| POST | `/users/saved-posts/{post_id}` | Salva um post | JWT |
-| DELETE | `/users/saved-posts/{post_id}` | Remove dos salvos | JWT |
+| GET | `/users/me/saved-posts` | Posts salvos | JWT |
+| POST | `/users/me/saved-posts/{post_id}` | Salva um post | JWT |
+| DELETE | `/users/me/saved-posts/{post_id}` | Remove dos salvos | JWT |
 
 <Warning>
 Antes de depurar falha de login de **apoiador**, leia o [gotcha dos 2 pipelines](/agropujante/autenticacao#gotcha-os-2-pipelines-de-auth-de-apoiador): contas com `password_hash = 'supabase_managed'` não logam por senha do portal.
 </Warning>
+
+<AccordionGroup>
+<Accordion title="POST /api/v1/users/register">
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/users/register" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Ana Beatriz Carvalho",
+    "email": "ana.carvalho@exemplo.com.br",
+    "password": "S3nhaForte1",
+    "terms_accepted": true
+  }'
+```
+
+```json title="200 OK"
+{
+  "access_token": "<TOKEN>",
+  "token_type": "bearer",
+  "expires_in": 604800,
+  "user": {
+    "id": "9a1d4f22-3b5c-4e7d-8f90-1a2b3c4d5e6f",
+    "email": "ana.carvalho@exemplo.com.br",
+    "name": "Ana Beatriz Carvalho",
+    "cpf_cnpj": null,
+    "phone": null,
+    "birth_date": null,
+    "graduation": null,
+    "graduation_year": null,
+    "state": null,
+    "city": null,
+    "occupation": null,
+    "email_verified": false,
+    "profile_completed": false,
+    "profile_full": false,
+    "profile_completion_percent": 20,
+    "missing_fields": ["cpf_cnpj", "phone", "birth_date", "graduation", "occupation"],
+    "welcome_seen_at": null,
+    "avatar_url": null,
+    "oauth_provider": null,
+    "terms_accepted_at": "2026-06-12T14:03:21+00:00",
+    "created_at": "2026-06-12T14:03:21+00:00",
+    "last_login_at": null,
+    "handle": null,
+    "headline": null,
+    "bio_long": null,
+    "linkedin_url": null,
+    "instagram_url": null,
+    "website_url": null,
+    "specialties": [],
+    "profile_visibility": "public",
+    "newsletter_subscribed": false,
+    "escola": {
+      "has_access": false,
+      "user_type": null,
+      "role": null,
+      "subscription_active": false
+    }
+  }
+}
+```
+
+```json title="409 Conflict — email duplicado"
+{ "detail": "Este email já está cadastrado", "code": "http_error" }
+```
+
+`terms_accepted: false` falha na validação Pydantic (422). Erros genéricos: ver [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="POST /api/v1/users/login">
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/users/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "ana.carvalho@exemplo.com.br", "password": "S3nhaForte1"}'
+```
+
+```json title="200 OK"
+{
+  "access_token": "<TOKEN>",
+  "token_type": "bearer",
+  "expires_in": 604800,
+  "user": { "id": "9a1d4f22-3b5c-4e7d-8f90-1a2b3c4d5e6f", "email": "ana.carvalho@exemplo.com.br", "name": "Ana Beatriz Carvalho" }
+}
+```
+
+`user` segue o shape completo de `UserPublic` — ver `POST /users/register` acima.
+
+```json title="401 Unauthorized — credenciais erradas"
+{ "detail": "Email ou senha incorretos", "code": "http_error" }
+```
+
+Conta de apoiador com `password_hash = 'supabase_managed'` cai neste 401 mesmo com a senha "certa" — ver o Warning acima.
+</Accordion>
+
+<Accordion title="POST /api/v1/users/google">
+Recebe o `credential` (JWT) do Google Identity Services. `terms_accepted` é obrigatório apenas na criação de conta nova.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/users/google" \
+  -H "Content-Type: application/json" \
+  -d '{"credential": "<TOKEN>", "terms_accepted": true}'
+```
+
+```json title="200 OK"
+{
+  "access_token": "<TOKEN>",
+  "token_type": "bearer",
+  "expires_in": 604800,
+  "user": { "id": "9a1d4f22-3b5c-4e7d-8f90-1a2b3c4d5e6f", "email": "ana.carvalho@exemplo.com.br", "name": "Ana Beatriz Carvalho", "oauth_provider": "google" }
+}
+```
+
+```json title="401 Unauthorized — credential rejeitado"
+{ "detail": "Token do Google inválido", "code": "http_error" }
+```
+
+```json title="400 Bad Request — conta nova sem aceitar os termos"
+{ "detail": "É obrigatório aceitar os Termos de Uso para criar conta", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/users/me">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/users/me" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "id": "9a1d4f22-3b5c-4e7d-8f90-1a2b3c4d5e6f",
+  "email": "ana.carvalho@exemplo.com.br",
+  "name": "Ana Beatriz Carvalho",
+  "state": "MG",
+  "city": "Uberaba",
+  "occupation": "Advogada",
+  "profile_completed": true,
+  "profile_full": true,
+  "profile_completion_percent": 100,
+  "missing_fields": [],
+  "handle": "anacarvalho",
+  "headline": "Advogada especialista em direito agrário",
+  "specialties": ["Direito Agrário", "Contratos Rurais"],
+  "profile_visibility": "public",
+  "newsletter_subscribed": true,
+  "escola": { "has_access": false, "user_type": null, "role": null, "subscription_active": false }
+}
+```
+
+Shape completo de `UserPublic` em `POST /users/register`. Erros genéricos (401): ver [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="PATCH /api/v1/users/me">
+Todos os campos são opcionais. Quando `profile_full` passa de `false` → `true` pela primeira vez, o usuário ganha trial de 7 dias de PRO (`trial_granted: true` na resposta).
+
+```bash title="Requisição"
+curl -X PATCH "https://api.agropujante.com.br/api/v1/users/me" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "headline": "Advogada especialista em direito agrário",
+    "bio_long": "Atuo há 12 anos com contratos rurais e regularização fundiária no Triângulo Mineiro.",
+    "specialties": ["Direito Agrário", "Contratos Rurais"],
+    "handle": "anacarvalho",
+    "state": "MG",
+    "city": "Uberaba",
+    "occupation": "Advogada"
+  }'
+```
+
+```json title="200 OK"
+{
+  "user": { "id": "9a1d4f22-3b5c-4e7d-8f90-1a2b3c4d5e6f", "handle": "anacarvalho", "profile_full": true, "profile_completion_percent": 100 },
+  "trial_granted": true
+}
+```
+
+`user` segue o shape completo de `UserPublic`.
+
+```json title="409 Conflict — handle em uso"
+{ "detail": "handle_taken", "code": "http_error" }
+```
+
+`detail` pode ser `handle_taken`, `handle_reserved` ou `handle_invalid_format`.
+
+```json title="404 Not Found"
+{ "detail": "Usuário não encontrado", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/users/access/check">
+Funciona anônimo (só `visitor_id`) ou logado (Bearer opcional).
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/users/access/check" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "post_type": "artigo",
+    "post_id": "c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
+    "visitor_id": "vis_8f2a91c7"
+  }'
+```
+
+```json title="200 OK — acesso liberado"
+{
+  "allowed": true,
+  "reason": "ok",
+  "reads_this_month": 2,
+  "reads_limit": 5,
+  "post_type": "artigo",
+  "missing_fields": null
+}
+```
+
+```json title="200 OK — paywall"
+{
+  "allowed": false,
+  "reason": "limit_reached",
+  "reads_this_month": 5,
+  "reads_limit": 5,
+  "post_type": "artigo",
+  "missing_fields": null
+}
+```
+
+`reason`: `ok` | `limit_reached` | `login_required` | `profile_incomplete`.
+</Accordion>
+
+<Accordion title="POST /api/v1/users/access/track-read">
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/users/access/track-read" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "post_id": "c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
+    "post_type": "artigo",
+    "visitor_id": "vis_8f2a91c7"
+  }'
+```
+
+```json title="200 OK"
+{ "tracked": true }
+```
+
+`tracked: false` quando a leitura já tinha sido contada no mês.
+</Accordion>
+
+<Accordion title="GET /api/v1/users/me/saved-posts">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/users/me/saved-posts?page=1&page_size=20" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "items": [
+    {
+      "id": "5e6f7a8b-9c0d-4e1f-a2b3-c4d5e6f7a8b9",
+      "post_id": "c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
+      "saved_at": "2026-06-10T09:15:00+00:00",
+      "title": "Marco temporal e a segurança jurídica no campo",
+      "slug": "marco-temporal-seguranca-juridica-no-campo",
+      "type": "artigo",
+      "cover_image_url": "https://cdn.agropujante.com.br/posts/marco-temporal.jpg",
+      "excerpt": "O que muda para o produtor rural após a decisão do STF..."
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "page_size": 20
+}
+```
+
+Erros genéricos (401): ver [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="POST /api/v1/users/me/saved-posts/{post_id}">
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/users/me/saved-posts/c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "message": "Post salvo com sucesso", "saved": true }
+```
+
+```json title="200 OK — já estava salvo (idempotente)"
+{ "message": "Post já estava salvo", "saved": false }
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v1/users/me/saved-posts/{post_id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.agropujante.com.br/api/v1/users/me/saved-posts/c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "message": "Post removido dos salvos", "removed": true }
+```
+
+```json title="200 OK — não estava salvo (idempotente)"
+{ "message": "Post não estava salvo", "removed": false }
+```
+</Accordion>
+</AccordionGroup>
 
 ## Profiles (`/profiles`)
 
@@ -40,6 +463,77 @@ Antes de depurar falha de login de **apoiador**, leia o [gotcha dos 2 pipelines]
 | GET | `/profiles/handle-available?handle=` | Verifica unicidade do handle (considera `reserved_handles`) | Público |
 | GET | `/profiles/by-handle/{handle}` | Perfil público — `view_mode` controla o que aparece (`owner`/`full`/`reduced`/`private`) | Público |
 
+<AccordionGroup>
+<Accordion title="GET /api/v1/profiles/handle-available">
+Bearer opcional — se o handle pertence ao próprio user logado, retorna `available: true` (permite re-salvar o mesmo handle no formulário).
+
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/profiles/handle-available?handle=anacarvalho"
+```
+
+```json title="200 OK — disponível"
+{ "available": true, "reason": null }
+```
+
+```json title="200 OK — indisponível"
+{ "available": false, "reason": "taken" }
+```
+
+`reason`: `invalid_format` | `reserved` | `taken` | `null`.
+</Accordion>
+
+<Accordion title="GET /api/v1/profiles/by-handle/{handle}">
+Bearer opcional — define o `view_mode` da resposta (`owner`/`full`/`reduced`/`private`).
+
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/profiles/by-handle/anacarvalho" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "view_mode": "full",
+  "profile": {
+    "id": "9a1d4f22-3b5c-4e7d-8f90-1a2b3c4d5e6f",
+    "handle": "anacarvalho",
+    "name": "Ana Beatriz Carvalho",
+    "headline": "Advogada especialista em direito agrário",
+    "bio_long": "Atuo há 12 anos com contratos rurais e regularização fundiária no Triângulo Mineiro.",
+    "avatar_url": "https://cdn.agropujante.com.br/avatars/anacarvalho.jpg",
+    "city": "Uberaba",
+    "state": "MG",
+    "occupation": "Advogada",
+    "specialties": ["Direito Agrário", "Contratos Rurais"],
+    "profile_visibility": "public",
+    "member_since": "2025-11-03T12:00:00+00:00",
+    "email": "ana.carvalho@exemplo.com.br",
+    "phone": "+55 34 99999-0000",
+    "graduation": "Direito",
+    "graduation_year": 2014,
+    "linkedin_url": "https://linkedin.com/in/anacarvalho",
+    "instagram_url": null,
+    "website_url": null
+  },
+  "author": {
+    "author_id": "1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e",
+    "author_slug": "ana-beatriz-carvalho",
+    "posts_count": 14,
+    "bio": "Colunista de contratos rurais.",
+    "is_vip": false
+  },
+  "supporter": null,
+  "is_owner": false
+}
+```
+
+Em `view_mode: "reduced"` (viewer free), os campos de contato (`email`, `phone`, `linkedin_url`...) vêm `null`.
+
+```json title="404 Not Found"
+{ "detail": "Perfil não encontrado", "code": "http_error" }
+```
+</Accordion>
+</AccordionGroup>
+
 ## Password reset (`/password-reset`)
 
 | Método | Path | Descrição | Auth |
@@ -47,6 +541,70 @@ Antes de depurar falha de login de **apoiador**, leia o [gotcha dos 2 pipelines]
 | POST | `/password-reset/request` | Envia OTP de 6 dígitos por email | Público |
 | POST | `/password-reset/verify` | Valida o OTP (máx. 3 tentativas) | Público |
 | POST | `/password-reset/confirm` | Define a nova senha | Público |
+
+<AccordionGroup>
+<Accordion title="POST /api/v1/users/password-reset/request">
+Rate limit: `10/hour` por IP + máx. 3 códigos por email/hora. A resposta é **sempre** a mesma (200 genérico) — o endpoint não revela se a conta existe.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/users/password-reset/request" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "ana.carvalho@exemplo.com.br"}'
+```
+
+```json title="200 OK"
+{ "message": "Se esse email estiver cadastrado, enviamos um código de verificação." }
+```
+
+Erros genéricos (422, 429): ver [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="POST /api/v1/users/password-reset/verify">
+Rate limit: `30/hour`. O código tem 6 dígitos, vale por 10 minutos e admite no máx. 5 tentativas erradas.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/users/password-reset/verify" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "ana.carvalho@exemplo.com.br", "code": "482913"}'
+```
+
+```json title="200 OK"
+{ "reset_token": "<TOKEN>" }
+```
+
+O `reset_token` é um JWT de curta duração (5 min) que autoriza só o `/confirm`.
+
+```json title="400 Bad Request — código errado/expirado"
+{ "detail": "Código inválido ou expirado.", "code": "http_error" }
+```
+
+```json title="429 Too Many Requests — 5 tentativas erradas"
+{ "detail": "Muitas tentativas. Solicite um novo código.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/users/password-reset/confirm">
+Rate limit: `30/hour`. Senha mínima: 8 caracteres com letras e números.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/users/password-reset/confirm" \
+  -H "Content-Type: application/json" \
+  -d '{"reset_token": "<TOKEN>", "new_password": "NovaSenha2026"}'
+```
+
+```json title="200 OK"
+{ "message": "Senha redefinida com sucesso." }
+```
+
+```json title="401 Unauthorized — reset_token vencido"
+{ "detail": "Sessão de redefinição expirou. Solicite um novo código.", "code": "http_error" }
+```
+
+```json title="400 Bad Request — senha fraca"
+{ "detail": "A senha precisa ter no mínimo 8 caracteres, incluindo letras e números.", "code": "http_error" }
+```
+</Accordion>
+</AccordionGroup>
 
 <Note>
 O reset cobre apenas o pipeline Supabase Auth ou o portal-nativo correspondente à conta — resetar em um mundo não destrava o outro.

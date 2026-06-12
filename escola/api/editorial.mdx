@@ -6,6 +6,34 @@ icon: "newspaper"
 
 Base: `/api/v2/noticias`. Módulo usado pelo time editorial (role `EDITORIAL` tem acesso a notícias, artigos e calendário; ações de escrita aqui exigem MANAGER).
 
+## Erros comuns
+
+Todos os endpoints autenticados podem retornar os shapes abaixo (FastAPI + handler global, que acrescenta o campo `code`):
+
+```json title="401 Unauthorized — sem token"
+{ "detail": "Token de autenticacao nao fornecido", "code": "http_error" }
+```
+
+```json title="401 Unauthorized — token inválido ou usuário não mapeado"
+{ "detail": "Token invalido ou expirado", "code": "http_error" }
+```
+
+Também pode ocorrer `{ "detail": "Usuario nao mapeado. Contate o suporte." }` quando o JWT é válido mas não há registro em `pujante.users`.
+
+```json title="403 Forbidden — role insuficiente (MANAGER/ADMIN)"
+{ "detail": "Acesso restrito", "code": "http_error" }
+```
+
+```json title="422 Unprocessable Entity — validação Pydantic"
+{
+  "detail": [
+    { "type": "missing", "loc": ["body", "campo"], "msg": "Field required", "input": {} }
+  ]
+}
+```
+
+Nos accordions abaixo, esses três erros genéricos não são repetidos — apenas os erros específicos de cada endpoint.
+
 ## Notícias
 
 | Método | Path | Descrição | Auth |
@@ -14,6 +42,121 @@ Base: `/api/v2/noticias`. Módulo usado pelo time editorial (role `EDITORIAL` te
 | GET | `/noticias/estatisticas` | Estatísticas gerais | JWT |
 | GET | `/noticias/{noticia_id}` | Detalhe | JWT |
 | PATCH | `/noticias/{noticia_id}` | Atualizar status/favorito/notas | MANAGER |
+
+<AccordionGroup>
+<Accordion title="GET /api/v2/noticias">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/noticias?status=NOVA&sigla=STJ&page=1&pageSize=20" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "data": [
+    {
+      "id": 482,
+      "titulo": "STJ define tese sobre penhora de safra em execução rural",
+      "link": "https://www.stj.jus.br/noticias/penhora-safra",
+      "dataPublicacao": "2026-06-10T14:30:00+00:00",
+      "textoCompleto": "O Superior Tribunal de Justiça decidiu que...",
+      "imagens": ["https://www.stj.jus.br/img/noticia-482.jpg"],
+      "instituicao": "Superior Tribunal de Justiça",
+      "sigla": "STJ",
+      "status": "NOVA",
+      "favorito": false,
+      "notas": null,
+      "resumoIa": null,
+      "coletadoEm": "2026-06-10T15:00:12+00:00",
+      "usadoEm": null,
+      "createdAt": "2026-06-10T15:00:12+00:00"
+    }
+  ],
+  "pagination": { "page": 1, "pageSize": 20, "total": 312, "totalPages": 16 },
+  "items": [ "..." ],
+  "total": 312
+}
+```
+
+`items`/`total` são duplicados de `data`/`pagination.total` mantidos por compatibilidade com o frontend legado. Erros 401/422: ver [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="GET /api/v2/noticias/estatisticas">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/noticias/estatisticas" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "total": 1284, "novas": 312, "usadas": 857, "favoritas": 45 }
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/noticias/{noticia_id}">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/noticias/482" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "id": 482,
+  "titulo": "STJ define tese sobre penhora de safra em execução rural",
+  "link": "https://www.stj.jus.br/noticias/penhora-safra",
+  "dataPublicacao": "2026-06-10T14:30:00+00:00",
+  "textoCompleto": "O Superior Tribunal de Justiça decidiu que...",
+  "imagens": [],
+  "instituicao": "Superior Tribunal de Justiça",
+  "sigla": "STJ",
+  "status": "NOVA",
+  "favorito": false,
+  "notas": null,
+  "resumoIa": null,
+  "coletadoEm": "2026-06-10T15:00:12+00:00",
+  "usadoEm": null,
+  "createdAt": "2026-06-10T15:00:12+00:00"
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Noticia nao encontrado", "code": "not_found" }
+```
+</Accordion>
+
+<Accordion title="PATCH /api/v2/noticias/{noticia_id}">
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/noticias/482" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"status": "USADA", "favorito": true, "notas": "Usada na pauta de 12/06"}'
+```
+
+```json title="200 OK"
+{
+  "id": 482,
+  "titulo": "STJ define tese sobre penhora de safra em execução rural",
+  "status": "USADA",
+  "favorito": true,
+  "notas": "Usada na pauta de 12/06",
+  "sigla": "STJ",
+  "instituicao": "Superior Tribunal de Justiça",
+  "link": "https://www.stj.jus.br/noticias/penhora-safra",
+  "dataPublicacao": "2026-06-10T14:30:00+00:00",
+  "textoCompleto": "...",
+  "imagens": [],
+  "resumoIa": null,
+  "coletadoEm": "2026-06-10T15:00:12+00:00",
+  "usadoEm": null,
+  "createdAt": "2026-06-10T15:00:12+00:00"
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Noticia nao encontrado", "code": "not_found" }
+```
+
+Erros 401/403: ver [Erros comuns](#erros-comuns).
+</Accordion>
+</AccordionGroup>
 
 ### PATCH /noticias/\{noticia_id\}
 
@@ -33,12 +176,127 @@ Base: `/api/v2/noticias`. Módulo usado pelo time editorial (role `EDITORIAL` te
 `POST /noticias/scraper/executar` retorna **501 — não implementado**.
 </Warning>
 
+<AccordionGroup>
+<Accordion title="GET /api/v2/noticias/scraper/status">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/noticias/scraper/status" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "institutions": [
+    {
+      "sigla": "STJ",
+      "instituicao": "Superior Tribunal de Justiça",
+      "lastStatus": "SUCESSO",
+      "lastRun": "2026-06-12T06:00:03+00:00",
+      "lastTotal": 14,
+      "lastError": null
+    }
+  ]
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/noticias/scraper/logs">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/noticias/scraper/logs?sigla=STJ&limit=50" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "sources": [
+    {
+      "id": 9015,
+      "sigla": "STJ",
+      "instituicao": "Superior Tribunal de Justiça",
+      "status": "SUCESSO",
+      "totalColetado": 14,
+      "totalVazio": 0,
+      "totalDuplicado": 3,
+      "erro": null,
+      "duracaoMs": 8210,
+      "executadoEm": "2026-06-12T06:00:03+00:00",
+      "totalSemTexto": 0
+    }
+  ],
+  "recentLogs": [
+    {
+      "id": 9015,
+      "sigla": "STJ",
+      "instituicao": "Superior Tribunal de Justiça",
+      "status": "SUCESSO",
+      "totalColetado": 14,
+      "totalVazio": 0,
+      "totalDuplicado": 3,
+      "erro": null,
+      "duracaoMs": 8210,
+      "executadoEm": "2026-06-12T06:00:03+00:00"
+    }
+  ],
+  "logs": [ "..." ]
+}
+```
+
+`logs` repete as linhas cruas (snake_case) por compatibilidade. Erros 401/403: ver [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="POST /api/v2/noticias/scraper/executar">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/noticias/scraper/executar" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Execucao do scraper roda como job pesado no Nest legado.", "code": "http_error" }
+```
+</Accordion>
+</AccordionGroup>
+
 ## Instituições
 
 | Método | Path | Descrição | Auth |
 |---|---|---|---|
 | GET | `/noticias/instituicoes` | Listar instituições | JWT |
 | GET | `/noticias/instituicoes/counts` | Contagem por instituição | JWT |
+
+<AccordionGroup>
+<Accordion title="GET /api/v2/noticias/instituicoes">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/noticias/instituicoes" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "institutions": [
+    { "sigla": "INCRA", "instituicao": "Instituto Nacional de Colonização e Reforma Agrária" },
+    { "sigla": "STF", "instituicao": "Supremo Tribunal Federal" },
+    { "sigla": "STJ", "instituicao": "Superior Tribunal de Justiça" }
+  ]
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/noticias/instituicoes/counts">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/noticias/instituicoes/counts" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "counts": [
+    { "sigla": "STJ", "count": 512 },
+    { "sigla": "STF", "count": 437 },
+    { "sigla": "INCRA", "count": 335 }
+  ]
+}
+```
+</Accordion>
+</AccordionGroup>
 
 ## Tags
 
@@ -49,6 +307,84 @@ Base: `/api/v2/noticias`. Módulo usado pelo time editorial (role `EDITORIAL` te
 | POST | `/noticias/{noticia_id}/tags/{tag_id}` | Vincular tag à notícia | MANAGER |
 | DELETE | `/noticias/{noticia_id}/tags/{tag_id}` | Desvincular tag | MANAGER |
 | GET | `/noticias/{noticia_id}/tags` | Tags de uma notícia | JWT |
+
+<AccordionGroup>
+<Accordion title="GET /api/v2/noticias/tags">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/noticias/tags" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  { "id": 4, "nome": "Crédito Rural", "cor": "#c9a84c" },
+  { "id": 5, "nome": "Marco Temporal", "cor": "#7fd1a8" }
+]
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/noticias/tags">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/noticias/tags" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"nome": "Seguro Agrícola", "cor": "#e9c46a"}'
+```
+
+```json title="201 Created"
+{ "id": 7, "nome": "Seguro Agrícola", "cor": "#e9c46a" }
+```
+
+```json title="422 Unprocessable Entity — nome vazio"
+{ "detail": "nome obrigatorio", "code": "http_error" }
+```
+
+```json title="409 Conflict — nome duplicado"
+{ "detail": "Registro ja existe.", "code": "conflict" }
+```
+
+Se `cor` for omitida, o backend grava `#999999`.
+</Accordion>
+
+<Accordion title="POST /api/v2/noticias/{noticia_id}/tags/{tag_id}">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/noticias/482/tags/4" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="201 Created"
+{ "noticiaId": 482, "tagId": 4 }
+```
+
+```json title="201 Created — vínculo já existia"
+{ "noticiaId": 482, "tagId": 4, "alreadyExists": true }
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v2/noticias/{noticia_id}/tags/{tag_id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.escolapujante.com.br/api/v2/noticias/482/tags/4" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "noticiaId": 482, "tagId": 4, "removed": true }
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/noticias/{noticia_id}/tags">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/noticias/482/tags" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  { "id": 4, "nome": "Crédito Rural", "cor": "#c9a84c" }
+]
+```
+</Accordion>
+</AccordionGroup>
 
 ### POST /noticias/tags
 
@@ -62,6 +398,65 @@ Base: `/api/v2/noticias`. Módulo usado pelo time editorial (role `EDITORIAL` te
 | GET | `/noticias/alertas` | Listar alertas | JWT |
 | POST | `/noticias/alertas` | Criar alerta por palavra-chave | MANAGER |
 | DELETE | `/noticias/alertas/{alerta_id}` | Remover alerta | MANAGER |
+
+<AccordionGroup>
+<Accordion title="GET /api/v2/noticias/alertas">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/noticias/alertas" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": 12,
+    "palavraChave": "marco temporal",
+    "ativo": true,
+    "createdAt": "2026-05-28T11:42:09+00:00"
+  }
+]
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/noticias/alertas">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/noticias/alertas" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"palavraChave": "crédito rural", "ativo": true}'
+```
+
+```json title="201 Created"
+{
+  "id": 13,
+  "palavra_chave": "crédito rural",
+  "ativo": true,
+  "created_at": "2026-06-12T13:05:44+00:00"
+}
+```
+
+A resposta devolve a linha crua do banco (snake_case), diferente da listagem (camelCase).
+
+```json title="422 Unprocessable Entity — palavra vazia"
+{ "detail": "palavraChave obrigatorio", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v2/noticias/alertas/{alerta_id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.escolapujante.com.br/api/v2/noticias/alertas/12" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "id": 12 }
+```
+
+```json title="404 Not Found"
+{ "detail": "Alerta nao encontrado", "code": "not_found" }
+```
+</Accordion>
+</AccordionGroup>
 
 ### POST /noticias/alertas
 
@@ -77,6 +472,88 @@ Base: `/api/v2/noticias`. Módulo usado pelo time editorial (role `EDITORIAL` te
 | GET | `/noticias/configuracoes/{chave}` | Ler configuração | JWT |
 | POST | `/noticias/configuracoes` | Gravar configuração (`{chave, valor}`) | MANAGER |
 
+<AccordionGroup>
+<Accordion title="GET /api/v2/noticias/historico">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/noticias/historico?noticiaId=482&limit=20" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": 901,
+    "noticiaId": 482,
+    "acao": "FAVORITAR",
+    "detalhes": null,
+    "createdAt": "2026-06-11T09:12:30+00:00"
+  }
+]
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/noticias/historico">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/noticias/historico" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"noticiaId": 482, "acao": "GERAR_ARTIGO", "detalhes": "Artigo gerado pelo editor"}'
+```
+
+```json title="201 Created"
+{
+  "id": 902,
+  "noticia_id": 482,
+  "acao": "GERAR_ARTIGO",
+  "detalhes": "Artigo gerado pelo editor",
+  "created_at": "2026-06-12T13:10:02+00:00"
+}
+```
+
+Resposta é a linha crua do insert (snake_case).
+
+```json title="422 Unprocessable Entity"
+{ "detail": "noticiaId e acao obrigatorios", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/noticias/configuracoes/{chave}">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/noticias/configuracoes/scraper_intervalo_horas" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "chave": "scraper_intervalo_horas",
+  "valor": "6",
+  "updated_at": "2026-06-01T08:00:00+00:00"
+}
+```
+
+```json title="200 OK — chave inexistente (não retorna 404)"
+{ "chave": "chave_que_nao_existe", "valor": null }
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/noticias/configuracoes">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/noticias/configuracoes" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"chave": "scraper_intervalo_horas", "valor": "4"}'
+```
+
+```json title="200 OK"
+{ "chave": "scraper_intervalo_horas", "valor": "4" }
+```
+
+```json title="422 Unprocessable Entity"
+{ "detail": "chave obrigatoria", "code": "http_error" }
+```
+</Accordion>
+</AccordionGroup>
+
 ## Artigos
 
 | Método | Path | Descrição | Auth |
@@ -84,6 +561,80 @@ Base: `/api/v2/noticias`. Módulo usado pelo time editorial (role `EDITORIAL` te
 | GET | `/noticias/artigos` | Listar artigos (`?limit`) | JWT |
 | PATCH | `/noticias/artigos/{artigo_id}` | Atualizar artigo | MANAGER |
 | GET | `/noticias/{noticia_id}/artigo` | Artigo gerado da notícia | JWT |
+
+<AccordionGroup>
+<Accordion title="GET /api/v2/noticias/artigos">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/noticias/artigos?limit=50" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": 55,
+    "noticia_id": 482,
+    "titulo": "O que muda com a nova tese do STJ sobre penhora de safra",
+    "conteudo": "## Contexto\n\nO STJ decidiu que...",
+    "publicado": false,
+    "created_at": "2026-06-11T10:22:18+00:00"
+  }
+]
+```
+
+Linhas cruas da tabela `artigos` (snake_case, `SELECT *`).
+</Accordion>
+
+<Accordion title="PATCH /api/v2/noticias/artigos/{artigo_id}">
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/noticias/artigos/55" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"titulo": "Nova tese do STJ sobre penhora de safra", "publicado": true}'
+```
+
+```json title="200 OK"
+{
+  "id": 55,
+  "noticia_id": 482,
+  "titulo": "Nova tese do STJ sobre penhora de safra",
+  "conteudo": "## Contexto\n\nO STJ decidiu que...",
+  "publicado": true,
+  "created_at": "2026-06-11T10:22:18+00:00"
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Artigo nao encontrado", "code": "not_found" }
+```
+
+Se o body não tiver nenhum dos campos `titulo`/`conteudo`/`publicado`, a resposta é `{}` (nada é alterado).
+</Accordion>
+
+<Accordion title="GET /api/v2/noticias/{noticia_id}/artigo">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/noticias/482/artigo" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "artigo": {
+    "id": 55,
+    "noticia_id": 482,
+    "titulo": "Nova tese do STJ sobre penhora de safra",
+    "conteudo": "## Contexto\n\nO STJ decidiu que...",
+    "publicado": true,
+    "created_at": "2026-06-11T10:22:18+00:00"
+  }
+}
+```
+
+```json title="200 OK — notícia sem artigo gerado"
+{ "artigo": null }
+```
+</Accordion>
+</AccordionGroup>
 
 ### PATCH /noticias/artigos/\{artigo_id\}
 
@@ -104,3 +655,60 @@ Todos os endpoints abaixo retornam **501 — não implementado** no v2:
 | POST | `/noticias/{noticia_id}/gerar-artigo-stream` | Gerar artigo (streaming) | MANAGER |
 | POST | `/noticias/{noticia_id}/gerar-carrossel` | Gerar carrossel | MANAGER |
 | POST | `/noticias/{noticia_id}/enviar-email` | Enviar por email | MANAGER |
+
+<AccordionGroup>
+<Accordion title="POST /api/v2/noticias/{noticia_id}/analise-ia">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/noticias/482/analise-ia" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Analise IA depende Anthropic.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/noticias/{noticia_id}/gerar-artigo">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/noticias/482/gerar-artigo" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Geracao de artigo depende Anthropic.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/noticias/{noticia_id}/gerar-artigo-stream">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/noticias/482/gerar-artigo-stream" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Geracao streaming depende Anthropic.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/noticias/{noticia_id}/gerar-carrossel">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/noticias/482/gerar-carrossel" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Geracao de carrossel depende Anthropic.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/noticias/{noticia_id}/enviar-email">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/noticias/482/enviar-email" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Envio por email depende Resend.", "code": "http_error" }
+```
+</Accordion>
+</AccordionGroup>

@@ -8,12 +8,72 @@ icon: "credit-card"
 A **criação de cobranças recorrentes** nos gateways (Asaas/PagarMe) ainda vive no NestJS legado. O v2 cuida da gestão local de subscriptions, imports gateway → local, webhooks e checkout.
 </Note>
 
+## Erros comuns
+
+Erros de `HTTPException`/`AppException` saem com `detail` + `code` (handler global em `core/exceptions.py`). O 422 de validação segue o shape padrão do FastAPI.
+
+```json title="401 Unauthorized"
+{ "detail": "Token de autenticacao nao fornecido", "code": "http_error" }
+```
+
+```json title="403 Forbidden (rota MANAGER/ADMIN sem role)"
+{ "detail": "Acesso restrito", "code": "http_error" }
+```
+
+```json title="422 Unprocessable Entity"
+{ "detail": [{ "loc": ["body", "productType"], "msg": "field required", "type": "missing" }] }
+```
+
 ## Products (`/products`)
 
 | Método | Path | Descrição | Auth |
 |---|---|---|---|
 | GET | `/products` | Listar produtos | JWT |
 | GET | `/products/revenue` | Receita por produto | JWT |
+
+### Exemplos
+
+<AccordionGroup>
+
+<Accordion title="GET /api/v2/products">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/products" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+[
+  { "id": "clx1a2b3c0001mk08de4f5g6h", "name": "Clube de Membros", "type": "MEMBERS_CLUB", "active": true },
+  { "id": "clx1a2b3c0002mk08de4f5g6i", "name": "Mentoria", "type": "MENTORSHIP", "active": true }
+]
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/products/revenue">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/products/revenue" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "clx1a2b3c0001mk08de4f5g6h",
+    "name": "Clube de Membros",
+    "type": "MEMBERS_CLUB",
+    "active": true,
+    "revenue": 35640.0,
+    "subscriptionsCount": 120
+  }
+]
+```
+
+</Accordion>
+
+</AccordionGroup>
 
 ## Subscriptions (`/subscriptions`)
 
@@ -45,6 +105,451 @@ A **criação de cobranças recorrentes** nos gateways (Asaas/PagarMe) ainda viv
 <Warning>
 Retornam **501 — não implementado**: `GET /subscriptions/asaas`, `POST /subscriptions/asaas/sync-payments` e `POST /subscriptions/process-expired`.
 </Warning>
+
+### Exemplos
+
+<AccordionGroup>
+
+<Accordion title="GET /api/v2/subscriptions">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/subscriptions?productType=MEMBERS_CLUB&status=ACTIVE" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "clx7p2m9t0003mk08w1r5b8qu",
+    "productId": "clx1a2b3c0001mk08de4f5g6h",
+    "officeId": null,
+    "memberId": "clx3k9d2f0001mk08yq4w7d1z",
+    "member": { "id": "clx3k9d2f0001mk08yq4w7d1z", "fullName": "Ana Carolina Souza", "email": "ana.souza@exemplo.com.br", "phone": "(11) 98765-4321" },
+    "product": { "id": "clx1a2b3c0001mk08de4f5g6h", "name": "Clube de Membros", "type": "MEMBERS_CLUB" },
+    "office": null,
+    "status": "ACTIVE",
+    "startDate": "2026-01-15T00:00:00+00:00",
+    "endDate": "2027-01-15T00:00:00+00:00",
+    "price": 297.0,
+    "billingCycle": "ANNUAL",
+    "billingType": "credit_card",
+    "nextDueDate": "2026-07-15T00:00:00+00:00",
+    "isLate": false,
+    "asaasId": null,
+    "pagarmeSubscriptionId": "sub_AbCdEf123456",
+    "createdAt": "2026-01-15T12:00:00.000000+00:00",
+    "updatedAt": "2026-06-01T09:15:44.103000+00:00"
+  }
+]
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/subscriptions">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/subscriptions" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "productType": "MENTORSHIP", "memberId": "clx3k9d2f0001mk08yq4w7d1z", "startDate": "2026-06-12T00:00:00Z", "endDate": "2027-06-12T00:00:00Z", "status": "ACTIVE" }'
+```
+
+```json title="201 Created"
+{
+  "id": "clxar5o8w0001mk08jg3h6k9x",
+  "productId": "clx1a2b3c0002mk08de4f5g6i",
+  "officeId": null,
+  "memberId": "clx3k9d2f0001mk08yq4w7d1z",
+  "member": null,
+  "product": null,
+  "office": null,
+  "status": "ACTIVE",
+  "startDate": "2026-06-12T00:00:00+00:00",
+  "endDate": "2027-06-12T00:00:00+00:00",
+  "price": null,
+  "billingCycle": null,
+  "billingType": null,
+  "nextDueDate": null,
+  "isLate": false,
+  "asaasId": null,
+  "pagarmeSubscriptionId": null,
+  "createdAt": "2026-06-12T11:30:02.881000+00:00",
+  "updatedAt": "2026-06-12T11:30:02.881000+00:00"
+}
+```
+
+```json title="422 Unprocessable Entity (regra de negócio)"
+{ "detail": "Informe officeId ou memberId.", "code": "validation_error" }
+```
+
+Outra mensagem 422 possível: `"Produto do tipo MENTORSHIP nao encontrado."`.
+
+</Accordion>
+
+<Accordion title="GET /api/v2/subscriptions/{subscription_id}">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/subscriptions/clx7p2m9t0003mk08w1r5b8qu" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+Resposta 200: objeto `SubscriptionResponse` (mesmo shape do `GET /subscriptions`).
+
+```json title="404 Not Found"
+{ "detail": "Subscription nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+<Accordion title="PATCH /api/v2/subscriptions/{subscription_id}">
+
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/subscriptions/clx7p2m9t0003mk08w1r5b8qu" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "price": 347.0, "billingCycle": "ANNUAL", "nextDueDate": "2026-08-15T00:00:00Z" }'
+```
+
+Resposta 200: objeto `SubscriptionResponse` atualizado (mesmo shape do `GET /subscriptions`).
+
+```json title="404 Not Found"
+{ "detail": "Subscription nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+<Accordion title="DELETE /api/v2/subscriptions/{subscription_id}">
+
+```bash title="Requisição"
+curl -X DELETE "https://api.escolapujante.com.br/api/v2/subscriptions/clx7p2m9t0003mk08w1r5b8qu" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{ "id": "clx7p2m9t0003mk08w1r5b8qu" }
+```
+
+```json title="404 Not Found"
+{ "detail": "Subscription nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+<Accordion title="PATCH /api/v2/subscriptions/{subscription_id}/activate">
+
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/subscriptions/clx7p2m9t0003mk08w1r5b8qu/activate" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+Resposta 200: `SubscriptionResponse` com `"status": "ACTIVE"`. Erros: `404 { "detail": "Subscription nao encontrado", "code": "not_found" }`.
+
+</Accordion>
+
+<Accordion title="PATCH /api/v2/subscriptions/{subscription_id}/cancel">
+
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/subscriptions/clx7p2m9t0003mk08w1r5b8qu/cancel" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+Resposta 200: `SubscriptionResponse` com `"status": "CANCELED"` e `endDate` ajustado para agora. Erros: `404 { "detail": "Subscription nao encontrado", "code": "not_found" }`.
+
+</Accordion>
+
+<Accordion title="PATCH /api/v2/subscriptions/{subscription_id}/pause">
+
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/subscriptions/clx7p2m9t0003mk08w1r5b8qu/pause" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+Resposta 200: `SubscriptionResponse` com `"status": "PAUSED"`. Erros: `404 { "detail": "Subscription nao encontrado", "code": "not_found" }`.
+
+</Accordion>
+
+<Accordion title="PATCH /api/v2/subscriptions/{subscription_id}/churn">
+
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/subscriptions/clx7p2m9t0003mk08w1r5b8qu/churn" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "churnDate": "2026-06-12T00:00:00Z", "reason": "Cancelou por custo" }'
+```
+
+Resposta 200: `SubscriptionResponse` com `"status": "CANCELED"`, `endDate` = `churnDate` e `cancellationReason` gravado.
+
+```json title="404 Not Found"
+{ "detail": "Subscription nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/subscriptions/{subscription_id}/payments">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/subscriptions/clx7p2m9t0003mk08w1r5b8qu/payments" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "clxbs6p9x0001mk08kh4i7l0y",
+    "asaasId": null,
+    "pagarmeChargeId": "ch_9XyZaB1cD2eF3gH4",
+    "status": "paid",
+    "normalizedStatus": "PAID",
+    "gateway": "pagarme",
+    "value": 297.0,
+    "paymentDate": "2026-06-15",
+    "dueDate": "2026-06-15",
+    "createdAt": "2026-06-15T03:12:40.220000+00:00"
+  }
+]
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/subscriptions/my">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/subscriptions/my" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+Resposta 200: array de `SubscriptionResponse` (mesmo shape do `GET /subscriptions`). Retorna `[]` se o user não tem member vinculado.
+
+</Accordion>
+
+<Accordion title="GET /api/v2/subscriptions/my/payments/{subscription_id}">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/subscriptions/my/payments/clx7p2m9t0003mk08w1r5b8qu" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+Resposta 200: mesmo shape do `GET /subscriptions/{subscription_id}/payments`.
+
+```json title="403 Forbidden (subscription de outro user)"
+{ "detail": "Subscription nao pertence ao usuario", "code": "forbidden" }
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/subscriptions/asaas (501)">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/subscriptions/asaas" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Listagem de subscriptions direto da API Asaas nao migrada. Use /api/subscriptions/asaas no Nest legado.", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/subscriptions/webhook/asaas">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/subscriptions/webhook/asaas" \
+  -H "asaas-access-token: <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{ "event": "PAYMENT_RECEIVED", "payment": { "id": "pay_1234567890", "subscription": "sub_abc123", "value": 297.0 } }'
+```
+
+```json title="200 OK"
+{ "received": true, "processed": true }
+```
+
+```json title="400 Bad Request"
+{ "detail": "JSON invalido.", "code": "http_error" }
+```
+
+```json title="401 Unauthorized"
+{ "detail": "Token de webhook invalido.", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/subscriptions/webhook/pagarme">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/subscriptions/webhook/pagarme" \
+  -H "x-webhook-token: <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{ "type": "charge.paid", "data": { "id": "ch_9XyZaB1cD2eF3gH4", "amount": 29700 } }'
+```
+
+```json title="200 OK"
+{ "received": true, "processed": true }
+```
+
+```json title="400 Bad Request"
+{ "detail": "JSON invalido.", "code": "http_error" }
+```
+
+```json title="401 Unauthorized"
+{ "detail": "Token de webhook invalido.", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/subscriptions/asaas/import">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/subscriptions/asaas/import" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "productType": "OFFICE_SUPPORTER", "startDate": "2026-01-01", "endDate": "2026-06-12" }'
+```
+
+```json title="202 Accepted"
+{
+  "productType": "OFFICE_SUPPORTER",
+  "status": "running",
+  "message": "Sincronizacao com o Asaas em andamento.",
+  "startedAt": "2026-06-12T11:30:02.881000+00:00",
+  "finishedAt": null,
+  "lastUpdatedAt": "2026-06-12T11:30:02.881000+00:00",
+  "created": 0,
+  "updated": 0,
+  "skipped": 0,
+  "skippedMismatch": 0,
+  "skippedNoCustomer": 0,
+  "skippedNoEntity": 0,
+  "processed": 0,
+  "pages": 0,
+  "lastOffset": 0,
+  "error": null
+}
+```
+
+Se já há um import em andamento para o mesmo `productType`, retorna o estado atual sem disparar outro.
+
+</Accordion>
+
+<Accordion title="GET /api/v2/subscriptions/asaas/import-status">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/subscriptions/asaas/import-status?productType=OFFICE_SUPPORTER" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{
+  "productType": "OFFICE_SUPPORTER",
+  "status": "completed",
+  "message": "Sincronizacao concluida.",
+  "startedAt": "2026-06-12T11:30:02.881000+00:00",
+  "finishedAt": "2026-06-12T11:34:48.012000+00:00",
+  "lastUpdatedAt": "2026-06-12T11:34:48.012000+00:00",
+  "created": 12,
+  "updated": 85,
+  "skipped": 3,
+  "skippedMismatch": 1,
+  "skippedNoCustomer": 1,
+  "skippedNoEntity": 1,
+  "processed": 100,
+  "pages": 2,
+  "lastOffset": 100,
+  "error": null
+}
+```
+
+`status` é `"idle"`, `"running"`, `"completed"` ou `"failed"`. Sem sincronização anterior: `status: "idle"` e `message: "Nenhuma sincronizacao iniciada."`.
+
+</Accordion>
+
+<Accordion title="POST /api/v2/subscriptions/asaas/backfill-member-contacts">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/subscriptions/asaas/backfill-member-contacts?limit=500" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{ "scanned": 42, "updated": 30, "skippedNoCustomer": 8, "skippedNoData": 3, "errors": 1 }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/subscriptions/pagarme/import">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/subscriptions/pagarme/import" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="202 Accepted"
+{
+  "status": "running",
+  "message": "Importando charges PagarMe...",
+  "startedAt": "2026-06-12T11:30:02.881000+00:00",
+  "finishedAt": null,
+  "lastUpdatedAt": "2026-06-12T11:30:02.881000+00:00",
+  "created": 0,
+  "updated": 0,
+  "skipped": 0,
+  "total": 0,
+  "error": null
+}
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/subscriptions/pagarme/import-status">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/subscriptions/pagarme/import-status" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{
+  "status": "completed",
+  "message": "Importacao concluida.",
+  "startedAt": "2026-06-12T11:30:02.881000+00:00",
+  "finishedAt": "2026-06-12T11:41:17.530000+00:00",
+  "lastUpdatedAt": "2026-06-12T11:41:17.530000+00:00",
+  "created": 230,
+  "updated": 412,
+  "skipped": 18,
+  "total": 660,
+  "error": null
+}
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/subscriptions/asaas/sync-payments (501)">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/subscriptions/asaas/sync-payments" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Use Nest legado.", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/subscriptions/process-expired (501)">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/subscriptions/process-expired" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Job de expiracao roda como cron no Nest legado.", "code": "http_error" }
+```
+
+</Accordion>
+
+</AccordionGroup>
 
 ### POST /subscriptions
 
@@ -90,6 +595,160 @@ Dispara sync assíncrono (responde `202 Accepted`); acompanhe via `GET /subscrip
 | PATCH | `/coupons/{coupon_id}/toggle` | Alternar ativo | ADMIN |
 | DELETE | `/coupons/{coupon_id}` | Remover | ADMIN |
 
+### Exemplos
+
+<AccordionGroup>
+
+<Accordion title="GET /api/v2/coupons/validate/{code}">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/coupons/validate/BEMVINDA10"
+```
+
+```json title="200 OK (cupom válido)"
+{ "valid": true, "code": "BEMVINDA10", "discountPercent": 10, "fixedPrice": null, "productType": "MEMBERS_CLUB" }
+```
+
+```json title="200 OK (cupom inválido/expirado/esgotado)"
+{ "valid": false, "code": null, "discountPercent": null, "fixedPrice": null, "productType": null }
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/coupons">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/coupons?isActive=true&productId=clx1a2b3c0001mk08de4f5g6h" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "clxct7q0y0001mk08li5j8m1z",
+    "code": "BEMVINDA10",
+    "description": "10% off no Clube de Membros",
+    "discountPercent": 10,
+    "fixedPrice": null,
+    "isActive": true,
+    "expiresAt": "2026-12-31T23:59:59",
+    "maxUsage": 100,
+    "maxUsagePerCustomer": 1,
+    "usageCount": 37,
+    "totalDiscounted": 1098.9,
+    "totalRevenue": 9890.1,
+    "productId": "clx1a2b3c0001mk08de4f5g6h",
+    "createdAt": "2026-01-02T10:00:00.000000+00:00",
+    "updatedAt": "2026-06-10T18:22:05.114000+00:00"
+  }
+]
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/coupons/impact">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/coupons/impact" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{
+  "totalDiscounted": 1098.9,
+  "totalRevenue": 9890.1,
+  "totalUsage": 37,
+  "couponsWithUsage": 1,
+  "coupons": [
+    {
+      "id": "clxct7q0y0001mk08li5j8m1z",
+      "code": "BEMVINDA10",
+      "description": "10% off no Clube de Membros",
+      "product": "Clube de Membros",
+      "usageCount": 37,
+      "totalDiscounted": 1098.9,
+      "totalRevenue": 9890.1,
+      "avgDiscount": 29.7,
+      "avgRevenue": 267.3
+    }
+  ]
+}
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/coupons">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/coupons" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "code": "BEMVINDA10", "description": "10% off no Clube de Membros", "discountPercent": 10, "isActive": true, "expiresAt": "2026-12-31T23:59:59Z", "maxUsage": 100, "maxUsagePerCustomer": 1, "productId": "clx1a2b3c0001mk08de4f5g6h" }'
+```
+
+Resposta 201: objeto `CouponResponse` (mesmo shape do `GET /coupons`).
+
+```json title="409 Conflict"
+{ "detail": "Cupom com codigo \"BEMVINDA10\" ja existe.", "code": "conflict" }
+```
+
+```json title="422 Unprocessable Entity (regra de negócio)"
+{ "detail": "Codigo do cupom obrigatorio.", "code": "validation_error" }
+```
+
+</Accordion>
+
+<Accordion title="PATCH /api/v2/coupons/{coupon_id}">
+
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/coupons/clxct7q0y0001mk08li5j8m1z" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "description": "10% off — campanha de inverno", "maxUsage": 200 }'
+```
+
+Resposta 200: objeto `CouponResponse` atualizado.
+
+```json title="404 Not Found"
+{ "detail": "Cupom nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+<Accordion title="PATCH /api/v2/coupons/{coupon_id}/toggle">
+
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/coupons/clxct7q0y0001mk08li5j8m1z/toggle" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+Resposta 200: objeto `CouponResponse` com `isActive` invertido.
+
+```json title="404 Not Found"
+{ "detail": "Cupom nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+<Accordion title="DELETE /api/v2/coupons/{coupon_id}">
+
+```bash title="Requisição"
+curl -X DELETE "https://api.escolapujante.com.br/api/v2/coupons/clxct7q0y0001mk08li5j8m1z" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{ "id": "clxct7q0y0001mk08li5j8m1z" }
+```
+
+```json title="404 Not Found"
+{ "detail": "Cupom nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+</AccordionGroup>
+
 ### POST /coupons
 
 <ParamField body="code" type="string" required>Código do cupom.</ParamField>
@@ -109,14 +768,84 @@ Dispara sync assíncrono (responde `202 Accepted`); acompanhe via `GET /subscrip
 | POST | `/checkout` | Processar checkout | Público |
 | GET | `/checkout/pix-status/{order_id}` | Status de pagamento PIX | Público |
 
+### Exemplos
+
+<AccordionGroup>
+
+<Accordion title="POST /api/v2/checkout">
+
+O body real usa `planSlug` (`mentorship`, `members-club`, `members-club-semester`, `office-supporter`, `course-of-month`) e `paymentMethod` (`credit_card`, `pix`, `boleto`).
+
+```bash title="Requisição (PIX)"
+curl -X POST "https://api.escolapujante.com.br/api/v2/checkout" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "planSlug": "members-club",
+    "fullName": "Ana Carolina Souza",
+    "email": "ana.souza@exemplo.com.br",
+    "phone": "(11) 98765-4321",
+    "cpf": "123.456.789-09",
+    "cep": "01310-100",
+    "paymentMethod": "pix",
+    "couponCode": "BEMVINDA10"
+  }'
+```
+
+```json title="200 OK (PIX pendente)"
+{
+  "status": "pending",
+  "message": "QR Code PIX gerado com sucesso. Apos a confirmacao do pagamento, voce recebera suas credenciais por email.",
+  "pix_qr_code": "00020126580014br.gov.bcb.pix...",
+  "pix_qr_code_url": "https://api.pagar.me/core/v5/transactions/qrcode...",
+  "orderId": "or_9XyZaB1cD2eF3gH4"
+}
+```
+
+```json title="200 OK (cartão aprovado)"
+{
+  "status": "active",
+  "message": "Conta criada com sucesso! Verifique seu email.",
+  "subscriptionId": "clxar5o8w0001mk08jg3h6k9x",
+  "orderId": "or_9XyZaB1cD2eF3gH4"
+}
+```
+
+Erros 422 de regra de negócio (`code: "validation_error"`), mensagens reais:
+
+- `"Este email ja possui uma conta. Faca login para gerenciar sua assinatura."`
+- `"Dados do cartao sao obrigatorios para credit_card."`
+- `"Plano invalido."`
+- `"Valor minimo para cartao de credito eh R$ 1,00."`
+- `"Falha ao gerar PIX. Tente novamente em alguns instantes."`
+
+Para cartão, envie também `"card": { "number": "4111111111111111", "holderName": "ANA C SOUZA", "expMonth": 12, "expYear": 2028, "cvv": "123" }` e opcionalmente `"installments": 12`.
+
+</Accordion>
+
+<Accordion title="GET /api/v2/checkout/pix-status/{order_id}">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/checkout/pix-status/or_9XyZaB1cD2eF3gH4"
+```
+
+```json title="200 OK"
+{ "status": "paid" }
+```
+
+`status` é `"paid"`, `"pending"`, `"failed"` ou `"not_found"` (order sem subscription local).
+
+</Accordion>
+
+</AccordionGroup>
+
 ### POST /checkout
 
 <ParamField body="email" type="string" required>Email do comprador.</ParamField>
 <ParamField body="fullName" type="string" required>Nome completo.</ParamField>
 <ParamField body="phone" type="string" required>Telefone.</ParamField>
 <ParamField body="cpf" type="string" required>CPF.</ParamField>
-<ParamField body="productType" type="string" required>Produto comprado.</ParamField>
-<ParamField body="paymentMethod" type="string" required>Forma de pagamento (PIX, cartão, etc.).</ParamField>
+<ParamField body="planSlug" type="string" required>Plano comprado: `mentorship`, `members-club`, `members-club-semester`, `office-supporter` ou `course-of-month`.</ParamField>
+<ParamField body="paymentMethod" type="string" required>Forma de pagamento: `credit_card`, `pix` ou `boleto`.</ParamField>
 <ParamField body="card" type="object">Dados do cartão (quando aplicável).</ParamField>
 <ParamField body="utm" type="object">Parâmetros UTM (opcional).</ParamField>
 
@@ -126,12 +855,63 @@ Dispara sync assíncrono (responde `202 Accepted`); acompanhe via `GET /subscrip
 |---|---|---|---|
 | POST | `/trials/grant` | Conceder trial originado no AgroPujante | Internal Token |
 
+### Exemplos
+
+<AccordionGroup>
+
+<Accordion title="POST /api/v2/trials/grant">
+
+O body real usa snake_case (`duration_days`, `source_ref`).
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/trials/grant" \
+  -H "X-Internal-Token: <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{ "email": "ana.souza@exemplo.com.br", "duration_days": 7, "source": "agropujante_pro_annual", "source_ref": "sub_AbCdEf123456" }'
+```
+
+```json title="200 OK (concedido)"
+{
+  "status": "granted",
+  "trial_id": "b4c5d6e7-f8a9-4b0c-8d1e-2f3a4b5c6d7e",
+  "expires_at": "2026-06-19T11:30:02.881000+00:00",
+  "user_id": "clx3k9d2f0002mk08ab1c2d3e",
+  "reason": null
+}
+```
+
+```json title="200 OK (já tinha trial ativo — idempotente)"
+{
+  "status": "already_active",
+  "trial_id": "b4c5d6e7-f8a9-4b0c-8d1e-2f3a4b5c6d7e",
+  "expires_at": "2026-06-19T11:30:02.881000+00:00",
+  "user_id": "clx3k9d2f0002mk08ab1c2d3e",
+  "reason": null
+}
+```
+
+`status` também pode ser `"user_not_found"` (com `reason: "user_inexistente"`).
+
+```json title="401 Unauthorized"
+{ "detail": "X-Internal-Token invalido", "code": "http_error" }
+```
+
+```json title="503 Service Unavailable"
+{ "detail": "internal_api_token nao configurado", "code": "http_error" }
+```
+
+Falha interna (`status: "error"` no service) vira `500 { "detail": "<reason>", "code": "http_error" }`.
+
+</Accordion>
+
+</AccordionGroup>
+
 ### POST /trials/grant
 
 <ParamField body="email" type="string" required>Email do usuário.</ParamField>
-<ParamField body="durationDays" type="number">Duração do trial em dias (opcional).</ParamField>
+<ParamField body="duration_days" type="number">Duração do trial em dias (opcional).</ParamField>
 <ParamField body="source" type="string" required>Origem do trial.</ParamField>
-<ParamField body="sourceRef" type="string">Referência da origem (opcional).</ParamField>
+<ParamField body="source_ref" type="string">Referência da origem (opcional).</ParamField>
 <ParamField body="metadata" type="object">Metadados livres (opcional).</ParamField>
 
 ## Renewal (`/renewal`)
@@ -146,6 +926,52 @@ Dispara sync assíncrono (responde `202 Accepted`); acompanhe via `GET /subscrip
 Retornam **501 — não implementado**: `GET /renewal/resolve-magic-link` e `POST /renewal/magic-link`.
 </Warning>
 
+### Exemplos
+
+<AccordionGroup>
+
+<Accordion title="GET /api/v2/renewal/my-status">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/renewal/my-status" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+Stub atual — sempre responde "sem renovação pendente":
+
+```json title="200 OK"
+{ "status": "ok", "renewUrl": null }
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/renewal/resolve-magic-link (501)">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/renewal/resolve-magic-link"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Magic link de renovacao depende de RenewalService no Nest legado.", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/renewal/magic-link (501)">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/renewal/magic-link" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Geracao de magic link nao migrada.", "code": "http_error" }
+```
+
+</Accordion>
+
+</AccordionGroup>
+
 ## Webhooks externos
 
 | Método | Path | Descrição | Auth |
@@ -153,3 +979,80 @@ Retornam **501 — não implementado**: `GET /renewal/resolve-magic-link` e `POS
 | POST | `/subscriptions/webhook/asaas` | Eventos Asaas (auditado em `asaas_webhook_events`) | Público (token `ASAAS_WEBHOOK_TOKEN`) |
 | POST | `/subscriptions/webhook/pagarme` | Eventos PagarMe (auditado em `pagarme_webhook_events`) | Público (token `PAGARME_WEBHOOK_TOKEN`) |
 | POST | `/webhooks/resend` | Eventos Resend (entregas, bounces) | Público (assinatura Svix HMAC) |
+
+### Exemplos
+
+<AccordionGroup>
+
+<Accordion title="POST /api/v2/subscriptions/webhook/asaas">
+
+Exemplo completo na seção [Subscriptions](#subscriptions-subscriptions). Resumo:
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/subscriptions/webhook/asaas" \
+  -H "asaas-access-token: <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{ "event": "PAYMENT_RECEIVED", "payment": { "id": "pay_1234567890", "subscription": "sub_abc123" } }'
+```
+
+```json title="200 OK"
+{ "received": true, "processed": true }
+```
+
+Payload sem `event` ou `payment` retorna `{ "received": true, "processed": false }`. Erros: `401 { "detail": "Token de webhook invalido." }`, `400 { "detail": "JSON invalido." }`.
+
+</Accordion>
+
+<Accordion title="POST /api/v2/subscriptions/webhook/pagarme">
+
+Exemplo completo na seção [Subscriptions](#subscriptions-subscriptions). Resumo:
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/subscriptions/webhook/pagarme" \
+  -H "x-webhook-token: <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{ "type": "charge.paid", "data": { "id": "ch_9XyZaB1cD2eF3gH4" } }'
+```
+
+```json title="200 OK"
+{ "received": true, "processed": true }
+```
+
+Erros: `401 { "detail": "Token de webhook invalido." }`, `400 { "detail": "JSON invalido." }`.
+
+</Accordion>
+
+<Accordion title="POST /api/v2/webhooks/resend">
+
+Chamado pelo Resend com headers Svix (não chame manualmente em produção).
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/webhooks/resend" \
+  -H "svix-id: msg_2f8a..." \
+  -H "svix-timestamp: 1781262000" \
+  -H "svix-signature: v1,K5oZ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "type": "email.delivered", "created_at": "2026-06-12T11:30:02.881Z", "data": { "email_id": "8f3b2c1d-..." } }'
+```
+
+```json title="200 OK"
+{ "ok": true, "event": "email.delivered" }
+```
+
+Eventos não rastreados retornam `{ "ok": true, "skipped": "event_not_tracked" }`; payload sem `email_id` retorna `{ "ok": true, "skipped": "no_email_id" }`.
+
+```json title="400 Bad Request"
+{ "detail": "Headers Svix ausentes.", "code": "http_error" }
+```
+
+```json title="401 Unauthorized"
+{ "detail": "Assinatura invalida.", "code": "http_error" }
+```
+
+```json title="503 Service Unavailable"
+{ "detail": "Webhook nao configurado.", "code": "http_error" }
+```
+
+</Accordion>
+
+</AccordionGroup>

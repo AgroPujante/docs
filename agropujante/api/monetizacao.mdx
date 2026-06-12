@@ -5,6 +5,35 @@ description: "Assinaturas PRO, checkout de apoiador, tokens de cartão, crédito
 
 Base: `/api/v1`. Pagamentos via **Asaas** — ver [Integrações](/agropujante/integracoes#asaas-pagamentos).
 
+## Erros comuns
+
+O handler global adiciona `code` ao body. Shapes que se repetem:
+
+```json title="401 Unauthorized — sem credencial"
+{ "detail": "Token de autenticação não fornecido", "code": "http_error" }
+```
+
+```json title="401 Unauthorized — token ruim"
+{ "detail": "Token inválido ou expirado", "code": "http_error" }
+```
+
+```json title="403 Forbidden — role insuficiente (endpoints admin+)"
+{ "detail": "Acesso negado — permissão insuficiente", "code": "http_error" }
+```
+
+```json title="422 Unprocessable Entity — validação Pydantic (shape padrão FastAPI)"
+{
+  "detail": [
+    {
+      "type": "literal_error",
+      "loc": ["body", "billing_type"],
+      "msg": "Input should be 'PIX' or 'CREDIT_CARD'",
+      "input": "BOLETO"
+    }
+  ]
+}
+```
+
 ## Subscriptions (`/subscriptions`)
 
 | Método | Path | Descrição | Auth |
@@ -13,6 +42,106 @@ Base: `/api/v1`. Pagamentos via **Asaas** — ver [Integrações](/agropujante/i
 | POST | `/subscriptions/checkout` | Cria checkout no Asaas (PIX/cartão) | JWT |
 | POST | `/subscriptions/webhook` | Webhook Asaas — valida header `asaas-access-token` | Público (token) |
 | POST | `/subscriptions/cancel` | Cancela a assinatura | JWT |
+
+<AccordionGroup>
+<Accordion title="GET /api/v1/subscriptions/plans">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/subscriptions/plans"
+```
+
+```json title="200 OK"
+{
+  "plans": [
+    { "id": "monthly", "name": "Mensal", "price_monthly": 19.9, "price_total": 19.9, "period_months": 1, "discount_percent": 0 },
+    { "id": "semiannual", "name": "Semestral", "price_monthly": 14.9, "price_total": 89.4, "period_months": 6, "discount_percent": 25 },
+    { "id": "annual", "name": "Anual", "price_monthly": 9.9, "price_total": 118.8, "period_months": 12, "discount_percent": 50 }
+  ]
+}
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/subscriptions/checkout">
+Exige CPF/CNPJ no perfil. Retorna a URL da página de pagamento do Asaas.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/subscriptions/checkout" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"plan": "annual"}'
+```
+
+```json title="200 OK"
+{
+  "checkout_url": "https://www.asaas.com/c/abc123def456",
+  "subscription_id": "sub_000012345678"
+}
+```
+
+```json title="400 Bad Request — plano inválido"
+{ "detail": "Plano inválido: trimestral. Opções: monthly, semiannual, annual", "code": "http_error" }
+```
+
+```json title="400 Bad Request — já assinante"
+{ "detail": "Você já possui uma assinatura ativa", "code": "http_error" }
+```
+
+```json title="400 Bad Request — sem CPF/CNPJ"
+{ "detail": "CPF/CNPJ é obrigatório para assinar. Atualize seu perfil.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/subscriptions/webhook">
+Webhook do Asaas — valida o header `asaas-access-token`. Sempre responde 200 com `{"received": true}` após aceitar o evento (mesmo se o processamento interno falhar, para evitar retries do Asaas).
+
+```bash title="Requisição (payload enviado pelo Asaas)"
+curl -X POST "https://api.agropujante.com.br/api/v1/subscriptions/webhook" \
+  -H "asaas-access-token: <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "event": "PAYMENT_CONFIRMED",
+    "payment": {
+      "id": "pay_080225913252",
+      "customer": "cus_000005219613",
+      "subscription": "sub_000012345678",
+      "value": 118.80,
+      "billingType": "PIX",
+      "status": "CONFIRMED",
+      "externalReference": "9a1d4f22-3b5c-4e7d-8f90-1a2b3c4d5e6f"
+    }
+  }'
+```
+
+```json title="200 OK"
+{ "received": true }
+```
+
+```json title="401 Unauthorized — token do webhook errado"
+{ "detail": "Invalid webhook token", "code": "http_error" }
+```
+
+```json title="400 Bad Request — sem event"
+{ "detail": "Missing event type", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/subscriptions/cancel">
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/subscriptions/cancel" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "success": true,
+  "message": "Assinatura cancelada com sucesso. Você ainda terá acesso até o final do período pago."
+}
+```
+
+```json title="400 Bad Request — nada pra cancelar"
+{ "detail": "Você não possui uma assinatura ativa para cancelar", "code": "http_error" }
+```
+</Accordion>
+</AccordionGroup>
 
 Pagamento confirmado → `site_subscriptions.status = active` + `users.is_subscriber = true` + evento em `site_subscription_events`. Fluxo completo em [Trial → PRO](/agropujante/fluxos#trial-pro).
 
@@ -29,12 +158,191 @@ Pagamento confirmado → `site_subscriptions.status = active` + `users.is_subscr
 Apoiador e PRO **não coexistem** (1 assinatura por usuário). Supporter ativo já carrega acesso PRO via `users.is_subscriber` — não crie uma segunda assinatura.
 </Warning>
 
-## Card tokens (`/card-tokens`)
+<AccordionGroup>
+<Accordion title="GET /api/v1/supporter-checkout/plans">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/supporter-checkout/plans"
+```
+
+```json title="200 OK"
+{
+  "plans": [
+    {
+      "id": "supporter-monthly",
+      "name": "Escritório Apoiador Pujante",
+      "price_monthly": 385.0,
+      "price_total": 385.0,
+      "period_months": 1,
+      "benefits": [
+        "Reconhecimento como Apoiador Oficial em todas as frentes do movimento",
+        "Descontos em imersões, cursos e eventos presenciais",
+        "Participação prioritária em iniciativas (webinários, painéis, mentorias)",
+        "Acesso direto com a liderança para influenciar pautas estratégicas"
+      ]
+    }
+  ]
+}
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/supporter-checkout/start">
+PIX (pagamento avulso do 1º ciclo) ou CREDIT_CARD (recorrente, exige `payment_method_id` de cartão tokenizado). Se o user tem PRO ativa, ela é cancelada **antes** de criar a supporter (evita cobrança dupla).
+
+```bash title="Requisição — PIX"
+curl -X POST "https://api.agropujante.com.br/api/v1/supporter-checkout/start" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "plan": "supporter-monthly",
+    "billing_type": "PIX",
+    "cpf_cnpj": "12345678000190"
+  }'
+```
+
+```json title="200 OK — PIX"
+{
+  "subscription_id": null,
+  "payment_id": "pay_080225913252",
+  "status": "pending",
+  "pix": {
+    "payment_id": "pay_080225913252",
+    "qr_code": "iVBORw0KGgoAAAANSUhEUgAA...",
+    "copy_paste": "00020126580014br.gov.bcb.pix...",
+    "expiration_date": "2026-06-13 23:59:59"
+  }
+}
+```
+
+```json title="400 Bad Request — apoiador duplicado"
+{ "detail": "Você já possui uma assinatura de apoiador ativa.", "code": "http_error" }
+```
+
+```json title="400 Bad Request — cartão sem payment_method_id"
+{ "detail": "Selecione um cartão.", "code": "http_error" }
+```
+
+```json title="404 Not Found — cartão inexistente"
+{ "detail": "Cartão não encontrado.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/supporter-checkout/me">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/supporter-checkout/me" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK — é apoiador"
+{
+  "is_supporter": true,
+  "status": "active",
+  "current_period_end": "2026-07-12T00:00:00+00:00"
+}
+```
+
+```json title="200 OK — não é"
+{ "is_supporter": false, "status": null, "current_period_end": null }
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/supporter-checkout/upgrade-preview">
+Usado pra exibir o aviso "sua PRO será cancelada sem estorno" antes do checkout de apoiador.
+
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/supporter-checkout/upgrade-preview" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK — tem PRO ativa"
+{
+  "has_active_pro": true,
+  "pro_plan_id": "annual",
+  "pro_plan_name": "Anual",
+  "pro_status": "active",
+  "pro_current_period_end": "2026-11-02T00:00:00+00:00",
+  "pro_trial_ends_at": null
+}
+```
+
+```json title="200 OK — sem PRO"
+{ "has_active_pro": false, "pro_plan_id": null, "pro_plan_name": null, "pro_status": null, "pro_current_period_end": null, "pro_trial_ends_at": null }
+```
+</Accordion>
+</AccordionGroup>
+
+## Cartões e checkout v2 (`/checkout`)
 
 | Método | Path | Descrição | Auth |
 |---|---|---|---|
-| POST | `/card-tokens` | Tokeniza cartão no Asaas (PAN nunca é persistido) | JWT |
-| GET | `/card-tokens` | Cartões salvos do usuário | JWT |
+| POST | `/checkout/cards` | Tokeniza cartão no Asaas (PAN nunca é persistido) | JWT |
+| GET | `/checkout/cards` | Cartões salvos do usuário | JWT |
+| DELETE | `/checkout/cards/{card_id}` | Remove cartão salvo | JWT |
+| POST | `/checkout/start` | Inicia checkout v2 | JWT |
+| POST | `/checkout/redemption/start` | Inicia resgate com créditos | JWT |
+| GET | `/checkout/payment/{payment_id}/status` | Status do pagamento | JWT |
+
+<AccordionGroup>
+<Accordion title="POST /api/v1/checkout/cards">
+Tokeniza o cartão no Asaas — o PAN nunca é persistido no banco.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/checkout/cards" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "card_data": {
+      "holder_name": "Ana Beatriz Carvalho",
+      "cpf_cnpj": "12345678901",
+      "phone": "34999990000",
+      "postal_code": "38010100",
+      "address_number": "120",
+      "number": "5162306219378829",
+      "expiry_month": "08",
+      "expiry_year": "2029",
+      "cvv": "318"
+    }
+  }'
+```
+
+```json title="200 OK"
+{
+  "token": "<TOKEN>",
+  "last_four": "8829",
+  "brand": "MASTERCARD"
+}
+```
+
+```json title="400 Bad Request — cartão recusado"
+{ "detail": "Não foi possível processar o cartão. Verifique os dados.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/checkout/cards">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/checkout/cards" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "cards": [
+    {
+      "id": "4a5b6c7d-8e9f-4a0b-1c2d-3e4f5a6b7c8d",
+      "last_four": "8829",
+      "brand": "MASTERCARD",
+      "holder_name": "Ana Beatriz Carvalho",
+      "expiry_month": "08",
+      "expiry_year": "2029",
+      "is_default": true,
+      "created_at": "2026-06-12T16:40:00+00:00"
+    }
+  ]
+}
+```
+
+Há também `DELETE /checkout/cards/{card_id}` (`{"success": true}`; 404 `"Cartão não encontrado."`).
+</Accordion>
+</AccordionGroup>
 
 ## Credits (`/credits`)
 
@@ -43,7 +351,75 @@ Saldo de gamificação do usuário.
 | Método | Path | Descrição | Auth |
 |---|---|---|---|
 | GET | `/credits/balance` | Saldo atual | JWT |
-| POST | `/credits/log` | Registra evento de crédito | JWT |
+| GET | `/credits/history` | Histórico de eventos de crédito | JWT |
+| GET | `/credits/streak` | Streak atual e chaves de revive | JWT |
+| POST | `/credits/check-in` | Check-in diário | JWT |
+| POST | `/credits/track-share` | Crédito por compartilhamento | JWT |
+| POST | `/credits/track-read` | Crédito por leitura | JWT |
+| POST | `/credits/claim-welcome-gift` | Resgata bônus de boas-vindas | JWT |
+| POST | `/credits/redemption/preview` | Preview de resgate | JWT |
+
+<Note>
+Não há endpoint genérico de escrita: earn/spend/refund rodam só via hooks internos. As escritas expostas são tasks específicas — `POST /credits/track-share` e `POST /credits/track-read` (além de `/credits/check-in` e `/credits/claim-welcome-gift`).
+</Note>
+
+<AccordionGroup>
+<Accordion title="GET /api/v1/credits/balance">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/credits/balance" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "user_id": "9a1d4f22-3b5c-4e7d-8f90-1a2b3c4d5e6f",
+  "balance": 85,
+  "total_earned": 120,
+  "total_spent": 35,
+  "welcome_gift_claimed": true,
+  "updated_at": "2026-06-12T09:00:00+00:00"
+}
+```
+
+Erros genéricos (401): ver [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="POST /api/v1/credits/track-share">
+Credita coin por compartilhar um post (idempotente por user+post; cap 1/dia).
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/credits/track-share" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"post_id": "c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f"}'
+```
+
+```json title="200 OK — creditado"
+{ "credited": true, "balance": 86, "task_code": "share_post", "amount": 1, "reason": null }
+```
+
+```json title="200 OK — duplicado (não é erro)"
+{ "credited": false, "balance": 86, "task_code": "share_post", "amount": null, "reason": "idempotent_duplicate" }
+```
+
+`reason`: `task_not_found_or_inactive` | `already_credited_one_shot` | `daily_limit_reached` | `idempotent_duplicate`.
+</Accordion>
+
+<Accordion title="POST /api/v1/credits/track-read">
+Credita coin por leitura completa de artigo (idempotente por user+post; cap 5/dia). O frontend valida a leitura (scroll + tempo) antes de chamar.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/credits/track-read" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"post_id": "c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f"}'
+```
+
+```json title="200 OK"
+{ "credited": true, "balance": 87, "task_code": "read_article", "amount": 1, "reason": null }
+```
+</Accordion>
+</AccordionGroup>
 
 ## Supporter leads (`/supporter-leads`)
 
@@ -51,6 +427,67 @@ Saldo de gamificação do usuário.
 |---|---|---|---|
 | POST | `/supporter-leads` | Formulário de lead (name, email, office, phone, message) | Público |
 | GET | `/supporter-leads` | Lista leads | admin+ |
-| DELETE | `/supporter-leads/{lead_id}` | Remove lead | admin+ |
+| GET | `/supporter-leads/unread-count` | Contagem de leads não lidos | admin+ |
+| PATCH | `/supporter-leads/{lead_id}/read` | Marca lead como lido | admin+ |
+| PATCH | `/supporter-leads/read-all` | Marca todos como lidos | admin+ |
+
+<AccordionGroup>
+<Accordion title="POST /api/v1/supporter-leads">
+Formulário público da página de apoiador. `terms_accepted: true` é obrigatório (422 se faltar).
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/supporter-leads" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Fernanda Oliveira Castro",
+    "email": "fernanda.castro@exemplo.com.br",
+    "office_name": "Castro & Almeida Advocacia Agrária",
+    "phone": "+55 65 98888-1234",
+    "message": "Queremos entender o plano de escritório apoiador.",
+    "terms_accepted": true
+  }'
+```
+
+```json title="201 Created"
+{
+  "id": "5b6c7d8e-9f0a-4b1c-2d3e-4f5a6b7c8d9e",
+  "name": "Fernanda Oliveira Castro",
+  "email": "fernanda.castro@exemplo.com.br",
+  "office_name": "Castro & Almeida Advocacia Agrária",
+  "phone": "+55 65 98888-1234",
+  "message": "Queremos entender o plano de escritório apoiador.",
+  "terms_accepted_at": "2026-06-12T16:50:00+00:00",
+  "created_at": "2026-06-12T16:50:00+00:00"
+}
+```
+
+Erros genéricos (422): ver [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="GET /api/v1/supporter-leads">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/supporter-leads" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "5b6c7d8e-9f0a-4b1c-2d3e-4f5a6b7c8d9e",
+    "name": "Fernanda Oliveira Castro",
+    "email": "fernanda.castro@exemplo.com.br",
+    "office_name": "Castro & Almeida Advocacia Agrária",
+    "phone": "+55 65 98888-1234",
+    "message": "Queremos entender o plano de escritório apoiador.",
+    "is_read": false,
+    "terms_accepted_at": "2026-06-12T16:50:00+00:00",
+    "created_at": "2026-06-12T16:50:00+00:00"
+  }
+]
+```
+
+O router também expõe `GET /supporter-leads/unread-count`, `PATCH /supporter-leads/{lead_id}/read` e `PATCH /supporter-leads/read-all` (todos admin+). Erros genéricos (401, 403): ver [Erros comuns](#erros-comuns).
+</Accordion>
+</AccordionGroup>
 
 Cada lead novo notifica a equipe via `LEAD_NOTIFICATION_EMAIL`.

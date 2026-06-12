@@ -5,6 +5,45 @@ description: "Analytics, métricas de receita e email, gestão de admins e usuá
 
 Base: `/api/v1`.
 
+## Erros comuns
+
+O handler global adiciona `code` ao body. Shapes que se repetem:
+
+```json title="401 Unauthorized — sem credencial"
+{ "detail": "Não autenticado", "code": "http_error" }
+```
+
+```json title="401 Unauthorized — token ruim"
+{ "detail": "Token inválido ou expirado", "code": "http_error" }
+```
+
+```json title="403 Forbidden — role insuficiente"
+{ "detail": "Acesso negado — permissão insuficiente", "code": "http_error" }
+```
+
+```json title="403 Forbidden — API key em método de escrita"
+{ "detail": "API key é somente leitura — apenas requisições GET são permitidas", "code": "http_error" }
+```
+
+```json title="422 Unprocessable Entity — validação Pydantic (shape padrão FastAPI)"
+{
+  "detail": [
+    {
+      "type": "missing",
+      "loc": ["query", "year"],
+      "msg": "Field required",
+      "input": null
+    }
+  ]
+}
+```
+
+`POST /analytics/pageview` é rate-limited (slowapi, `60/minute` por IP):
+
+```json title="429 Too Many Requests — slowapi"
+{ "error": "Rate limit exceeded: 60 per 1 minute" }
+```
+
 ## Analytics (`/analytics`)
 
 | Método | Path | Descrição | Auth |
@@ -23,6 +62,264 @@ Base: `/api/v1`.
 | GET | `/analytics/users/{user_id}/details` | Detalhe por usuário | gestor+ |
 | GET | `/analytics/users/registrations` | Registros ao longo do tempo | gestor+ |
 
+<AccordionGroup>
+<Accordion title="POST /api/v1/analytics/pageview">
+Fire-and-forget — responde **sempre** 204, mesmo descartando (bot ou path bloqueado: `/admin`, `/api`, `/obrigado`). Rate limit `60/minute`.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/analytics/pageview" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "path": "/artigo/marco-temporal-seguranca-juridica-no-campo",
+    "visitor_id": "vis_8f2a91c7",
+    "session_id": "sess_31bd07",
+    "utm_source": "newsletter",
+    "utm_medium": "email",
+    "referrer": "https://news.agropujante.com.br"
+  }'
+```
+
+```text title="204 No Content"
+(sem body)
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/analytics/view/{post_id}">
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/analytics/view/c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f?visitor_id=vis_8f2a91c7"
+```
+
+```text title="204 No Content"
+(sem body)
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/analytics/summary">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/analytics/summary" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "views_today": 2840,
+  "views_7d": 21450,
+  "views_30d": 89200,
+  "views_total": 1250300,
+  "views_by_type": { "noticia": 41200, "artigo": 38900, "julgado": 9100 }
+}
+```
+
+Erros genéricos (401, 403): ver [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="GET /api/v1/analytics/top-posts">
+`period`: `today` | `7d` | `30d` | `all`.
+
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/analytics/top-posts?period=7d&limit=10" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
+    "title": "Marco temporal e a segurança jurídica no campo",
+    "slug": "marco-temporal-seguranca-juridica-no-campo",
+    "type": "artigo",
+    "cover_image_url": "https://cdn.agropujante.com.br/posts/marco-temporal.jpg",
+    "views": 3120
+  }
+]
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/analytics/post/{post_id}">
+`period`: `7d` | `30d` | `all`.
+
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/analytics/post/c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f?period=30d" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "post_id": "c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
+  "total_views": 3120,
+  "period": "30d",
+  "daily_views": [
+    { "date": "2026-06-10", "views": 220 },
+    { "date": "2026-06-11", "views": 198 }
+  ]
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/analytics/daily">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/analytics/daily?days=30" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  { "date": "2026-06-11", "views": 2980 },
+  { "date": "2026-06-12", "views": 2840 }
+]
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/analytics/monthly">
+`year` e `month` são obrigatórios (422 se faltarem).
+
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/analytics/monthly?year=2026&month=5" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "year": 2026,
+  "month": 5,
+  "total_views": 91200,
+  "unique_visitors": 30150,
+  "avg_views_per_visitor": 3.02,
+  "daily_views": [ { "date": "2026-05-01", "views": 2710 } ]
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/analytics/visitors/frequency">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/analytics/visitors/frequency?year=2026&month=5&limit=20" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  { "visitor_id": "vis_8f2a91c7", "days_visited": 18, "total_views": 64 }
+]
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/analytics/peak-hours">
+Horários em fuso do Brasil (UTC-3).
+
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/analytics/peak-hours?days=30" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "period_days": 30,
+  "total_views": 89200,
+  "by_hour": [ { "hour": 0, "views": 820 }, { "hour": 9, "views": 7240 } ],
+  "by_day_of_week": [ { "day": 0, "name": "Segunda", "views": 16200 } ],
+  "peak_hour": 9,
+  "peak_day": 1,
+  "peak_day_name": "Terca"
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/analytics/users/summary">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/analytics/users/summary" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "total_users": 18230,
+  "users_today": 42,
+  "users_7d": 310,
+  "users_30d": 1280,
+  "profile_completed_count": 9100,
+  "profile_completed_rate": 49.9,
+  "active_users_30d": 4210,
+  "average_age": 36.4,
+  "users_with_age": 7800,
+  "by_state": [ { "state": "MT", "count": 2310 }, { "state": "SP", "count": 2105 } ],
+  "by_graduation": [ { "graduation": "Direito", "count": 8900 } ],
+  "by_occupation": [ { "occupation": "Advogado(a)", "count": 7400 } ]
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/analytics/users/list">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/analytics/users/list?page=1&page_size=20&search=ana&sort_by=created_at&order=desc" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "items": [
+    {
+      "id": "9a1d4f22-3b5c-4e7d-8f90-1a2b3c4d5e6f",
+      "name": "Ana Beatriz Carvalho",
+      "email": "ana.carvalho@exemplo.com.br",
+      "created_at": "2025-11-03T12:00:00+00:00",
+      "last_login_at": "2026-06-12T09:00:00+00:00",
+      "profile_completed": true,
+      "state": "MG",
+      "city": "Uberaba",
+      "occupation": "Advogada",
+      "phone": "+55 34 99999-0000",
+      "total_reads": 64
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "page_size": 20
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/analytics/users/{user_id}/details">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/analytics/users/9a1d4f22-3b5c-4e7d-8f90-1a2b3c4d5e6f/details" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "user": { "id": "9a1d4f22-3b5c-4e7d-8f90-1a2b3c4d5e6f", "name": "Ana Beatriz Carvalho", "email": "ana.carvalho@exemplo.com.br" },
+  "stats": {
+    "total_reads": 64,
+    "reads_by_type": { "artigo": 40, "noticia": 20, "julgado": 4 },
+    "total_downloads": 6,
+    "days_active": 22,
+    "first_activity": "2025-11-04T08:12:00+00:00",
+    "last_activity": "2026-06-12T09:00:00+00:00"
+  },
+  "recent_activities": [ { "activity_type": "post_view", "reference_id": "c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f", "created_at": "2026-06-12T09:00:00+00:00" } ],
+  "top_content": [ { "reference_id": "c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f", "count": 5 } ]
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "User not found" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/analytics/users/registrations">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/analytics/users/registrations?days=30" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  { "date": "2026-06-11", "count": 38 },
+  { "date": "2026-06-12", "count": 42 }
+]
+```
+</Accordion>
+</AccordionGroup>
+
 ## Admin metrics (`/admin`)
 
 | Método | Path | Descrição | Auth |
@@ -38,6 +335,254 @@ Base: `/api/v1`.
 | GET | `/admin/emails/job-runs` | Execuções de jobs de email | gestor+ |
 | GET | `/admin/emails/failures` | Falhas de envio | gestor+ |
 
+<AccordionGroup>
+<Accordion title="GET /api/v1/admin/revenue/summary">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/revenue/summary" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "mrr": {
+    "pro_realized": 8420.5,
+    "pro_pipeline": 312.4,
+    "supporter_realized": 4620.0,
+    "supporter_pipeline": 0.0,
+    "total_realized": 13040.5,
+    "total_pipeline": 312.4
+  },
+  "arr_realized": 156486.0,
+  "arr_ttm": 142300.8,
+  "cash_this_month": 12100.4,
+  "cash_this_month_pro": 7480.4,
+  "cash_this_month_supporter": 4620.0,
+  "paid_users": 612,
+  "trials_active": 84,
+  "trials_active_paid": 31,
+  "trials_active_profile": 53,
+  "new_paid_this_month": 47,
+  "churned_30d": { "count": 12, "rate_pct": 1.92, "by_plan": { "monthly": 8, "annual": 4 } },
+  "data_quality": { "comp_count": 3, "anomaly_count": 0 }
+}
+```
+
+Erros genéricos (401, 403): ver [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/revenue/mrr-history">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/revenue/mrr-history?months=12" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "series": [
+    { "month": "2026-05", "pro": 7980.2, "supporter": 4235.0, "total": 12215.2 },
+    { "month": "2026-06", "pro": 8420.5, "supporter": 4620.0, "total": 13040.5 }
+  ]
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/revenue/trial-funnel">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/revenue/trial-funnel?days=30" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "trials_started": 140,
+  "converted": 38,
+  "still_in_trial": 84,
+  "expired_no_convert": 18,
+  "conversion_rate_pct": 27.14,
+  "window_days": 30,
+  "by_source": {
+    "paid": { "trials_started": 52, "converted": 28, "still_in_trial": 20, "expired_no_convert": 4, "conversion_rate_pct": 53.85 },
+    "profile_completion": { "trials_started": 86, "converted": 10, "still_in_trial": 62, "expired_no_convert": 14, "conversion_rate_pct": 11.63 },
+    "unknown": { "trials_started": 2, "converted": 0, "still_in_trial": 2, "expired_no_convert": 0, "conversion_rate_pct": 0.0 }
+  }
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/revenue/breakdown">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/revenue/breakdown" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "rows": [
+    { "plan_id": "annual", "plan_name": "Anual", "kind": "pro", "users": 320, "price_monthly": 9.9, "mrr": 3168.0 },
+    { "plan_id": "monthly", "plan_name": "Mensal", "kind": "pro", "users": 180, "price_monthly": 19.9, "mrr": 3582.0 },
+    { "plan_id": "supporter-monthly", "plan_name": "Escritório Apoiador Pujante", "kind": "supporter", "users": 12, "price_monthly": 385.0, "mrr": 4620.0 }
+  ]
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/revenue/subscribers">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/revenue/subscribers" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "rows": [
+    {
+      "user_id": "9a1d4f22-3b5c-4e7d-8f90-1a2b3c4d5e6f",
+      "user_name": "Ana Beatriz Carvalho",
+      "user_email": "ana.carvalho@exemplo.com.br",
+      "plan_id": "annual",
+      "plan_name": "Anual",
+      "kind": "pro",
+      "price_monthly": 9.9,
+      "status": "active",
+      "trial_ends_at": null,
+      "trial_source": null,
+      "current_period_start": "2026-06-02T00:00:00+00:00",
+      "current_period_end": "2027-06-02T00:00:00+00:00",
+      "cancelled_at": null,
+      "created_at": "2026-06-02T14:00:00+00:00",
+      "asaas_subscription_id": "sub_000012345678",
+      "asaas_payment_id": null,
+      "billing_type": "CREDIT_CARD"
+    }
+  ],
+  "total": 612
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/revenue/funnel">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/revenue/funnel?window_days=30" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "window_days": 30,
+  "stages": [
+    { "key": "visitors", "label": "Visitantes únicos", "count": 30150, "is_flow": true },
+    { "key": "newsletter", "label": "Newsletter", "count": 1120, "is_flow": true },
+    { "key": "signups", "label": "Cadastros", "count": 1280, "is_flow": true },
+    { "key": "trials", "label": "Trials", "count": 140, "is_flow": true },
+    { "key": "pro_active", "label": "PRO ativos", "count": 600, "is_flow": false },
+    { "key": "supporters", "label": "Apoiadores", "count": 12, "is_flow": false }
+  ]
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/emails/today">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/emails/today" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "sent": 4810,
+  "failed": 12,
+  "total": 4822,
+  "success_rate_pct": 99.75,
+  "last_job": {
+    "job_id": "newsletter_campaign_send",
+    "run_date": "2026-06-12",
+    "status": "success",
+    "stats": { "sent": 4810, "failed": 12 },
+    "started_at": "2026-06-12T08:00:00+00:00",
+    "finished_at": "2026-06-12T08:14:30+00:00",
+    "error_message": null
+  }
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/emails/by-template">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/emails/by-template?days=7" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "rows": [
+    {
+      "template": "newsletter_campaign",
+      "sent": 4810,
+      "failed": 12,
+      "delivered": 4750,
+      "opened": 2110,
+      "clicked": 640,
+      "bounced": 35,
+      "open_rate_pct": 43.87,
+      "click_rate_pct": 13.31,
+      "bounce_rate_pct": 0.73
+    }
+  ],
+  "window_days": 7
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/emails/job-runs">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/emails/job-runs?limit=14" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "rows": [
+    {
+      "id": "3c4d5e6f-7a8b-4c9d-0e1f-2a3b4c5d6e7f",
+      "job_id": "newsletter_campaign_send",
+      "run_date": "2026-06-12",
+      "status": "success",
+      "started_at": "2026-06-12T08:00:00+00:00",
+      "finished_at": "2026-06-12T08:14:30+00:00",
+      "stats": { "sent": 4810, "failed": 12 },
+      "error_message": null,
+      "duration_sec": 870
+    }
+  ]
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/emails/failures">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/emails/failures?limit=20" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "rows": [
+    {
+      "id": "4d5e6f7a-8b9c-4d0e-1f2a-3b4c5d6e7f8a",
+      "to_email": "caixa-cheia@exemplo.com.br",
+      "template": "newsletter_campaign",
+      "subject": "Penhora de safra futura: o que decidiu o STJ — Boletim #87",
+      "error_message": "Mailbox full",
+      "user_id": null,
+      "job_run_id": "3c4d5e6f-7a8b-4c9d-0e1f-2a3b4c5d6e7f",
+      "created_at": "2026-06-12T08:05:00+00:00"
+    }
+  ]
+}
+```
+</Accordion>
+</AccordionGroup>
+
 ## Admin users (`/admin-users`) — RBAC
 
 | Método | Path | Descrição | Auth |
@@ -46,6 +591,95 @@ Base: `/api/v1`.
 | POST | `/admin-users` | Cria admin (Supabase Auth + row em `admin_users`) | admin+ |
 | PATCH | `/admin-users/{user_id}` | Altera role | admin+ |
 | DELETE | `/admin-users/{user_id}` | Remove acesso admin | admin+ |
+
+<AccordionGroup>
+<Accordion title="GET /api/v1/admin-users">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin-users" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "5e6f7a8b-9c0d-4e1f-2a3b-4c5d6e7f8a9b",
+    "user_id": "7f3b2c10-9d4e-4a8b-b1c2-5e6f7a8b9c0d",
+    "role_id": "administrador",
+    "email": "editorial@agropujante.com.br",
+    "created_at": "2025-09-01T12:00:00+00:00",
+    "updated_at": "2026-01-15T12:00:00+00:00"
+  }
+]
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/admin-users">
+Cria o usuário no Supabase Auth (email confirmado automaticamente) + row em `admin_users`. `role_id`: `administrador` | `gestor` | `editor`.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/admin-users" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "novo.editor@exemplo.com.br", "password": "S3nhaForte1", "role_id": "editor"}'
+```
+
+```json title="201 Created"
+{
+  "id": "6f7a8b9c-0d1e-4f2a-3b4c-5d6e7f8a9b0c",
+  "user_id": "8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d",
+  "role_id": "editor",
+  "email": "novo.editor@exemplo.com.br",
+  "created_at": "2026-06-12T18:00:00+00:00",
+  "updated_at": "2026-06-12T18:00:00+00:00"
+}
+```
+
+```json title="400 Bad Request — role inválida"
+{ "detail": "Cargo inválido: 'super'. Use: administrador, editor, gestor", "code": "http_error" }
+```
+
+```json title="400 Bad Request — erro do Supabase Auth"
+{ "detail": "Erro ao criar usuário: A user with this email address has already been registered", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="PATCH /api/v1/admin-users/{user_id}">
+```bash title="Requisição"
+curl -X PATCH "https://api.agropujante.com.br/api/v1/admin-users/8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"role_id": "gestor"}'
+```
+
+```json title="200 OK"
+{
+  "id": "6f7a8b9c-0d1e-4f2a-3b4c-5d6e7f8a9b0c",
+  "user_id": "8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d",
+  "role_id": "gestor",
+  "email": "novo.editor@exemplo.com.br",
+  "created_at": "2026-06-12T18:00:00+00:00",
+  "updated_at": "2026-06-12T18:05:00+00:00"
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Usuário não encontrado", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v1/admin-users/{user_id}">
+Remove só a row de `admin_users` — o usuário continua existindo no Supabase Auth, mas perde as permissões de aplicação.
+
+```bash title="Requisição"
+curl -X DELETE "https://api.agropujante.com.br/api/v1/admin-users/8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem body)
+```
+</Accordion>
+</AccordionGroup>
 
 ## Listagem de usuários (`/admin/users`)
 
@@ -60,6 +694,106 @@ Base: `/api/v1`.
 O export usa token de uso único porque o download de CSV pelo browser não envia o header Authorization — o token vai na query string.
 </Note>
 
+<AccordionGroup>
+<Accordion title="GET /api/v1/admin/users">
+Filtros: `?search`, `?plan` (`free`/`pro`/`supporter`/`trial`/`cancelled`), `?status`, `?trial_source` (`paid`/`profile_completion`), `?last_login_window` (`24h`/`7d`/`30d`/`90d`/`never`), `?sort_by`, `?sort_order`.
+
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/users?plan=pro&page=1&page_size=20" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "items": [
+    {
+      "id": "9a1d4f22-3b5c-4e7d-8f90-1a2b3c4d5e6f",
+      "email": "ana.carvalho@exemplo.com.br",
+      "name": "Ana Beatriz Carvalho",
+      "phone": "+55 34 99999-0000",
+      "avatar_url": null,
+      "oauth_provider": "google",
+      "email_verified": true,
+      "profile_full": true,
+      "created_at": "2025-11-03T12:00:00+00:00",
+      "last_login_at": "2026-06-12T09:00:00+00:00",
+      "subscription_kind": "pro",
+      "plan": "annual",
+      "subscription_status": "active",
+      "trial_ends_at": null,
+      "trial_source": null,
+      "current_period_end": "2027-06-02T00:00:00+00:00",
+      "cancelled_at": null,
+      "plan_badge": "pro",
+      "activity_count": 122,
+      "likes_count": 18,
+      "comments_count": 5
+    }
+  ],
+  "total": 612,
+  "page": 1,
+  "page_size": 20
+}
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/admin/users/export-token">
+O body (opcional) carrega os mesmos filtros do GET; eles vão embutidos no token assinado (validade 5 min).
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/admin/users/export-token" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"plan": "pro"}'
+```
+
+```json title="200 OK"
+{ "token": "<TOKEN>", "expires_in": 300 }
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/users/export.csv">
+Autenticação **só** pelo token assinado na query string (browsers não mandam Authorization em links de download).
+
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/users/export.csv?token=<TOKEN>" -o usuarios.csv
+```
+
+```text title="200 OK"
+Content-Type: text/csv; charset=utf-8
+Content-Disposition: attachment; filename="agropujante-users-20260612-180500.csv"
+(linhas do CSV)
+```
+
+```json title="401 Unauthorized — token vencido"
+{ "detail": "Token inválido ou expirado", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/users/{user_id}">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/users/9a1d4f22-3b5c-4e7d-8f90-1a2b3c4d5e6f" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "user": { "id": "9a1d4f22-3b5c-4e7d-8f90-1a2b3c4d5e6f", "email": "ana.carvalho@exemplo.com.br", "name": "Ana Beatriz Carvalho", "created_at": "2025-11-03T12:00:00+00:00", "plan_badge": "pro", "subscription_kind": "pro", "plan": "annual", "subscription_status": "active", "activity_count": 122, "likes_count": 18, "comments_count": 5, "email_verified": true, "profile_full": true },
+  "timeline": [
+    { "kind": "subscription_change", "at": "2026-06-02T14:00:00+00:00", "title": "Assinou plano Anual", "metadata": { "plan": "annual" } },
+    { "kind": "post_view", "at": "2026-06-12T09:00:00+00:00", "title": "Marco temporal e a segurança jurídica no campo", "metadata": null }
+  ],
+  "subscription_history": [ { "plan": "annual", "status": "active", "created_at": "2026-06-02T14:00:00+00:00" } ],
+  "stats": { "total_reads": 64 }
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Usuário não encontrado", "code": "http_error" }
+```
+</Accordion>
+</AccordionGroup>
+
 ## API keys (`/admin/api-keys`)
 
 | Método | Path | Descrição | Auth |
@@ -68,6 +802,74 @@ O export usa token de uso único porque o download de CSV pelo browser não envi
 | GET | `/admin/api-keys` | Lista chaves | admin+ |
 | DELETE | `/admin/api-keys/{key_id}` | Revoga | admin+ |
 
+<AccordionGroup>
+<Accordion title="POST /api/v1/admin/api-keys">
+A chave em claro é retornada **uma única vez**, na criação. Em uso, ela vai no header `X-API-Key` (ou `?api_key=`) e só funciona em GET.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/admin/api-keys" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Wander - Codex", "expires_at": "2026-12-31T23:59:59+00:00"}'
+```
+
+```json title="200 OK"
+{
+  "id": "7a8b9c0d-1e2f-4a3b-4c5d-6e7f8a9b0c1d",
+  "name": "Wander - Codex",
+  "key_prefix": "apk_1a2b3c",
+  "scope": "read",
+  "active": true,
+  "last_used_at": null,
+  "expires_at": "2026-12-31T23:59:59+00:00",
+  "revoked_at": null,
+  "created_at": "2026-06-12T18:10:00+00:00",
+  "key": "<TOKEN>"
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/api-keys">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/api-keys" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "7a8b9c0d-1e2f-4a3b-4c5d-6e7f8a9b0c1d",
+    "name": "Wander - Codex",
+    "key_prefix": "apk_1a2b3c",
+    "scope": "read",
+    "active": true,
+    "last_used_at": "2026-06-12T18:20:00+00:00",
+    "expires_at": "2026-12-31T23:59:59+00:00",
+    "revoked_at": null,
+    "created_at": "2026-06-12T18:10:00+00:00"
+  }
+]
+```
+
+O segredo nunca volta na listagem — só `key_prefix`.
+</Accordion>
+
+<Accordion title="DELETE /api/v1/admin/api-keys/{key_id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.agropujante.com.br/api/v1/admin/api-keys/7a8b9c0d-1e2f-4a3b-4c5d-6e7f8a9b0c1d?reason=rotacao" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "status": "revoked", "id": "7a8b9c0d-1e2f-4a3b-4c5d-6e7f8a9b0c1d" }
+```
+
+```json title="404 Not Found"
+{ "detail": "API key não encontrada", "code": "http_error" }
+```
+</Accordion>
+</AccordionGroup>
+
 ## Storage (`/storage`)
 
 | Método | Path | Descrição | Auth |
@@ -75,6 +877,52 @@ O export usa token de uso único porque o download de CSV pelo browser não envi
 | GET | `/storage/buckets` | Lista buckets (debug) | editor+ |
 | POST | `/storage/upload?bucket=` | Upload multipart | editor+ |
 | DELETE | `/storage?bucket=&path=` | Remove arquivo | editor+ |
+
+<AccordionGroup>
+<Accordion title="GET /api/v1/storage/buckets">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/storage/buckets" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "buckets": [
+    { "id": "images", "name": "images", "public": true },
+    { "id": "content", "name": "content", "public": true },
+    { "id": "public-assets", "name": "public-assets", "public": true }
+  ]
+}
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/storage/upload">
+Multipart. O path final é gerado pelo backend: `YYYY/MM/{uuid}.{ext}` dentro do bucket informado.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/storage/upload?bucket=images" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -F "file=@capa-artigo-cpr.jpg;type=image/jpeg"
+```
+
+```json title="200 OK"
+{ "url": "https://xyz.supabase.co/storage/v1/object/public/images/2026/06/9f3a1b2c4d5e6f7a8b9c0d1e2f3a4b5c.jpg" }
+```
+
+Erros genéricos (401, 403, 422): ver [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="DELETE /api/v1/storage">
+```bash title="Requisição"
+curl -X DELETE "https://api.agropujante.com.br/api/v1/storage?bucket=images&path=2026/06/9f3a1b2c4d5e6f7a8b9c0d1e2f3a4b5c.jpg" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem body)
+```
+</Accordion>
+</AccordionGroup>
 
 ## Outros routers operacionais
 
@@ -85,12 +933,103 @@ O export usa token de uso único porque o download de CSV pelo browser não envi
 | `/noticias_coletadas` | Notícias agregadas via scraping (Playwright); digest para `NOTICIAS_DIGEST_RECIPIENTS` |
 | `/nps` | `POST /nps` — feedback NPS do usuário (JWT) |
 
+<AccordionGroup>
+<Accordion title="POST /api/v1/nps/responses">
+No código atual o NPS é **token-based** (o token do convite é a credencial, enviado por email), não JWT. O convite é validado antes em `GET /nps/invitation/{token}`.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/nps/responses" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "token": "<TOKEN>",
+    "score": 9,
+    "comment": "O boletim de jurisprudência vale a assinatura sozinho.",
+    "feature_request": "Alertas por tema de interesse."
+  }'
+```
+
+```json title="201 Created"
+{ "success": true }
+```
+
+```json title="400 Bad Request — token inválido"
+{ "detail": "Convite nao encontrado.", "code": "http_error" }
+```
+
+`detail` também pode ser `"Esse convite ja foi respondido."`, `"Esse convite expirou."` ou `"Sua assinatura expirou."`.
+
+Admin: `GET /admin/nps/stats` e `GET /admin/nps/responses` (gestor+).
+</Accordion>
+</AccordionGroup>
+
 ## Webhooks (`/webhooks`)
 
 | Método | Path | Descrição | Auth |
 |---|---|---|---|
 | POST | `/webhooks/resend` | Status de entrega/abertura/clique de email → `email_analytics` | Assinatura Resend |
 | POST | `/webhooks/asaas` | Status de pagamento → `asaas_webhooks_log` + processamento | Header `asaas-access-token` |
+
+<AccordionGroup>
+<Accordion title="POST /api/v1/webhooks/resend">
+Validação por assinatura **Svix** (headers `svix-id`, `svix-timestamp`, `svix-signature` + `RESEND_WEBHOOK_SECRET`). Eventos tratados: `email.delivered`, `email.opened`, `email.clicked`, `email.bounced`, `email.complained`.
+
+```bash title="Requisição (payload enviado pelo Resend)"
+curl -X POST "https://api.agropujante.com.br/api/v1/webhooks/resend" \
+  -H "Content-Type: application/json" \
+  -H "svix-id: msg_2hXk91mPq" \
+  -H "svix-timestamp: 1781200000" \
+  -H "svix-signature: v1,<TOKEN>" \
+  -d '{
+    "type": "email.clicked",
+    "created_at": "2026-06-12T10:05:00.000Z",
+    "data": {
+      "email_id": "re_3kLm82nQr7",
+      "to": ["ana.carvalho@exemplo.com.br"],
+      "click": {
+        "link": "https://agropujante.com.br/decisoes/penhora-de-safra-futura-em-execucao-de-cpr?utm_campaign=semanal",
+        "ipAddress": "203.0.113.10",
+        "userAgent": "Mozilla/5.0 ..."
+      }
+    }
+  }'
+```
+
+```json title="200 OK"
+{ "ok": true, "event": "email.clicked" }
+```
+
+```json title="200 OK — evento não rastreado (ignorado sem retry)"
+{ "ok": true, "skipped": "event_not_tracked" }
+```
+
+```json title="401 Unauthorized — assinatura inválida"
+{ "detail": "Invalid signature", "code": "http_error" }
+```
+
+```json title="400 Bad Request — sem headers svix"
+{ "detail": "Missing svix headers", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/subscriptions/webhook (Asaas)">
+No código atual o webhook do Asaas vive em `/subscriptions/webhook` (não em `/webhooks/asaas`). Valida o header `asaas-access-token` e sempre responde 200 após aceitar o evento — exemplo completo de payload na página de [monetização](/agropujante/api/monetizacao#subscriptions-subscriptions).
+
+```bash title="Requisição (payload enviado pelo Asaas)"
+curl -X POST "https://api.agropujante.com.br/api/v1/subscriptions/webhook" \
+  -H "asaas-access-token: <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"event": "PAYMENT_CONFIRMED", "payment": {"id": "pay_080225913252", "subscription": "sub_000012345678", "value": 118.80, "status": "CONFIRMED"}}'
+```
+
+```json title="200 OK"
+{ "received": true }
+```
+
+```json title="401 Unauthorized"
+{ "detail": "Invalid webhook token", "code": "http_error" }
+```
+</Accordion>
+</AccordionGroup>
 
 ## Integração Escola (`/escola`)
 

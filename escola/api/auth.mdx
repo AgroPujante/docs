@@ -6,6 +6,24 @@ icon: "key"
 
 Base: `/api/v2/auth`. Entenda o fluxo completo em [Autenticação](/escola/autenticacao).
 
+## Erros comuns
+
+Erros de `HTTPException`/`AppException` saem com `detail` + `code` (handler global em `core/exceptions.py`). O 422 de validação segue o shape padrão do FastAPI.
+
+```json title="401 Unauthorized"
+{ "detail": "Token de autenticacao nao fornecido", "code": "http_error" }
+```
+
+Outras mensagens 401 possíveis: `"Token invalido ou expirado"`, `"Token sem subject"`, `"Usuario nao mapeado. Contate o suporte."`.
+
+```json title="403 Forbidden"
+{ "detail": "Acesso restrito", "code": "http_error" }
+```
+
+```json title="422 Unprocessable Entity"
+{ "detail": [{ "loc": ["body", "email"], "msg": "field required", "type": "missing" }] }
+```
+
 ## Endpoints de auth
 
 | Método | Path | Descrição | Auth |
@@ -21,6 +39,273 @@ Base: `/api/v2/auth`. Entenda o fluxo completo em [Autenticação](/escola/auten
 | POST | `/auth/handoff-link` | Magic link via AgroPujante | Internal Token |
 | POST | `/auth/sync-password` | Sincronizar senha entre sistemas | JWT |
 
+### Exemplos
+
+<AccordionGroup>
+
+<Accordion title="POST /api/v2/auth/register">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/auth/register" \
+  -H "Content-Type: application/json" \
+  -d '{ "email": "ana.souza@exemplo.com.br", "password": "S3nhaForte!", "name": "Ana Carolina Souza" }'
+```
+
+```json title="200 OK"
+{
+  "accessToken": "eyJ...",
+  "refreshToken": "eyJ...",
+  "tokenType": "Bearer",
+  "expiresIn": 3600,
+  "user": {
+    "id": "3f8a2c1e-7b4d-4e2a-9c0d-5a1b2c3d4e5f",
+    "email": "ana.souza@exemplo.com.br",
+    "name": "Ana Carolina Souza"
+  }
+}
+```
+
+```json title="409 Conflict"
+{ "detail": "E-mail ja cadastrado.", "code": "conflict" }
+```
+
+422 de validação: ver [Erros comuns](#erros-comuns).
+
+</Accordion>
+
+<Accordion title="POST /api/v2/auth/login">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{ "email": "ana.souza@exemplo.com.br", "password": "••••••••" }'
+```
+
+```json title="200 OK"
+{
+  "accessToken": "eyJ...",
+  "refreshToken": "eyJ...",
+  "tokenType": "Bearer",
+  "expiresIn": 3600,
+  "user": {
+    "id": "3f8a2c1e-7b4d-4e2a-9c0d-5a1b2c3d4e5f",
+    "email": "ana.souza@exemplo.com.br",
+    "name": "Ana Carolina Souza"
+  }
+}
+```
+
+```json title="422 Unprocessable Entity (credenciais erradas)"
+{ "detail": "Email ou senha invalidos.", "code": "validation_error" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/auth/google">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/auth/google" \
+  -H "Content-Type: application/json" \
+  -d '{ "credential": "eyJ..." }'
+```
+
+```json title="200 OK"
+{
+  "accessToken": "eyJ...",
+  "refreshToken": "eyJ...",
+  "tokenType": "Bearer",
+  "expiresIn": 3600,
+  "user": {
+    "id": "3f8a2c1e-7b4d-4e2a-9c0d-5a1b2c3d4e5f",
+    "email": "ana.souza@exemplo.com.br",
+    "name": "Ana Carolina Souza"
+  }
+}
+```
+
+```json title="401 Unauthorized (email Google não verificado)"
+{ "detail": "Email do Google nao verificado. Use uma conta verificada." }
+```
+
+```json title="422 Unprocessable Entity"
+{ "detail": "Falha ao gerar magic link.", "code": "validation_error" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/auth/forgot-password">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/auth/forgot-password" \
+  -H "Content-Type: application/json" \
+  -d '{ "email": "ana.souza@exemplo.com.br" }'
+```
+
+Sempre retorna 200 (anti-enumeration — não revela se o email existe):
+
+```json title="200 OK"
+{ "message": "Se o email estiver cadastrado, voce recebera um link para redefinir sua senha." }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/auth/change-password">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/auth/change-password" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "newPassword": "NovaS3nha!" }'
+```
+
+```json title="200 OK"
+{ "message": "Senha alterada com sucesso." }
+```
+
+```json title="401 Unauthorized"
+{ "detail": "Token ausente ou mal formado", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/auth/check-email">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/auth/check-email" \
+  -H "Content-Type: application/json" \
+  -d '{ "email": "ana.souza@exemplo.com.br" }'
+```
+
+```json title="200 OK"
+{ "status": "has_password", "name": "Ana Carolina Souza" }
+```
+
+`status` é `"not_found"`, `"has_password"` ou `"no_password"`. Em caso de falha do lookup, devolve `{ "status": "not_found", "name": null }` (não vaza erro).
+
+</Accordion>
+
+<Accordion title="POST /api/v2/auth/set-password">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/auth/set-password" \
+  -H "Content-Type: application/json" \
+  -d '{ "email": "ana.souza@exemplo.com.br", "password": "S3nhaForte!" }'
+```
+
+```json title="200 OK"
+{
+  "accessToken": "eyJ...",
+  "refreshToken": "eyJ...",
+  "tokenType": "Bearer",
+  "expiresIn": 3600,
+  "user": {
+    "id": "3f8a2c1e-7b4d-4e2a-9c0d-5a1b2c3d4e5f",
+    "email": "ana.souza@exemplo.com.br",
+    "name": "Ana Carolina Souza"
+  }
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Usuario nao encontrado. nao encontrado", "code": "not_found" }
+```
+
+```json title="409 Conflict (já tem senha)"
+{ "detail": "Este email ja tem senha. Use 'esqueci minha senha' se precisar redefinir.", "code": "conflict" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/auth/impersonate">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/auth/impersonate" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "memberId": "clx3k9d2f0001mk08yq4w7d1z" }'
+```
+
+```json title="200 OK"
+{
+  "actionLink": "https://xyz.supabase.co/auth/v1/verify?token=...&type=magiclink&redirect_to=...",
+  "hashedToken": "pkce_4f2a...",
+  "user": {
+    "id": "clx3k9d2f0002mk08ab1c2d3e",
+    "email": "joao.pereira@exemplo.com.br",
+    "name": "João Pereira da Silva"
+  }
+}
+```
+
+```json title="403 Forbidden"
+{ "detail": "Apenas administradores podem impersonar usuarios.", "code": "forbidden" }
+```
+
+```json title="404 Not Found"
+{ "detail": "Nenhum usuario vinculado a este mentorado nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/auth/handoff-link">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/auth/handoff-link" \
+  -H "X-Internal-Token: <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{ "email": "ana.souza@exemplo.com.br" }'
+```
+
+```json title="200 OK"
+{
+  "magicLink": "https://xyz.supabase.co/auth/v1/verify?token=...&type=magiclink&redirect_to=https://app.escolapujante.com.br/login?from=pro_annual_trial",
+  "expiresAt": null
+}
+```
+
+```json title="401 Unauthorized"
+{ "detail": "X-Internal-Token invalido", "code": "http_error" }
+```
+
+```json title="403 Forbidden (sem trial nem assinatura)"
+{ "detail": "Usuario sem trial ou assinatura ativa na Escola.", "code": "forbidden" }
+```
+
+```json title="404 Not Found"
+{ "detail": "Usuario nao encontrado na Escola. nao encontrado", "code": "not_found" }
+```
+
+```json title="503 Service Unavailable"
+{ "detail": "internal_api_token nao configurado", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/auth/sync-password">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/auth/sync-password" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "password": "S3nhaForte!" }'
+```
+
+```json title="200 OK"
+{ "synced": true, "public_users": true, "pujante_users": true }
+```
+
+```json title="401 Unauthorized"
+{ "detail": "Token ausente ou mal formado", "code": "http_error" }
+```
+
+```json title="422 Unprocessable Entity (token não resolve user)"
+{ "detail": "Sessao invalida.", "code": "validation_error" }
+```
+
+</Accordion>
+
+</AccordionGroup>
+
 ## Password reset (OTP)
 
 Fluxo em três passos sob `/auth/password-reset`:
@@ -30,6 +315,76 @@ Fluxo em três passos sob `/auth/password-reset`:
 | POST | `/auth/password-reset/request` | Gerar e enviar OTP por email | Público |
 | POST | `/auth/password-reset/verify` | Validar OTP → reset token | Público |
 | POST | `/auth/password-reset/confirm` | Consumir reset token + trocar senha | Público |
+
+### Exemplos
+
+<AccordionGroup>
+
+<Accordion title="POST /api/v2/auth/password-reset/request">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/auth/password-reset/request" \
+  -H "Content-Type: application/json" \
+  -d '{ "email": "ana.souza@exemplo.com.br" }'
+```
+
+Sempre retorna 200 genérico (anti-enumeration, inclusive em rate limit):
+
+```json title="200 OK"
+{ "message": "Se esse email estiver cadastrado, enviamos um codigo de verificacao." }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/auth/password-reset/verify">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/auth/password-reset/verify" \
+  -H "Content-Type: application/json" \
+  -d '{ "email": "ana.souza@exemplo.com.br", "code": "482913" }'
+```
+
+```json title="200 OK"
+{ "reset_token": "eyJ..." }
+```
+
+```json title="400 Bad Request"
+{ "detail": "Codigo invalido ou expirado.", "code": "http_error" }
+```
+
+```json title="429 Too Many Requests"
+{ "detail": "Muitas tentativas. Solicite um novo codigo.", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/auth/password-reset/confirm">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/auth/password-reset/confirm" \
+  -H "Content-Type: application/json" \
+  -d '{ "reset_token": "eyJ...", "new_password": "NovaS3nha123" }'
+```
+
+```json title="200 OK"
+{ "message": "Senha redefinida com sucesso." }
+```
+
+```json title="400 Bad Request (senha fraca)"
+{ "detail": "A senha precisa ter no minimo 8 caracteres, incluindo letras e numeros.", "code": "http_error" }
+```
+
+```json title="401 Unauthorized (reset token expirado)"
+{ "detail": "Sessao de redefinicao expirou. Solicite um novo codigo.", "code": "http_error" }
+```
+
+```json title="404 Not Found"
+{ "detail": "Usuario nao encontrado.", "code": "http_error" }
+```
+
+</Accordion>
+
+</AccordionGroup>
 
 ## Detalhes dos principais endpoints
 
@@ -65,9 +420,9 @@ Exige header com o `INTERNAL_API_TOKEN` — não use a partir do frontend.
 ### POST /auth/password-reset/verify
 
 <ParamField body="email" type="string" required>Email que recebeu o OTP.</ParamField>
-<ParamField body="code" type="string" required>Código OTP de 6 dígitos. Em caso de sucesso, retorna um `resetToken` de uso único.</ParamField>
+<ParamField body="code" type="string" required>Código OTP de 6 dígitos. Em caso de sucesso, retorna um `reset_token` de uso único.</ParamField>
 
 ### POST /auth/password-reset/confirm
 
-<ParamField body="resetToken" type="string" required>Token obtido no passo `verify`.</ParamField>
-<ParamField body="newPassword" type="string" required>Nova senha.</ParamField>
+<ParamField body="reset_token" type="string" required>Token obtido no passo `verify`. Este endpoint usa snake_case no body, diferente dos demais.</ParamField>
+<ParamField body="new_password" type="string" required>Nova senha.</ParamField>

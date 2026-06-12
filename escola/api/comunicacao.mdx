@@ -4,6 +4,34 @@ description: "Campanhas de email, notificações, calendário, WhatsApp, chat e 
 icon: "envelope"
 ---
 
+## Erros comuns
+
+Todos os endpoints autenticados podem retornar os shapes abaixo (FastAPI + handler global, que acrescenta o campo `code`):
+
+```json title="401 Unauthorized — sem token"
+{ "detail": "Token de autenticacao nao fornecido", "code": "http_error" }
+```
+
+```json title="401 Unauthorized — token inválido ou usuário não mapeado"
+{ "detail": "Token invalido ou expirado", "code": "http_error" }
+```
+
+Também pode ocorrer `{ "detail": "Usuario nao mapeado. Contate o suporte." }` quando o JWT é válido mas não há registro em `pujante.users`.
+
+```json title="403 Forbidden — role insuficiente (MANAGER/ADMIN)"
+{ "detail": "Acesso restrito", "code": "http_error" }
+```
+
+```json title="422 Unprocessable Entity — validação Pydantic"
+{
+  "detail": [
+    { "type": "missing", "loc": ["body", "subject"], "msg": "Field required", "input": {} }
+  ]
+}
+```
+
+Validações de negócio (ex.: "Subject obrigatorio.") também respondem 422, mas com `{ "detail": "...", "code": "validation_error" }`. Nos accordions abaixo, os erros genéricos não são repetidos — apenas os específicos de cada endpoint.
+
 ## Email campaigns (`/email-campaigns`)
 
 Envios em massa via Resend, com logs em `email_campaign_logs`. Disparos são assíncronos (respondem `202 Accepted`).
@@ -20,6 +48,278 @@ Envios em massa via Resend, com logs em `email_campaign_logs`. Disparos são ass
 | POST | `/email-campaigns/aula-hoje` | Campanha rápida "aula hoje" (202) | MANAGER |
 | POST | `/email-campaigns/recipient-count` | Contar destinatários de um filtro | MANAGER |
 | DELETE | `/email-campaigns/{campaign_id}` | Remover campanha | MANAGER |
+
+<AccordionGroup>
+<Accordion title="GET /api/v2/email-campaigns">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/email-campaigns" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "camp_77ab12",
+    "subject": "Aula ao vivo hoje às 20h",
+    "htmlContent": "<h1>Aula hoje!</h1>...",
+    "recipientFilter": "{\"productTypes\":[\"MEMBERS_CLUB\"]}",
+    "recipientCount": 312,
+    "sentCount": 310,
+    "failedCount": 2,
+    "status": "SENT",
+    "sentAt": "2026-06-05T19:00:00+00:00",
+    "createdById": "usr_120fbc",
+    "createdAt": "2026-06-05T17:30:00+00:00",
+    "updatedAt": "2026-06-05T19:12:00+00:00"
+  }
+]
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/email-campaigns">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/email-campaigns" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "subject": "Novidades da Escola Pujante — Junho",
+    "htmlContent": "<h1>Olá!</h1><p>Confira as novidades...</p>",
+    "recipientFilter": "{\"productTypes\":[\"MEMBERS_CLUB\",\"OFFICE_SUPPORTER\"]}"
+  }'
+```
+
+`recipientFilter` é uma **string JSON** (não objeto). Chaves suportadas: `productTypes`, `memberIds` e `emails` (este último sobrescreve os demais).
+
+```json title="201 Created"
+{
+  "id": "camp_90cd34",
+  "subject": "Novidades da Escola Pujante — Junho",
+  "htmlContent": "<h1>Olá!</h1><p>Confira as novidades...</p>",
+  "recipientFilter": "{\"productTypes\":[\"MEMBERS_CLUB\",\"OFFICE_SUPPORTER\"]}",
+  "recipientCount": 390,
+  "sentCount": 0,
+  "failedCount": 0,
+  "status": "DRAFT",
+  "sentAt": null,
+  "createdById": "usr_120fbc",
+  "createdAt": "2026-06-12T14:00:00+00:00",
+  "updatedAt": null
+}
+```
+
+```json title="422 Unprocessable Entity — subject vazio"
+{ "detail": "Subject obrigatorio.", "code": "validation_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/email-campaigns/{campaign_id}">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/email-campaigns/camp_77ab12" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "id": "camp_77ab12",
+  "subject": "Aula ao vivo hoje às 20h",
+  "htmlContent": "<h1>Aula hoje!</h1>...",
+  "recipientFilter": "{\"productTypes\":[\"MEMBERS_CLUB\"]}",
+  "recipientCount": 312,
+  "sentCount": 310,
+  "failedCount": 2,
+  "status": "SENT",
+  "sentAt": "2026-06-05T19:00:00+00:00",
+  "createdById": "usr_120fbc",
+  "createdAt": "2026-06-05T17:30:00+00:00",
+  "updatedAt": "2026-06-05T19:12:00+00:00"
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Campanha nao encontrado", "code": "not_found" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/email-campaigns/{campaign_id}/analytics">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/email-campaigns/camp_77ab12/analytics" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "campaign": { "id": "camp_77ab12", "subject": "Aula ao vivo hoje às 20h", "status": "SENT" },
+  "counts": {
+    "sent": 310,
+    "failed": 2,
+    "delivered": 302,
+    "opened": 187,
+    "clicked": 64,
+    "bounced": 5,
+    "complained": 0,
+    "total_logs": 312
+  },
+  "rates": {
+    "delivery_rate_pct": 97.42,
+    "open_rate_pct": 61.92,
+    "click_rate_pct": 21.19,
+    "click_to_open_pct": 34.22,
+    "bounce_rate_pct": 1.61,
+    "complaint_rate_pct": 0.0
+  },
+  "failures": [
+    { "email": "email.invalido@dominio-inexistente.br", "error": "Resend: invalid recipient" }
+  ],
+  "bounces": [
+    { "email": "caixa.cheia@exemplo.com.br", "at": "2026-06-05T19:05:00+00:00" }
+  ]
+}
+```
+
+`campaign` traz o objeto completo da campanha (mesmo shape do detalhe). `failures` e `bounces` limitados a 50 itens.
+
+```json title="404 Not Found"
+{ "detail": "Campanha nao encontrado", "code": "not_found" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/email-campaigns/{campaign_id}/send">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/email-campaigns/camp_90cd34/send" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="202 Accepted"
+{
+  "id": "camp_90cd34",
+  "subject": "Novidades da Escola Pujante — Junho",
+  "htmlContent": "<h1>Olá!</h1>...",
+  "recipientFilter": "{\"productTypes\":[\"MEMBERS_CLUB\",\"OFFICE_SUPPORTER\"]}",
+  "recipientCount": 390,
+  "sentCount": 0,
+  "failedCount": 0,
+  "status": "SENDING",
+  "sentAt": null,
+  "createdById": "usr_120fbc",
+  "createdAt": "2026-06-12T14:00:00+00:00",
+  "updatedAt": "2026-06-12T14:05:00+00:00"
+}
+```
+
+O envio roda em background — acompanhe pelo `GET /email-campaigns/{id}`.
+
+```json title="422 Unprocessable Entity — campanha já enviada/enviando"
+{ "detail": "Campanha ja em status SENT. Use retry-failed se precisar.", "code": "validation_error" }
+```
+
+```json title="404 Not Found"
+{ "detail": "Campanha nao encontrado", "code": "not_found" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/email-campaigns/{campaign_id}/test">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/email-campaigns/camp_90cd34/test" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"testEmails": ["editorial@agropujante.com.br", "pedro@escolapujante.com.br"]}'
+```
+
+```json title="200 OK"
+{
+  "campaign_id": "camp_90cd34",
+  "tested_emails": ["editorial@agropujante.com.br", "pedro@escolapujante.com.br"],
+  "sent": 2,
+  "failed": 0,
+  "failures": []
+}
+```
+
+O subject recebe prefixo `[TESTE]`; nada é gravado em `email_campaign_logs`.
+
+```json title="422 Unprocessable Entity"
+{ "detail": "Informe pelo menos 1 email de teste valido.", "code": "validation_error" }
+```
+
+Também: `{ "detail": "Maximo 10 emails de teste por envio.", "code": "validation_error" }` e 404 `Campanha nao encontrado`.
+</Accordion>
+
+<Accordion title="POST /api/v2/email-campaigns/{campaign_id}/retry-failed">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/email-campaigns/camp_77ab12/retry-failed" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="202 Accepted"
+{ "campaign_id": "camp_77ab12", "status": "retrying" }
+```
+
+```json title="404 Not Found"
+{ "detail": "Campanha nao encontrado", "code": "not_found" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/email-campaigns/aula-hoje">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/email-campaigns/aula-hoje" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "zoomLink": "https://zoom.us/j/99887766554",
+    "lessonTitle": "Contratos de parceria rural na prática",
+    "lessonTime": "20h",
+    "recipientEmails": ["ana.prado@exemplo.com.br", "contato@pradoealmeida.adv.br"]
+  }'
+```
+
+```json title="202 Accepted"
+{
+  "id": "camp_aa11ff",
+  "subject": "Aula hoje: Contratos de parceria rural na prática",
+  "htmlContent": "<h1>...</h1>",
+  "recipientFilter": "{\"emails\":[\"ana.prado@exemplo.com.br\",\"contato@pradoealmeida.adv.br\"]}",
+  "recipientCount": 2,
+  "sentCount": 0,
+  "failedCount": 0,
+  "status": "SENDING",
+  "sentAt": null,
+  "createdById": "usr_120fbc",
+  "createdAt": "2026-06-12T14:10:00+00:00",
+  "updatedAt": null
+}
+```
+
+Cria a campanha e já dispara em background.
+</Accordion>
+
+<Accordion title="POST /api/v2/email-campaigns/recipient-count">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/email-campaigns/recipient-count" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"recipientFilter": "{\"productTypes\":[\"MEMBERS_CLUB\"]}"}'
+```
+
+```json title="200 OK"
+{ "count": 312 }
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v2/email-campaigns/{campaign_id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.escolapujante.com.br/api/v2/email-campaigns/camp_90cd34" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "id": "camp_90cd34" }
+```
+
+```json title="404 Not Found"
+{ "detail": "Campanha nao encontrado", "code": "not_found" }
+```
+</Accordion>
+</AccordionGroup>
 
 ### POST /email-campaigns
 
@@ -47,6 +347,80 @@ Envios em massa via Resend, com logs em `email_campaign_logs`. Disparos são ass
 | PATCH | `/notifications/read-all` | Marcar todas como lidas | JWT |
 | PATCH | `/notifications/{notification_id}/read` | Marcar como lida | JWT |
 
+<AccordionGroup>
+<Accordion title="GET /api/v2/notifications">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/notifications?unreadOnly=true" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "ntf_31aa90",
+    "type": "PAYMENT_OVERDUE",
+    "title": "Pagamento em atraso",
+    "body": "O escritório Prado & Almeida está com pagamento vencido há 5 dias.",
+    "link": "/painel/financeiro/inadimplencia",
+    "recipientRole": ["ADMIN", "COMMUNITY_MANAGER"],
+    "read": false,
+    "createdAt": "2026-06-11T08:00:00+00:00",
+    "updatedAt": "2026-06-11T08:00:00+00:00"
+  }
+]
+```
+
+O role do usuário logado define quais notificações (por `recipientRole`) ele recebe.
+</Accordion>
+
+<Accordion title="GET /api/v2/notifications/unread-count">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/notifications/unread-count" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "count": 4 }
+```
+</Accordion>
+
+<Accordion title="PATCH /api/v2/notifications/read-all">
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/notifications/read-all" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "updated": 4 }
+```
+</Accordion>
+
+<Accordion title="PATCH /api/v2/notifications/{notification_id}/read">
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/notifications/ntf_31aa90/read" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "id": "ntf_31aa90",
+  "type": "PAYMENT_OVERDUE",
+  "title": "Pagamento em atraso",
+  "body": "O escritório Prado & Almeida está com pagamento vencido há 5 dias.",
+  "link": "/painel/financeiro/inadimplencia",
+  "recipientRole": ["ADMIN", "COMMUNITY_MANAGER"],
+  "read": true,
+  "createdAt": "2026-06-11T08:00:00+00:00",
+  "updatedAt": "2026-06-12T14:20:00+00:00"
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Notificacao nao encontrado", "code": "not_found" }
+```
+</Accordion>
+</AccordionGroup>
+
 ## Calendar (`/calendar`)
 
 | Método | Path | Descrição | Auth |
@@ -58,6 +432,217 @@ Envios em massa via Resend, com logs em `email_campaign_logs`. Disparos são ass
 | DELETE | `/calendar/{event_id}` | Remover evento | MANAGER |
 | POST | `/calendar/{event_id}/image` | Upload de imagem (multipart) | MANAGER |
 | DELETE | `/calendar/{event_id}/image` | Remover imagem | MANAGER |
+
+<AccordionGroup>
+<Accordion title="GET /api/v2/calendar">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/calendar?from=2026-06-01T00:00:00Z&to=2026-06-30T23:59:59Z" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+No v2 os query params reais são `from` e `to` (aliases dos campos `from_date`/`to_date` do schema).
+
+```json title="200 OK"
+[
+  {
+    "id": "evt_55cc01",
+    "title": "Aula ao vivo — Contratos de parceria rural",
+    "description": "Encontro mensal do Clube de Membros",
+    "startsAt": "2026-06-12T23:00:00+00:00",
+    "endsAt": "2026-06-13T00:30:00+00:00",
+    "allDay": false,
+    "color": "#c9a84c",
+    "location": "Zoom",
+    "linkUrl": "https://zoom.us/j/99887766554",
+    "imageUrl": null,
+    "featured": true,
+    "createdAt": "2026-06-01T10:00:00+00:00",
+    "updatedAt": "2026-06-01T10:00:00+00:00"
+  }
+]
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/calendar/{event_id}">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/calendar/evt_55cc01" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "id": "evt_55cc01",
+  "title": "Aula ao vivo — Contratos de parceria rural",
+  "description": "Encontro mensal do Clube de Membros",
+  "startsAt": "2026-06-12T23:00:00+00:00",
+  "endsAt": "2026-06-13T00:30:00+00:00",
+  "allDay": false,
+  "color": "#c9a84c",
+  "location": "Zoom",
+  "linkUrl": "https://zoom.us/j/99887766554",
+  "imageUrl": null,
+  "featured": true,
+  "createdAt": "2026-06-01T10:00:00+00:00",
+  "updatedAt": "2026-06-01T10:00:00+00:00"
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Evento nao encontrado", "code": "not_found" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/calendar">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/calendar" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Imersão presencial — Goiânia",
+    "description": "Imersão de 2 dias para mentorados",
+    "startsAt": "2026-07-10T12:00:00Z",
+    "endsAt": "2026-07-11T21:00:00Z",
+    "allDay": false,
+    "color": "#7fd1a8",
+    "location": "Goiânia/GO",
+    "featured": false
+  }'
+```
+
+```json title="201 Created"
+{
+  "id": "evt_88dd02",
+  "title": "Imersão presencial — Goiânia",
+  "description": "Imersão de 2 dias para mentorados",
+  "startsAt": "2026-07-10T12:00:00+00:00",
+  "endsAt": "2026-07-11T21:00:00+00:00",
+  "allDay": false,
+  "color": "#7fd1a8",
+  "location": "Goiânia/GO",
+  "linkUrl": null,
+  "imageUrl": null,
+  "featured": false,
+  "createdAt": "2026-06-12T14:30:00+00:00",
+  "updatedAt": "2026-06-12T14:30:00+00:00"
+}
+```
+
+```json title="422 Unprocessable Entity"
+{ "detail": "Titulo obrigatorio.", "code": "validation_error" }
+```
+
+Também: `{ "detail": "startsAt obrigatorio.", "code": "validation_error" }`.
+</Accordion>
+
+<Accordion title="PATCH /api/v2/calendar/{event_id}">
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/calendar/evt_88dd02" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"featured": true, "linkUrl": "https://escolapujante.com.br/imersao-goiania"}'
+```
+
+```json title="200 OK"
+{
+  "id": "evt_88dd02",
+  "title": "Imersão presencial — Goiânia",
+  "description": "Imersão de 2 dias para mentorados",
+  "startsAt": "2026-07-10T12:00:00+00:00",
+  "endsAt": "2026-07-11T21:00:00+00:00",
+  "allDay": false,
+  "color": "#7fd1a8",
+  "location": "Goiânia/GO",
+  "linkUrl": "https://escolapujante.com.br/imersao-goiania",
+  "imageUrl": null,
+  "featured": true,
+  "createdAt": "2026-06-12T14:30:00+00:00",
+  "updatedAt": "2026-06-12T14:35:00+00:00"
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Evento nao encontrado", "code": "not_found" }
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v2/calendar/{event_id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.escolapujante.com.br/api/v2/calendar/evt_88dd02" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "id": "evt_88dd02" }
+```
+
+```json title="404 Not Found"
+{ "detail": "Evento nao encontrado", "code": "not_found" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/calendar/{event_id}/image">
+```bash title="Requisição (multipart)"
+curl -X POST "https://api.escolapujante.com.br/api/v2/calendar/evt_55cc01/image" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -F "file=@banner-aula.png;type=image/png"
+```
+
+```json title="200 OK"
+{
+  "id": "evt_55cc01",
+  "title": "Aula ao vivo — Contratos de parceria rural",
+  "imageUrl": "data:image/png;base64,iVBORw0KGgo...",
+  "startsAt": "2026-06-12T23:00:00+00:00",
+  "endsAt": "2026-06-13T00:30:00+00:00",
+  "allDay": false,
+  "color": "#c9a84c",
+  "location": "Zoom",
+  "linkUrl": "https://zoom.us/j/99887766554",
+  "featured": true,
+  "description": "Encontro mensal do Clube de Membros",
+  "createdAt": "2026-06-01T10:00:00+00:00",
+  "updatedAt": "2026-06-12T14:40:00+00:00"
+}
+```
+
+A imagem é armazenada como data URL base64 em `imageUrl`. Limite de 5MB, apenas `image/*`.
+
+```json title="400 Bad Request — tipo inválido"
+{ "detail": "Tipo de arquivo nao suportado. Use PNG, JPG ou WEBP.", "code": "http_error" }
+```
+
+Também: `{ "detail": "Arquivo nao enviado." }`, `{ "detail": "Arquivo maior que 5MB." }` (ambos 400) e 404 `Evento nao encontrado`.
+</Accordion>
+
+<Accordion title="DELETE /api/v2/calendar/{event_id}/image">
+```bash title="Requisição"
+curl -X DELETE "https://api.escolapujante.com.br/api/v2/calendar/evt_55cc01/image" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "id": "evt_55cc01",
+  "title": "Aula ao vivo — Contratos de parceria rural",
+  "imageUrl": null,
+  "startsAt": "2026-06-12T23:00:00+00:00",
+  "endsAt": "2026-06-13T00:30:00+00:00",
+  "allDay": false,
+  "color": "#c9a84c",
+  "location": "Zoom",
+  "linkUrl": "https://zoom.us/j/99887766554",
+  "featured": true,
+  "description": "Encontro mensal do Clube de Membros",
+  "createdAt": "2026-06-01T10:00:00+00:00",
+  "updatedAt": "2026-06-12T14:45:00+00:00"
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Evento nao encontrado", "code": "not_found" }
+```
+</Accordion>
+</AccordionGroup>
 
 ### POST /calendar
 
@@ -85,6 +670,135 @@ Conversas via Z-API (uma instância por office).
 | GET | `/whatsapp/logs` | Listar logs | MANAGER |
 | DELETE | `/whatsapp/logs` | Limpar logs | MANAGER |
 
+<AccordionGroup>
+<Accordion title="GET /api/v2/whatsapp/conversations">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/whatsapp/conversations" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "wac_19fe22",
+    "phone": "+5562999990000",
+    "createdAt": "2026-06-10T11:00:00+00:00",
+    "updatedAt": "2026-06-12T09:30:00+00:00",
+    "_count": { "messages": 8 },
+    "messages": [
+      {
+        "id": "wam_77aa01",
+        "conversationId": "wac_19fe22",
+        "role": "assistant",
+        "content": "Segue o link de pagamento atualizado: ...",
+        "createdAt": "2026-06-12T09:30:00+00:00"
+      }
+    ]
+  }
+]
+```
+
+`messages` traz apenas a última mensagem de cada conversa.
+</Accordion>
+
+<Accordion title="GET /api/v2/whatsapp/conversations/{id}">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/whatsapp/conversations/wac_19fe22" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "id": "wac_19fe22",
+  "phone": "+5562999990000",
+  "createdAt": "2026-06-10T11:00:00+00:00",
+  "updatedAt": "2026-06-12T09:30:00+00:00",
+  "messages": [
+    {
+      "id": "wam_76zz09",
+      "conversationId": "wac_19fe22",
+      "role": "user",
+      "content": "Pode me reenviar o boleto?",
+      "createdAt": "2026-06-12T09:29:10+00:00"
+    },
+    {
+      "id": "wam_77aa01",
+      "conversationId": "wac_19fe22",
+      "role": "assistant",
+      "content": "Segue o link de pagamento atualizado: ...",
+      "createdAt": "2026-06-12T09:30:00+00:00"
+    }
+  ],
+  "_count": { "messages": 8 }
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Conversa nao encontrada nao encontrado", "code": "not_found" }
+```
+
+(O detail duplicado vem do código atual — `NotFoundException("Conversa nao encontrada")` concatena o sufixo padrão.)
+</Accordion>
+
+<Accordion title="POST /api/v2/whatsapp/conversations/{id}/clear">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/whatsapp/conversations/wac_19fe22/clear" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "ok": true }
+```
+
+Apaga todas as mensagens mas mantém o registro da conversa. 404 com o mesmo shape do detalhe.
+</Accordion>
+
+<Accordion title="DELETE /api/v2/whatsapp/conversations/{id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.escolapujante.com.br/api/v2/whatsapp/conversations/wac_19fe22" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "ok": true }
+```
+
+Remove a conversa (cascade apaga as mensagens). 404 com o mesmo shape do detalhe.
+</Accordion>
+
+<Accordion title="GET /api/v2/whatsapp/logs">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/whatsapp/logs" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "wal_31bb77",
+    "level": "INFO",
+    "phone": "+5562999990000",
+    "action": "SEND_MESSAGE",
+    "message": "Mensagem enviada com sucesso",
+    "detail": null,
+    "createdAt": "2026-06-12T09:30:01+00:00"
+  }
+]
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v2/whatsapp/logs">
+```bash title="Requisição"
+curl -X DELETE "https://api.escolapujante.com.br/api/v2/whatsapp/logs" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "ok": true }
+```
+</Accordion>
+</AccordionGroup>
+
 ## Chat (`/chat`)
 
 | Método | Path | Descrição | Auth |
@@ -101,6 +815,141 @@ Conversas via Z-API (uma instância por office).
 Retornam **501 — não implementado**: `POST .../messages`, `POST .../confirm` e `POST .../confirm-password`.
 </Warning>
 
+<AccordionGroup>
+<Accordion title="GET /api/v2/chat/conversations">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/chat/conversations" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "chc_42aa10",
+    "userId": "usr_120fbc",
+    "title": "Inadimplência dos apoiadores em maio",
+    "archived": false,
+    "createdAt": "2026-06-11T15:00:00+00:00",
+    "updatedAt": "2026-06-11T15:20:00+00:00"
+  }
+]
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/chat/conversations">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/chat/conversations" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="201 Created"
+{
+  "id": "chc_55bb20",
+  "userId": "usr_120fbc",
+  "title": null,
+  "archived": false,
+  "createdAt": "2026-06-12T15:00:00+00:00",
+  "updatedAt": "2026-06-12T15:00:00+00:00"
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/chat/conversations/{conversation_id}">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/chat/conversations/chc_42aa10" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "chm_88cc01",
+    "conversationId": "chc_42aa10",
+    "role": "user",
+    "content": "Quantos apoiadores estão inadimplentes?",
+    "toolCalls": null,
+    "requiresConfirmation": false,
+    "confirmed": null,
+    "createdAt": "2026-06-11T15:01:00+00:00"
+  },
+  {
+    "id": "chm_88cc02",
+    "conversationId": "chc_42aa10",
+    "role": "assistant",
+    "content": "Hoje são 9 escritórios inadimplentes, somando R$ 3.120,00 em atraso.",
+    "toolCalls": [],
+    "requiresConfirmation": false,
+    "confirmed": null,
+    "createdAt": "2026-06-11T15:01:08+00:00"
+  }
+]
+```
+
+```json title="403 Forbidden — conversa de outro usuário"
+{ "detail": "Conversa nao pertence ao usuario", "code": "forbidden" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/chat/conversations/{conversation_id}/messages">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/chat/conversations/chc_42aa10/messages" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"content": "Quantos apoiadores estão inadimplentes?"}'
+```
+
+```json title="501 Not Implemented"
+{
+  "detail": "Envio de mensagem com IA + tool execution nao migrado. Use Nest legado (/api/chat/conversations/{id}/messages). Implementacao depende de migrar chat-tool-executor e chat-tools.",
+  "code": "http_error"
+}
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/chat/conversations/{conversation_id}/confirm">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/chat/conversations/chc_42aa10/confirm" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"messageId": "chm_88cc02", "approved": true}'
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Confirmacao de tool nao migrada. Use Nest legado.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/chat/conversations/{conversation_id}/confirm-password">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/chat/conversations/chc_42aa10/confirm-password" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"messageId": "chm_88cc02", "password": "<SENHA>"}'
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Confirmacao por senha nao migrada. Use Nest legado.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v2/chat/conversations/{conversation_id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.escolapujante.com.br/api/v2/chat/conversations/chc_42aa10" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "id": "chc_42aa10", "archived": true }
+```
+
+```json title="403 Forbidden — conversa de outro usuário"
+{ "detail": "Conversa nao pertence ao usuario", "code": "forbidden" }
+```
+
+Também 404 `{ "detail": "Conversa nao encontrado", "code": "not_found" }`.
+</Accordion>
+</AccordionGroup>
+
 ## Suggestions (`/suggestions`)
 
 | Método | Path | Descrição | Auth |
@@ -110,6 +959,125 @@ Retornam **501 — não implementado**: `POST .../messages`, `POST .../confirm` 
 | GET | `/suggestions/new-count` | Contar novas | MANAGER |
 | GET | `/suggestions` | Listar todas (`?status`) | MANAGER |
 | PATCH | `/suggestions/{suggestion_id}/status` | Atualizar status | MANAGER |
+
+<AccordionGroup>
+<Accordion title="POST /api/v2/suggestions">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/suggestions" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"category": "PLATAFORMA", "message": "Seria ótimo ter modo escuro na área do aluno."}'
+```
+
+Categorias aceitas: `CURSOS`, `PLATAFORMA`, `MENTORIA`, `OUTRO` (default).
+
+```json title="201 Created"
+{
+  "id": "sug_66dd31",
+  "userId": "usr_120fbc",
+  "userName": "Ana Carolina Prado",
+  "userEmail": "ana.prado@exemplo.com.br",
+  "category": "PLATAFORMA",
+  "message": "Seria ótimo ter modo escuro na área do aluno.",
+  "status": "NEW",
+  "createdAt": "2026-06-12T15:10:00+00:00",
+  "updatedAt": "2026-06-12T15:10:00+00:00"
+}
+```
+
+```json title="422 Unprocessable Entity"
+{ "detail": "A sugestao nao pode ser vazia.", "code": "validation_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/suggestions/mine">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/suggestions/mine" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "sug_66dd31",
+    "userId": "usr_120fbc",
+    "userName": "Ana Carolina Prado",
+    "userEmail": "ana.prado@exemplo.com.br",
+    "category": "PLATAFORMA",
+    "message": "Seria ótimo ter modo escuro na área do aluno.",
+    "status": "NEW",
+    "createdAt": "2026-06-12T15:10:00+00:00",
+    "updatedAt": "2026-06-12T15:10:00+00:00"
+  }
+]
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/suggestions/new-count">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/suggestions/new-count" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "count": 3 }
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/suggestions">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/suggestions?status=NEW" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+Status válidos: `NEW`, `READ`, `RESOLVED`.
+
+```json title="200 OK"
+[
+  {
+    "id": "sug_66dd31",
+    "userId": "usr_120fbc",
+    "userName": "Ana Carolina Prado",
+    "userEmail": "ana.prado@exemplo.com.br",
+    "category": "PLATAFORMA",
+    "message": "Seria ótimo ter modo escuro na área do aluno.",
+    "status": "NEW",
+    "createdAt": "2026-06-12T15:10:00+00:00",
+    "updatedAt": "2026-06-12T15:10:00+00:00"
+  }
+]
+```
+</Accordion>
+
+<Accordion title="PATCH /api/v2/suggestions/{suggestion_id}/status">
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/suggestions/sug_66dd31/status" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"status": "RESOLVED"}'
+```
+
+```json title="200 OK"
+{
+  "id": "sug_66dd31",
+  "userId": "usr_120fbc",
+  "userName": "Ana Carolina Prado",
+  "userEmail": "ana.prado@exemplo.com.br",
+  "category": "PLATAFORMA",
+  "message": "Seria ótimo ter modo escuro na área do aluno.",
+  "status": "RESOLVED",
+  "createdAt": "2026-06-12T15:10:00+00:00",
+  "updatedAt": "2026-06-12T16:00:00+00:00"
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Sugestao nao encontrado", "code": "not_found" }
+```
+
+Status fora do enum (`NEW`/`READ`/`RESOLVED`) responde 422 Pydantic padrão.
+</Accordion>
+</AccordionGroup>
 
 ### POST /suggestions
 

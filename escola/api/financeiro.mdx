@@ -6,6 +6,34 @@ icon: "chart-line"
 
 Quatro grupos de rotas: `/dashboard/financial` (métricas de negócio), `/dashboard` (billing unificado dos gateways), `/financial` (relatórios) e `/bling` (NFSe).
 
+## Erros comuns
+
+Todos os endpoints autenticados podem retornar os shapes abaixo (FastAPI + handler global, que acrescenta o campo `code`):
+
+```json title="401 Unauthorized — sem token"
+{ "detail": "Token de autenticacao nao fornecido", "code": "http_error" }
+```
+
+```json title="401 Unauthorized — token inválido ou usuário não mapeado"
+{ "detail": "Token invalido ou expirado", "code": "http_error" }
+```
+
+Também pode ocorrer `{ "detail": "Usuario nao mapeado. Contate o suporte." }` quando o JWT é válido mas não há registro em `pujante.users`.
+
+```json title="403 Forbidden — role insuficiente (MANAGER/ADMIN)"
+{ "detail": "Acesso restrito", "code": "http_error" }
+```
+
+```json title="422 Unprocessable Entity — validação Pydantic"
+{
+  "detail": [
+    { "type": "missing", "loc": ["query", "month"], "msg": "Field required", "input": null }
+  ]
+}
+```
+
+Nos accordions abaixo, esses erros genéricos não são repetidos — apenas os erros específicos de cada endpoint.
+
 ## Dashboard financial (`/dashboard/financial`)
 
 | Método | Path | Descrição | Auth |
@@ -27,6 +55,328 @@ Quatro grupos de rotas: `/dashboard/financial` (métricas de negócio), `/dashbo
 <Warning>
 `GET /dashboard/financial/offices-balance/pdf` retorna **501 — não implementado**.
 </Warning>
+
+<AccordionGroup>
+<Accordion title="GET /api/v2/dashboard/financial/kpis">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/financial/kpis?dateFrom=2026-05-01&dateTo=2026-05-31" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "activeCount": 187,
+  "freeActiveCount": 12,
+  "mrr": 24350.00,
+  "averageTicket": 130.21,
+  "lateCount": 9,
+  "lateAmount": 1170.00,
+  "delinquencyRate": 4.81,
+  "churnCount": 3,
+  "churnAmount": 390.00,
+  "churnRate": 1.58,
+  "churnByProduct": [ "..." ],
+  "rangeStart": "2026-05-01T00:00:00+00:00",
+  "rangeEnd": "2026-05-31T23:59:59.999999+00:00"
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/financial/health">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/financial/health?dateFrom=2026-01-01&dateTo=2026-05-31" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "mrrEvolution": [ "..." ],
+  "revenueByProduct": [ "..." ],
+  "delinquencyByProduct": [ "..." ],
+  "delinquentDetails": [ "..." ],
+  "paymentMethods": [ "..." ],
+  "activeSubsEvolution": [ { "month": "Mai/26", "value": 187 } ],
+  "delinquencyEvolution": [ { "month": "Mai/26", "rate": 4.81, "count": 9 } ],
+  "avgTicketEvolution": [ { "month": "Mai/26", "value": 130.21 } ],
+  "churnEvolution": [ { "month": "Mai/26", "count": 3, "rate": 1.58 } ]
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/financial/growth">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/financial/growth?dateFrom=2026-01-01&dateTo=2026-05-31" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "newVsChurn": [ "..." ],
+  "newByProduct": [ "..." ],
+  "churnRateEvolution": [ "..." ],
+  "recentMovements": [ "..." ]
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/financial/lifecycle">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/financial/lifecycle?dateFrom=2026-01-01&dateTo=2026-05-31" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "funnel": {
+    "registrations": 412,
+    "activated": 268,
+    "retained": 187,
+    "churned": 41
+  },
+  "engagement": {
+    "inactivePayingCount": 23,
+    "inactivePayingDetails": [ "..." ],
+    "lessonsWatchedCount": 1840,
+    "topActiveMembers": [ "..." ]
+  },
+  "avgLifetimeByProduct": [ "..." ],
+  "atRiskMembers": [ "..." ]
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/financial/churn">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/financial/churn?dateFrom=2026-05-01&dateTo=2026-05-31" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "period": { "from": "2026-05-01T00:00:00+00:00", "to": "2026-05-31T23:59:59.999999+00:00" },
+  "totals": {
+    "current": 3,
+    "previous": 5,
+    "delta": -2,
+    "outstandingAmount": 780.00
+  },
+  "byProduct": [ "..." ],
+  "details": [ "..." ]
+}
+```
+
+Considera apenas `OFFICE_SUPPORTER` e `MEMBERS_CLUB`; `details` inclui `outstandingAmount` por assinatura cancelada.
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/financial/member-performance">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/financial/member-performance" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "summary": {
+    "totalMembers": 412,
+    "activeLastMonth": 198,
+    "inactiveLastMonth": 87,
+    "neverLoggedIn": 64,
+    "loggedNeverOpenedLesson": 31,
+    "inactiveOver10Days": 72,
+    "totalWatchedHours": 1264.5,
+    "avgCompletionRate": 58.3
+  },
+  "members": [
+    {
+      "id": "a1b2c3d4-0000-0000-0000-000000000001",
+      "fullName": "Ana Carolina Prado",
+      "email": "ana.prado@exemplo.com.br",
+      "userType": "MENTORED",
+      "memberSince": "2025-11-03T12:00:00+00:00",
+      "hasUser": true,
+      "lastLoginAt": "2026-06-10T21:14:00+00:00",
+      "lastAccessedAt": "2026-06-10T21:40:12+00:00",
+      "totalLessonsAccessed": 34,
+      "totalLessonsCompleted": 21,
+      "completionRate": 61.8,
+      "totalWatchedMinutes": 812,
+      "totalComments": 5,
+      "recentAccessCount": 12,
+      "recentWatchedMinutes": 240
+    }
+  ]
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/financial/member-performance/{member_id}">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/financial/member-performance/a1b2c3d4-0000-0000-0000-000000000001" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK — função SQL ainda é stub"
+{ "status": "TODO", "memberId": "a1b2c3d4-0000-0000-0000-000000000001" }
+```
+
+A RPC `dashboard_member_performance_detail` ainda não foi implementada no banco — responde 200 com payload `TODO`.
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/financial/newsletter-performance">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/financial/newsletter-performance" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "summary": {
+    "totalCampaigns": 20,
+    "audienceSize": 5230,
+    "avgOpenRate": 41.2,
+    "avgClickRate": 6.8,
+    "totalOpens": 18432,
+    "totalClicks": 2120
+  },
+  "campaigns": [
+    {
+      "id": "f6g7h8i9j0",
+      "subject": "Boletim do Agro — semana 23",
+      "sentAt": "2026-06-05T12:00:00+00:00",
+      "emailsSent": 5100,
+      "opens": 3120,
+      "uniqueOpens": 2240,
+      "openRate": 43.9,
+      "clicks": 410,
+      "uniqueClicks": 305,
+      "clickRate": 6.0
+    }
+  ]
+}
+```
+
+Se o Mailchimp não estiver configurado (ou a API falhar), retorna o mesmo shape com `summary` zerado e `campaigns: []`.
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/financial/newsletter-performance/{campaign_id}">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/financial/newsletter-performance/f6g7h8i9j0" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "summary": {
+    "totalRecipients": 5100,
+    "systemMemberCount": 3320,
+    "externalCount": 1780,
+    "openedCount": 2240,
+    "clickedCount": 305,
+    "openRate": 43.9,
+    "clickRate": 6.0
+  },
+  "links": [
+    { "url": "https://escolapujante.com.br/aula-ao-vivo", "totalClicks": 280, "uniqueClicks": 214 }
+  ],
+  "recipients": [
+    {
+      "email": "ana.prado@exemplo.com.br",
+      "fullName": "Ana Carolina Prado",
+      "memberId": "a1b2c3d4-0000-0000-0000-000000000001",
+      "memberStatus": "ACTIVE",
+      "product": "Clube de Membros",
+      "isSystemMember": true,
+      "opensCount": 3,
+      "clicksCount": 1,
+      "opened": true,
+      "clicked": true
+    }
+  ]
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/financial/engagement-ranking">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/financial/engagement-ranking" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "ranking": [ "..." ],
+  "topContent": {
+    "mostAccessed": [ "..." ],
+    "mostCompleted": [ "..." ]
+  },
+  "note": "emailOpens/emailClicks zerados — depende de Mailchimp HTTP que precisa rodar no service Python"
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/financial/offices-balance">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/financial/offices-balance?period=MONTH&month=2026-05" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+Valores aceitos de `period`: `MONTH` (com `month` opcional `YYYY-MM`), `WEEK_4`, `YEAR` — qualquer outro valor cai no default (mês corrente).
+
+```json title="200 OK"
+{
+  "period": "MONTH",
+  "periodLabel": "Maio 2026",
+  "days": 31,
+  "rangeStart": "2026-05-01T00:00:00+00:00",
+  "rangeEnd": "2026-05-31T23:59:59.999999+00:00",
+  "summary": {
+    "entriesCount": 4,
+    "churnsCount": 2,
+    "netCount": 2,
+    "entriesValue": 1040.00,
+    "churnsValue": 520.00,
+    "netValue": 520.00,
+    "totalActiveOffices": 78,
+    "canceledSupporterOffices": 35,
+    "totalHistoricOffices": 113
+  },
+  "entries": [ "..." ],
+  "churns": [ "..." ]
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/financial/offices-balance/pdf">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/financial/offices-balance/pdf" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{
+  "detail": "Geracao de PDF do saldo de escritorios ainda nao migrada. Use /api/dashboard/financial/offices-balance/pdf no Nest legado.",
+  "code": "http_error"
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/financial/offices-balance/available-months">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/financial/offices-balance/available-months" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "months": [
+    { "value": "2026-06", "label": "Junho 2026" },
+    { "value": "2026-05", "label": "Maio 2026" },
+    { "value": "2026-04", "label": "Abril 2026" }
+  ]
+}
+```
+</Accordion>
+</AccordionGroup>
 
 ## Dashboard billing (`/dashboard`)
 
@@ -51,11 +401,383 @@ Quatro grupos de rotas: `/dashboard/financial` (métricas de negócio), `/dashbo
 | POST | `/dashboard/subscription-mgmt/{subscription_id}/sync` | Sync com gateway | MANAGER |
 | POST | `/dashboard/subscription-mgmt/{subscription_id}/update-card` | Atualizar cartão | MANAGER |
 | POST | `/dashboard/subscription-mgmt/{subscription_id}/retry-payment` | Reprocessar pagamento | MANAGER |
-| GET | `/dashboard/office-delinquency` | Inadimplência de apoiadores | MANAGER |
+| GET | `/financial/office-delinquency` | Inadimplência de apoiadores (rota vive no router `/financial`) | MANAGER |
 
 <Warning>
 Retornam **501 — não implementado**: `GET/PATCH /billing-rules*`, `POST /chargebacks/{id}/dispute`, `POST /payments/refund`, `POST /payment-links`, `DELETE /payment-links/{link_id}` e os três `POST /subscription-mgmt/{id}/*` (essas operações ainda vivem no NestJS legado).
 </Warning>
+
+<AccordionGroup>
+<Accordion title="GET /api/v2/dashboard/balance">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/balance" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "received": 184230.50,
+  "pending": 6240.00,
+  "overdue": 3120.00,
+  "failed": 1890.00,
+  "refunded": 740.00
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/balance/extract">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/balance/extract?dateFrom=2026-05-01&dateTo=2026-05-31" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "items": [
+    {
+      "id": "pay_9f3a2b",
+      "subscriptionId": "sub_44c1e0",
+      "value": 130.00,
+      "normalizedStatus": "PAID",
+      "gateway": "asaas",
+      "paymentDate": "2026-05-12T10:01:00+00:00",
+      "dueDate": "2026-05-12T00:00:00+00:00",
+      "createdAt": "2026-05-01T03:00:00+00:00"
+    }
+  ],
+  "total": 1
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/balance/receivables">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/balance/receivables?dateFrom=2026-06-01&dateTo=2026-06-30" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "items": [
+    {
+      "id": "pay_7a1b9c",
+      "subscriptionId": "sub_44c1e0",
+      "value": 130.00,
+      "status": "PENDING",
+      "gateway": "asaas",
+      "dueDate": "2026-06-20T00:00:00+00:00"
+    }
+  ],
+  "totalValue": 6240.00,
+  "count": 48
+}
+```
+
+Considera apenas pagamentos `PENDING`/`OVERDUE`.
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/balance/cash-flow">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/balance/cash-flow?dateFrom=2026-01-01&dateTo=2026-05-31" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "byMonth": [
+    { "month": "2026-04", "received": 17890.00 },
+    { "month": "2026-05", "received": 18240.50 }
+  ]
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/billing-rules">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/billing-rules" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{
+  "detail": "Listagem de regras de notificacao depende de tabela nao mapeada. Bloqueado por rotacao de chaves. Use Nest legado.",
+  "code": "http_error"
+}
+```
+</Accordion>
+
+<Accordion title="PATCH /api/v2/dashboard/billing-rules/{rule_id}">
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/dashboard/billing-rules/rule_01" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Update de billing rule. Bloqueado por rotacao de chaves. Use Nest legado.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/chargebacks">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/chargebacks?page=1&limit=20" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "items": [ "..." ], "total": 2, "page": 1, "limit": 20 }
+```
+
+Se a tabela `chargebacks` não estiver acessível, retorna `items: []` com `"note": "Tabela chargebacks nao acessivel — verificar Nest legado."`.
+</Accordion>
+
+<Accordion title="POST /api/v2/dashboard/chargebacks/{chargeback_id}/dispute">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/dashboard/chargebacks/cb_123/dispute" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Disputa de chargeback faz HTTP pra PagarMe/Asaas. Bloqueado por rotacao de chaves. Use Nest legado.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/history">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/history?dateFrom=2026-05-01&dateTo=2026-05-31&status=PAID&gateway=asaas&limit=100" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "items": [
+    {
+      "id": "pay_9f3a2b",
+      "subscriptionId": "sub_44c1e0",
+      "value": 130.00,
+      "normalizedStatus": "PAID",
+      "status": "RECEIVED",
+      "gateway": "asaas",
+      "paymentDate": "2026-05-12T10:01:00+00:00",
+      "dueDate": "2026-05-12T00:00:00+00:00",
+      "createdAt": "2026-05-01T03:00:00+00:00"
+    }
+  ],
+  "count": 1
+}
+```
+
+`status` (query) filtra pelo `normalized_status` (`PAID`, `PENDING`, `OVERDUE`, `FAILED`, `REFUNDED`...).
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/payments">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/payments?status=PAID&limit=100" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "items": [ "..." ], "count": 100 }
+```
+
+Alias exato de `GET /dashboard/history` — mesmo shape e mesmos filtros.
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/payments/failures">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/payments/failures?dateFrom=2026-05-01&dateTo=2026-05-31" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "items": [
+    {
+      "id": "pay_5e8d11",
+      "subscriptionId": "sub_91aa07",
+      "value": 130.00,
+      "status": "card_declined",
+      "gateway": "pagarme",
+      "paymentDate": null,
+      "createdAt": "2026-05-18T08:30:00+00:00"
+    }
+  ],
+  "count": 1
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/payments/refunds">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/payments/refunds?dateFrom=2026-05-01&dateTo=2026-05-31" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "items": [
+    {
+      "id": "pay_2c4f90",
+      "subscriptionId": "sub_18bb32",
+      "value": 130.00,
+      "gateway": "asaas",
+      "paymentDate": "2026-05-03T14:00:00+00:00",
+      "createdAt": "2026-05-03T14:00:00+00:00"
+    }
+  ],
+  "count": 1
+}
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/dashboard/payments/refund">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/dashboard/payments/refund" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Refund chama Asaas/PagarMe. Bloqueado por rotacao de chaves. Use Nest legado.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/dashboard/payment-links">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/dashboard/payment-links?page=1&limit=20" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "data": [
+    {
+      "id": "pl_88aa12",
+      "name": "Clube de Membros — Anual",
+      "description": "Assinatura anual com desconto",
+      "value": 1297.00,
+      "billingType": "CREDIT_CARD",
+      "url": "https://www.asaas.com/c/abc123",
+      "active": true,
+      "createdAt": "2026-04-02T12:00:00+00:00",
+      "linkType": "assinatura",
+      "productGroup": "Clube de Membros",
+      "isPrimary": true
+    }
+  ],
+  "total": 7,
+  "page": 1,
+  "limit": 20,
+  "grouped": {
+    "Clube de Membros": [ "..." ],
+    "Outros": [ "..." ]
+  }
+}
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/dashboard/payment-links">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/dashboard/payment-links" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Criar link de pagamento chama Asaas/PagarMe. Bloqueado por rotacao de chaves. Use Nest legado.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v2/dashboard/payment-links/{link_id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.escolapujante.com.br/api/v2/dashboard/payment-links/pl_88aa12" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Cancelar link de pagamento chama Asaas/PagarMe. Bloqueado por rotacao de chaves. Use Nest legado.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/dashboard/subscription-mgmt/{subscription_id}/sync">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/dashboard/subscription-mgmt/sub_44c1e0/sync" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Sync com Asaas/PagarMe. Bloqueado por rotacao de chaves. Use Nest legado.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/dashboard/subscription-mgmt/{subscription_id}/update-card">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/dashboard/subscription-mgmt/sub_44c1e0/update-card" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Atualizacao de cartao chama Asaas/PagarMe. Bloqueado por rotacao de chaves. Use Nest legado.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/dashboard/subscription-mgmt/{subscription_id}/retry-payment">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/dashboard/subscription-mgmt/sub_44c1e0/retry-payment" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Retry de pagamento chama gateway. Bloqueado por rotacao de chaves. Use Nest legado.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/financial/office-delinquency">
+<Note>
+Apesar de listado junto do dashboard, no FastAPI v2 esta rota vive sob o prefixo `/financial` (não `/dashboard`).
+</Note>
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/financial/office-delinquency" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "totalActive": 78,
+  "delinquentCount": 9,
+  "delinquencyRate": 11.54,
+  "totalOverdueAmount": 3120.00,
+  "brackets": [
+    { "label": "0-30", "count": 5, "amount": 1300.00 },
+    { "label": "31-60", "count": 2, "amount": 520.00 },
+    { "label": "61-90", "count": 1, "amount": 260.00 },
+    { "label": "90+", "count": 4, "amount": 1040.00 }
+  ],
+  "offices": [
+    {
+      "officeId": "off_3d9e21",
+      "officeName": "Prado & Almeida Advocacia Agrária",
+      "officeEmail": "contato@pradoealmeida.adv.br",
+      "officePhone": "+5562999990000",
+      "totalOverdue": 780.00,
+      "overdueCount": 3,
+      "maxDaysLate": 94
+    }
+  ]
+}
+```
+</Accordion>
+</AccordionGroup>
 
 ## Financial (`/financial`)
 
@@ -84,6 +806,405 @@ Retornam **501 — não implementado**: `GET/PATCH /billing-rules*`, `POST /char
 <Warning>
 Retornam **501 — não implementado**: `/clients`, `/products`, `/subscriptions`, `/charges`, `/events`, `/payments-by-product-status`, `/charges-kpis`, `/test-profiles` (GET e PATCH), `/product-mapping`, `/reconcile` e `/operational-alerts`.
 </Warning>
+
+Os endpoints 501 deste grupo respondem todos com o mesmo template, mudando apenas o método Nest equivalente:
+
+```json title="501 Not Implemented (template)"
+{
+  "detail": "Endpoint financial nao migrado ainda. Equivalente no Nest legado: FinancialService.<metodo>. Implementar via funcao SQL em migrations/0002_financial_functions.sql.",
+  "code": "http_error"
+}
+```
+
+<AccordionGroup>
+<Accordion title="GET /api/v2/financial/clients">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/financial/clients?search=prado" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `FinancialService.getClients`.
+</Accordion>
+
+<Accordion title="GET /api/v2/financial/products">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/financial/products" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `FinancialService.getProducts`.
+</Accordion>
+
+<Accordion title="GET /api/v2/financial/subscriptions">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/financial/subscriptions?status=ACTIVE&productType=OFFICE_SUPPORTER&isLate=true" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `FinancialService.getSubscriptions`.
+</Accordion>
+
+<Accordion title="GET /api/v2/financial/charges">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/financial/charges?normalizedStatus=OVERDUE&gateway=asaas" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `FinancialService.getCharges`.
+</Accordion>
+
+<Accordion title="GET /api/v2/financial/events">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/financial/events?limit=50" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `FinancialService.getEvents`.
+</Accordion>
+
+<Accordion title="GET /api/v2/financial/month-detail">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/financial/month-detail?month=2026-05&metric=revenue" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+Métricas aceitas: `revenue`, `offices`, `members`, `all-members` (usa `filterMonth`), `subscriptions`. Métrica desconhecida retorna `{ "breakdown": [], "records": [] }`.
+
+```json title="200 OK — metric=revenue"
+{
+  "breakdown": [
+    { "product": "Escritório Apoiador", "total": 10140.00, "count": 78 },
+    { "product": "Clube de Membros", "total": 8100.50, "count": 65 }
+  ],
+  "records": [
+    {
+      "client": "Prado & Almeida Advocacia Agrária",
+      "email": null,
+      "product": "Escritório Apoiador",
+      "productType": "OFFICE_SUPPORTER",
+      "value": 130.00,
+      "billingCycle": "MONTHLY",
+      "billingType": "BOLETO",
+      "gateway": "asaas",
+      "date": "2026-05-12T10:01:00+00:00"
+    }
+  ]
+}
+```
+
+Para `metric=members`/`all-members`, `records` traz `{id, fullName, email, phone, status, lastLoginAt, userType, createdAt}`; para `subscriptions`, `{id, client, email, product, productType, value, billingCycle, status, date}`.
+</Accordion>
+
+<Accordion title="GET /api/v2/financial/revenue-by-product-status">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/financial/revenue-by-product-status?month=2026-05" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "product": "Escritório Apoiador",
+    "type": "OFFICE_SUPPORTER",
+    "total": 11440.00,
+    "totalCount": 88,
+    "statuses": [
+      { "status": "PAID", "label": "Pago", "value": 10140.00, "count": 78, "percentage": 88.6 },
+      { "status": "OVERDUE", "label": "Vencido", "value": 1300.00, "count": 10, "percentage": 11.4 }
+    ]
+  }
+]
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/financial/payments-by-product-status">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/financial/payments-by-product-status?productType=MEMBERS_CLUB&status=PAID" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `FinancialService.getPaymentsByProductStatus`.
+</Accordion>
+
+<Accordion title="GET /api/v2/financial/charges-kpis">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/financial/charges-kpis?month=2026-05" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `FinancialService.getChargesKpis`.
+</Accordion>
+
+<Accordion title="GET /api/v2/financial/revenue-kpis">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/financial/revenue-kpis?month=2026-05" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "receivedRevenue": 18240.50,
+  "grossRevenue": 19120.00,
+  "netRevenue": 17310.20,
+  "gatewayFees": 930.30,
+  "gatewayFeesEstimated": true,
+  "refundedAmount": 260.00,
+  "projectedRevenue": 24350.00,
+  "mrr": 24350.00,
+  "lostRevenue": 1560.00,
+  "previousPeriodRevenue": 17104.00,
+  "previousPeriodDay": 31,
+  "byProduct": [ "..." ]
+}
+```
+
+`gatewayFeesEstimated: true` indica que parte das taxas Pagar.me foi estimada (linhas sem `net_value`).
+</Accordion>
+
+<Accordion title="GET /api/v2/financial/subscribers-history">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/financial/subscribers-history?months=14&productType=OFFICE_SUPPORTER" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "product_type": "OFFICE_SUPPORTER",
+  "months": ["2026-04", "2026-05", "2026-06"],
+  "rows": [
+    {
+      "id": "off_3d9e21",
+      "name": "Prado & Almeida Advocacia Agrária",
+      "email": "contato@pradoealmeida.adv.br",
+      "product_type": "OFFICE_SUPPORTER",
+      "source": "internal",
+      "first_payment_month": "2026-04",
+      "active_months": 3,
+      "total_revenue": 390.00,
+      "payments": {
+        "2026-04": { "value": 130.00, "count": 1, "is_new": true, "is_recovered": false },
+        "2026-05": { "value": 130.00, "count": 1, "is_new": false, "is_recovered": false },
+        "2026-06": { "value": 130.00, "count": 1, "is_new": false, "is_recovered": false }
+      }
+    }
+  ],
+  "monthly_totals": {
+    "2026-04": { "count": 74, "total": 9620.00, "new_count": 4 },
+    "2026-05": { "count": 78, "total": 10140.00, "new_count": 5 },
+    "2026-06": { "count": 61, "total": 7930.00, "new_count": 2 }
+  }
+}
+```
+
+`source` pode ser `internal`, `merged` ou `external_only`; meses sem pagamento aparecem como `null` em `payments`.
+</Accordion>
+
+<Accordion title="GET /api/v2/financial/monthly-history">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/financial/monthly-history?months=18&since=2026-05-20" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "months": ["2026-04", "2026-05", "2026-06"],
+  "rows": [
+    {
+      "month": "2026-05",
+      "gross_brl": 18240.50,
+      "net_brl": 17310.20,
+      "net_estimated": false,
+      "transactions": 142,
+      "by_gateway": {
+        "asaas": { "gross": 10140.00, "net": 10038.60, "count": 78 },
+        "pagarme": { "gross": 6100.50, "net": 5800.10, "count": 48 },
+        "pagarme_legacy": { "gross": 0.0, "net": 0.0, "count": 0 },
+        "hotmart": { "gross": 2000.00, "net": 1471.50, "count": 16 }
+      },
+      "platforms": "asaas+pagarme+hotmart",
+      "payers": [
+        {
+          "name": "Ana Carolina Prado",
+          "email": "ana.prado@exemplo.com.br",
+          "value": 130.00,
+          "net": 123.50,
+          "paid_at": "2026-05-12T10:01:00+00:00",
+          "gateway": "asaas",
+          "billing_type": "BOLETO",
+          "installments": null,
+          "product": "Clube de Membros",
+          "source_kind": "subscription"
+        }
+      ]
+    }
+  ],
+  "totals": {
+    "gross_brl": 54320.00,
+    "net_brl": 51410.30,
+    "transactions": 421,
+    "by_platform": {
+      "hotmart": { "gross": 6000.00, "net": 5410.00, "transactions": 48 },
+      "pagarme": { "gross": 18200.00, "net": 17290.30, "transactions": 144 },
+      "asaas": { "gross": 30120.00, "net": 28710.00, "transactions": 229 }
+    }
+  },
+  "refreshed_at": "2026-06-12T13:30:00+00:00"
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/financial/monthly-history-supporters">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/financial/monthly-history-supporters?months=18" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "months": ["2026-04", "2026-05", "2026-06"],
+  "rows": [ "..." ],
+  "totals": {
+    "gross_brl": 30120.00,
+    "net_brl": 29818.80,
+    "transactions": 229,
+    "by_platform": {
+      "hotmart": { "gross": 0.0, "net": 0.0, "transactions": 0 },
+      "pagarme": { "gross": 0.0, "net": 0.0, "transactions": 0 },
+      "asaas": { "gross": 30120.00, "net": 29818.80, "transactions": 229 }
+    }
+  },
+  "refreshed_at": "2026-06-12T13:30:00+00:00"
+}
+```
+
+Mesmo schema de `/monthly-history`, restrito a subscriptions `OFFICE_SUPPORTER` (sem `external_payments`).
+</Accordion>
+
+<Accordion title="GET /api/v2/financial/test-profiles">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/financial/test-profiles" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `FinancialService.getTestProfiles`.
+</Accordion>
+
+<Accordion title="PATCH /api/v2/financial/test-profiles/{member_id}/toggle">
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/financial/test-profiles/a1b2c3d4-0000-0000-0000-000000000001/toggle" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `FinancialService.toggleTestProfile`.
+</Accordion>
+
+<Accordion title="GET /api/v2/financial/product-mapping">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/financial/product-mapping" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `FinancialService.getProductMapping`.
+</Accordion>
+
+<Accordion title="GET /api/v2/financial/reconcile">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/financial/reconcile" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `FinancialService.reconcile`.
+</Accordion>
+
+<Accordion title="GET /api/v2/financial/operational-alerts">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/financial/operational-alerts" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `FinancialService.getOperationalAlerts`.
+</Accordion>
+
+<Accordion title="GET /api/v2/financial/overview-kpis">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/financial/overview-kpis?month=2026-05" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "metrics": {
+    "totalOffices": 3,
+    "prevOffices": 5,
+    "totalMembers": 14,
+    "prevMembers": 11,
+    "totalSubscriptions": 17,
+    "prevSubscriptions": 15,
+    "totalOfficesAllTime": 113,
+    "activeMembers": 297,
+    "activeSupporterOffices": 78,
+    "canceledSupporterOffices": 35
+  },
+  "revenue": {
+    "receivedRevenue": 18240.50,
+    "previousPeriodRevenue": 17104.00,
+    "previousPeriodDay": 0,
+    "byProduct": [
+      {
+        "product": "Escritório Apoiador",
+        "type": "OFFICE_SUPPORTER",
+        "revenue": 10140.00,
+        "clients": 78,
+        "ticketMedio": 130.00
+      }
+    ],
+    "mrr": 18240.50,
+    "mrr_apoiadores": 10140.00,
+    "mrr_apoiadores_total": 10140.00,
+    "revenueTTM": 369737.00,
+    "revenueTTM_byProduct": {
+      "OFFICE_SUPPORTER": 202605.00,
+      "COURSE": 167132.00
+    },
+    "projectedRevenue": 0.0,
+    "lostRevenue": 0.0
+  },
+  "apoiadoresSemaforo": {
+    "pagaram": { "count": 64, "valor": 10140.00 },
+    "aberto": { "count": 8, "valor": 1040.00 },
+    "churn_recuperavel": { "count": 4, "valor": 520.00 },
+    "inadimplentes_antigos": { "count": 6, "valor": 780.00 }
+  },
+  "alerts": [],
+  "recentOffices": [
+    {
+      "id": "off_3d9e21",
+      "name": "Prado & Almeida Advocacia Agrária",
+      "email": "contato@pradoealmeida.adv.br",
+      "status": "ACTIVE",
+      "createdAt": "2026-05-28T16:40:00+00:00"
+    }
+  ],
+  "recentMembers": [
+    {
+      "id": "a1b2c3d4-0000-0000-0000-000000000001",
+      "fullName": "Ana Carolina Prado",
+      "email": "ana.prado@exemplo.com.br",
+      "status": "ACTIVE",
+      "lastPaymentDate": "2026-05-12T10:01:00+00:00",
+      "lastPaymentValue": 130.00,
+      "productType": "MEMBERS_CLUB"
+    }
+  ],
+  "timeline": [
+    { "month": "2026-05", "offices": 3, "members": 14, "subscriptions": 17 }
+  ]
+}
+```
+
+`month` em `YYYY-MM` (default: mês corrente UTC). Comparação sempre com o mês anterior inteiro.
+</Accordion>
+</AccordionGroup>
 
 ### GET /financial/month-detail
 
@@ -118,6 +1239,329 @@ Retornam **501 — não implementado**: `/clients`, `/products`, `/subscriptions
 <Warning>
 Retornam **501 — não implementado**: `/authorize`, `/callback`, `/status`, todas as rotas `/nfe*` e `POST /webhook`.
 </Warning>
+
+Os endpoints 501 deste grupo respondem com o template:
+
+```json title="501 Not Implemented (template)"
+{ "detail": "Endpoint Bling nao migrado. Use Nest legado. Equivalente: BlingService.<metodo>", "code": "http_error" }
+```
+
+<AccordionGroup>
+<Accordion title="GET /api/v2/bling/authorize">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/bling/authorize" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `BlingService.getAuthorizationUrl`.
+</Accordion>
+
+<Accordion title="GET /api/v2/bling/callback">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/bling/callback?code=abc123"
+```
+
+**501** — template acima com `BlingService.exchangeCodeForTokens`. (Rota pública, sem auth.)
+</Accordion>
+
+<Accordion title="GET /api/v2/bling/status">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/bling/status" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `BlingService.getConnectionStatus`.
+</Accordion>
+
+<Accordion title="POST /api/v2/bling/nfe">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/bling/nfe" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `BlingService.createNfe / createAndSendNfe`.
+</Accordion>
+
+<Accordion title="POST /api/v2/bling/nfe/{id}/enviar">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/bling/nfe/987654321/enviar" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `BlingService.sendNfeToSefaz`.
+</Accordion>
+
+<Accordion title="POST /api/v2/bling/nfe/{id}/cancelar">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/bling/nfe/987654321/cancelar" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `BlingService.cancelNfe`.
+</Accordion>
+
+<Accordion title="GET /api/v2/bling/nfe/{id}">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/bling/nfe/987654321" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `BlingService.getNfe`.
+</Accordion>
+
+<Accordion title="GET /api/v2/bling/nfe">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/bling/nfe?page=1&status=6&dateFrom=2026-05-01&dateTo=2026-05-31" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**501** — template acima com `BlingService.listNfes`.
+</Accordion>
+
+<Accordion title="GET /api/v2/bling/invoices/kpis">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/bling/invoices/kpis" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "emittedCount": 64,
+  "emittedCountChange": 6,
+  "totalAmount": 9230.00,
+  "totalAmountChange": 820.00,
+  "pendingCount": 3,
+  "rejectedCount": 1
+}
+```
+
+Mês atual vs mês anterior, calculado sobre `bling_invoices`.
+</Accordion>
+
+<Accordion title="GET /api/v2/bling/invoices/monthly-stats">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/bling/invoices/monthly-stats" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  { "month": "2026-04", "count": 58, "total": 8410.00 },
+  { "month": "2026-05", "count": 64, "total": 9230.00 }
+]
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/bling/invoices">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/bling/invoices?page=1&limit=10&status=EMITTED&search=prado&dateFrom=2026-05-01&dateTo=2026-05-31" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "data": [
+    {
+      "id": "inv_5510aa",
+      "blingNfeId": "987654321",
+      "subscriptionId": "sub_44c1e0",
+      "paymentId": "pay_9f3a2b",
+      "clientName": "Prado & Almeida Advocacia Agrária",
+      "clientDocument": "12.345.678/0001-90",
+      "amount": 130.00,
+      "status": "EMITTED",
+      "blingStatus": 6,
+      "blingStatusLabel": "Autorizada",
+      "numero": "1042",
+      "serie": "1",
+      "chaveAcesso": "52260612345678000190550010000010421000010425",
+      "linkDanfe": "https://www.bling.com.br/danfe/...",
+      "linkPdf": "https://www.bling.com.br/pdf/...",
+      "error": null,
+      "createdAt": "2026-05-12T10:05:00+00:00",
+      "updatedAt": "2026-05-12T10:06:30+00:00"
+    }
+  ],
+  "total": 64,
+  "page": 1,
+  "limit": 10,
+  "totalPages": 7
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/bling/nfse-config">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/bling/nfse-config" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "cnpj": "12.345.678/0001-90",
+  "razaoSocial": "Escola Pujante Educação Ltda",
+  "inscricaoMunicipal": "123456",
+  "codigoMunicipio": "5208707",
+  "cnae": "8599-6/04",
+  "codigoServico": "8.02",
+  "codigoNbs": "123456000",
+  "aliquotaIss": "5.00",
+  "updatedAt": "2026-04-10T18:00:00+00:00"
+}
+```
+
+Sem config gravada, retorna todos os campos como string vazia e `updatedAt: null`.
+</Accordion>
+
+<Accordion title="PUT /api/v2/bling/nfse-config">
+```bash title="Requisição"
+curl -X PUT "https://api.escolapujante.com.br/api/v2/bling/nfse-config" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"cnpj": "12.345.678/0001-90", "razaoSocial": "Escola Pujante Educação Ltda", "aliquotaIss": "5.00"}'
+```
+
+```json title="200 OK"
+{
+  "cnpj": "12.345.678/0001-90",
+  "razaoSocial": "Escola Pujante Educação Ltda",
+  "inscricaoMunicipal": "123456",
+  "codigoMunicipio": "5208707",
+  "cnae": "8599-6/04",
+  "codigoServico": "8.02",
+  "codigoNbs": "123456000",
+  "aliquotaIss": "5.00",
+  "updatedAt": "2026-06-12T13:40:00+00:00"
+}
+```
+
+```json title="422 Unprocessable Entity — body sem nenhum campo conhecido"
+{ "detail": "Nenhum campo enviado.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/bling/product-configs">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/bling/product-configs" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "bpc_771c20",
+    "productId": "prod_clube01",
+    "fiscalDescription": "Serviço educacional — Clube de Membros",
+    "serviceCode": "8.02",
+    "codigoNbs": "123456000",
+    "active": true,
+    "createdAt": "2026-04-10T18:00:00+00:00",
+    "updatedAt": "2026-05-02T09:00:00+00:00"
+  }
+]
+```
+</Accordion>
+
+<Accordion title="PUT /api/v2/bling/product-configs/{product_id}">
+```bash title="Requisição"
+curl -X PUT "https://api.escolapujante.com.br/api/v2/bling/product-configs/prod_clube01" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"fiscalDescription": "Serviço educacional — Clube de Membros", "serviceCode": "8.02", "codigoNbs": "123456000", "active": true}'
+```
+
+```json title="200 OK"
+{
+  "id": "bpc_771c20",
+  "productId": "prod_clube01",
+  "fiscalDescription": "Serviço educacional — Clube de Membros",
+  "serviceCode": "8.02",
+  "codigoNbs": "123456000",
+  "active": true,
+  "createdAt": "2026-04-10T18:00:00+00:00",
+  "updatedAt": "2026-06-12T13:42:00+00:00"
+}
+```
+
+Upsert: cria a config se ainda não existir para o `product_id`.
+</Accordion>
+
+<Accordion title="GET /api/v2/bling/automation/config">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/bling/automation/config" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "id": "bac_001",
+  "enabled": true,
+  "products": ["prod_clube01", "prod_apoiador01"],
+  "updatedAt": "2026-05-02T09:00:00+00:00"
+}
+```
+
+Sem config gravada: `{ "id": null, "enabled": false, "products": [], "updatedAt": null }`.
+</Accordion>
+
+<Accordion title="PUT /api/v2/bling/automation/config">
+```bash title="Requisição"
+curl -X PUT "https://api.escolapujante.com.br/api/v2/bling/automation/config" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true, "products": ["prod_clube01", "prod_apoiador01"]}'
+```
+
+```json title="200 OK"
+{
+  "id": "bac_001",
+  "enabled": true,
+  "products": ["prod_clube01", "prod_apoiador01"],
+  "updatedAt": "2026-06-12T13:45:00+00:00"
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/bling/automation/logs">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/bling/automation/logs?page=1&limit=20" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "data": [
+    {
+      "id": "bal_4420fa",
+      "invoiceId": "inv_5510aa",
+      "paymentId": "pay_9f3a2b",
+      "clientName": "Prado & Almeida Advocacia Agrária",
+      "productName": "Escritório Apoiador",
+      "amount": 130.00,
+      "success": true,
+      "errorMessage": null,
+      "createdAt": "2026-05-12T10:06:35+00:00"
+    }
+  ],
+  "total": 64,
+  "page": 1,
+  "limit": 20,
+  "totalPages": 4
+}
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/bling/webhook">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/bling/webhook" \
+  -H "Content-Type: application/json" \
+  -H "x-bling-signature-256: sha256=<ASSINATURA>" \
+  -d '{"evento": "nfe.autorizada"}'
+```
+
+**501** — template acima com `BlingService.handleWebhook (verifyWebhookSignature)`. (Rota pública, validação por HMAC.)
+</Accordion>
+</AccordionGroup>
 
 ### PUT /bling/nfse-config
 

@@ -5,6 +5,41 @@ description: "Newsletter, campanhas admin, ads, banners, apoiadores, parceiros, 
 
 Base: `/api/v1`.
 
+## Erros comuns
+
+O handler global adiciona `code` ao body. Shapes que se repetem:
+
+```json title="401 Unauthorized — sem credencial"
+{ "detail": "Não autenticado", "code": "http_error" }
+```
+
+```json title="401 Unauthorized — token ruim"
+{ "detail": "Token inválido ou expirado", "code": "http_error" }
+```
+
+```json title="403 Forbidden — role insuficiente (admin/gestor)"
+{ "detail": "Acesso negado — permissão insuficiente", "code": "http_error" }
+```
+
+```json title="422 Unprocessable Entity — validação Pydantic (shape padrão FastAPI)"
+{
+  "detail": [
+    {
+      "type": "missing",
+      "loc": ["body", "subject"],
+      "msg": "Field required",
+      "input": {}
+    }
+  ]
+}
+```
+
+A newsletter pública é rate-limited via slowapi (`5/minute` no subscribe). Ao estourar:
+
+```json title="429 Too Many Requests — slowapi"
+{ "error": "Rate limit exceeded: 5 per 1 minute" }
+```
+
 ## Newsletter pública (`/newsletter`)
 
 | Método | Path | Descrição | Auth |
@@ -12,6 +47,57 @@ Base: `/api/v1`.
 | POST | `/newsletter/subscribe` | Inscreve email | Público |
 | POST | `/newsletter/unsubscribe` | Remove inscrição | Público |
 | GET | `/newsletter` | Status de inscrição do usuário | JWT |
+
+<Note>
+No código atual o status de inscrição do usuário logado vem no campo `newsletter_subscribed` de `GET /users/me`; a remoção de inscrito é `DELETE /newsletter/{subscriber_id}` (gestor+).
+</Note>
+
+<AccordionGroup>
+<Accordion title="POST /api/v1/newsletter/subscribe">
+Rate limit: `5/minute`. `terms_accepted: true` é obrigatório (422 se faltar).
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/newsletter/subscribe" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "roberto.nogueira@exemplo.com.br",
+    "name": "Roberto Nogueira",
+    "profession": "Produtor rural",
+    "terms_accepted": true
+  }'
+```
+
+```json title="201 Created"
+{
+  "id": "6c7d8e9f-0a1b-4c2d-3e4f-5a6b7c8d9e0f",
+  "email": "roberto.nogueira@exemplo.com.br",
+  "name": "Roberto Nogueira",
+  "phone": null,
+  "profession": "Produtor rural",
+  "subscribed_at": "2026-06-12T17:00:00+00:00",
+  "is_active": true,
+  "mailchimp_synced_at": null
+}
+```
+
+Erros genéricos (422, 429): ver [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="DELETE /api/v1/newsletter/{subscriber_id}">
+Remove a inscrição (gestor+).
+
+```bash title="Requisição"
+curl -X DELETE "https://api.agropujante.com.br/api/v1/newsletter/6c7d8e9f-0a1b-4c2d-3e4f-5a6b7c8d9e0f" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem body)
+```
+
+O router também expõe `GET /newsletter/by-slug/{slug}` (HTML público da campanha enviada, 60/min), `GET /newsletter/subscribers` e `GET /newsletter/subscribers/export` (CSV, ambos gestor+).
+</Accordion>
+</AccordionGroup>
 
 ## Admin newsletters (`/admin/newsletters`)
 
@@ -37,6 +123,363 @@ Gestão completa de campanhas — ciclo draft → test → send → tracking (ve
 | GET | `/admin/newsletters/analytics/overview` | Visão geral de analytics | admin+ |
 | GET | `/admin/newsletters/analytics/summary` | Resumo agregado | admin+ |
 
+<AccordionGroup>
+<Accordion title="POST /api/v1/admin/newsletters">
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/admin/newsletters" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Boletim semanal #87",
+    "subject": "STJ define penhora de safra futura — Boletim #87",
+    "preheader": "As decisões da semana em direito do agro",
+    "segment": "all",
+    "boletim_id": "8a9b0c1d-2e3f-4a4b-5c6d-7e8f9a0b1c2d"
+  }'
+```
+
+```json title="201 Created"
+{
+  "id": "0c1d2e3f-4a5b-4c6d-7e8f-9a0b1c2d3e4f",
+  "title": "Boletim semanal #87",
+  "subject": "STJ define penhora de safra futura — Boletim #87",
+  "preheader": "As decisões da semana em direito do agro",
+  "body_html": "",
+  "body_json": null,
+  "segment": "all",
+  "status": "draft",
+  "scheduled_at": null,
+  "sent_at": null,
+  "created_by": "7f3b2c10-9d4e-4a8b-b1c2-5e6f7a8b9c0d",
+  "boletim_id": "8a9b0c1d-2e3f-4a4b-5c6d-7e8f9a0b1c2d",
+  "slug": null,
+  "stats": {},
+  "test_recipients": [],
+  "edition_number_override": null,
+  "edition_date_override": null,
+  "created_at": "2026-06-12T17:10:00+00:00",
+  "updated_at": "2026-06-12T17:10:00+00:00"
+}
+```
+
+`segment`: `all` | `pro` | `supporter` | `free` | `inactive`. `status`: `draft` | `scheduled` | `sending` | `sent` | `failed` | `cancelled`.
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/newsletters">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/newsletters?status=draft&page=1&page_size=20" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "items": [
+    { "id": "0c1d2e3f-4a5b-4c6d-7e8f-9a0b1c2d3e4f", "title": "Boletim semanal #87", "subject": "STJ define penhora de safra futura — Boletim #87", "segment": "all", "status": "draft", "body_html": "", "stats": {}, "test_recipients": [], "created_at": "2026-06-12T17:10:00+00:00", "updated_at": "2026-06-12T17:10:00+00:00" }
+  ],
+  "total": 4,
+  "page": 1,
+  "page_size": 20
+}
+```
+
+Filtros: `?status`, `?segment`, `?search`. Itens no shape `CampaignOut` (ver `POST`).
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/newsletters/{id}">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/newsletters/0c1d2e3f-4a5b-4c6d-7e8f-9a0b1c2d3e4f" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "id": "0c1d2e3f-4a5b-4c6d-7e8f-9a0b1c2d3e4f", "title": "Boletim semanal #87", "subject": "STJ define penhora de safra futura — Boletim #87", "segment": "all", "status": "draft", "body_html": "", "body_json": null, "stats": {}, "test_recipients": [], "created_at": "2026-06-12T17:10:00+00:00", "updated_at": "2026-06-12T17:10:00+00:00" }
+```
+
+```json title="404 Not Found"
+{ "detail": "Campanha nao encontrada", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="PATCH /api/v1/admin/newsletters/{id}">
+```bash title="Requisição"
+curl -X PATCH "https://api.agropujante.com.br/api/v1/admin/newsletters/0c1d2e3f-4a5b-4c6d-7e8f-9a0b1c2d3e4f" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"subject": "Penhora de safra futura: o que decidiu o STJ — Boletim #87", "segment": "pro"}'
+```
+
+```json title="200 OK"
+{ "id": "0c1d2e3f-4a5b-4c6d-7e8f-9a0b1c2d3e4f", "title": "Boletim semanal #87", "subject": "Penhora de safra futura: o que decidiu o STJ — Boletim #87", "segment": "pro", "status": "draft", "body_html": "", "stats": {}, "test_recipients": [], "created_at": "2026-06-12T17:10:00+00:00", "updated_at": "2026-06-12T17:15:00+00:00" }
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v1/admin/newsletters/{id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.agropujante.com.br/api/v1/admin/newsletters/0c1d2e3f-4a5b-4c6d-7e8f-9a0b1c2d3e4f" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem body)
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/admin/newsletters/{id}/test">
+Máximo 5 destinatários de teste por chamada.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/admin/newsletters/0c1d2e3f-4a5b-4c6d-7e8f-9a0b1c2d3e4f/test" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"recipients": ["editorial@agropujante.com.br", "teste@exemplo.com.br"]}'
+```
+
+```json title="200 OK"
+{ "sent": 2 }
+```
+
+```json title="400 Bad Request"
+{ "detail": "Maximo 5 emails de teste por vez", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/admin/newsletters/{id}/send-custom">
+Envio personalizado (máx. 50) que **entra nas analytics** — usado pra validar tracking.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/admin/newsletters/0c1d2e3f-4a5b-4c6d-7e8f-9a0b1c2d3e4f/send-custom" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"recipients": ["ana.carvalho@exemplo.com.br", "roberto.nogueira@exemplo.com.br"]}'
+```
+
+```json title="200 OK"
+{ "sent": 2 }
+```
+
+```json title="400 Bad Request"
+{ "detail": "Maximo 50 emails por envio personalizado", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/admin/newsletters/{id}/send">
+Enfileira o envio para o segmento da campanha. Com `scheduled_at` futuro, agenda; sem, dispara já.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/admin/newsletters/0c1d2e3f-4a5b-4c6d-7e8f-9a0b1c2d3e4f/send" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"scheduled_at": "2026-06-13T08:00:00+00:00"}'
+```
+
+```json title="202 Accepted"
+{ "id": "0c1d2e3f-4a5b-4c6d-7e8f-9a0b1c2d3e4f", "title": "Boletim semanal #87", "subject": "Penhora de safra futura: o que decidiu o STJ — Boletim #87", "segment": "pro", "status": "scheduled", "scheduled_at": "2026-06-13T08:00:00+00:00", "sent_at": null, "body_html": "", "stats": {}, "test_recipients": [], "created_at": "2026-06-12T17:10:00+00:00", "updated_at": "2026-06-12T17:20:00+00:00" }
+```
+
+```json title="409 Conflict — não é draft"
+{ "detail": "Somente drafts podem ser enviados (status: sent)", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/admin/newsletters/{id}/cancel">
+Só cancela campanhas `draft` ou `scheduled`.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/admin/newsletters/0c1d2e3f-4a5b-4c6d-7e8f-9a0b1c2d3e4f/cancel" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "id": "0c1d2e3f-4a5b-4c6d-7e8f-9a0b1c2d3e4f", "title": "Boletim semanal #87", "subject": "Penhora de safra futura: o que decidiu o STJ — Boletim #87", "segment": "pro", "status": "cancelled", "body_html": "", "stats": {}, "test_recipients": [], "created_at": "2026-06-12T17:10:00+00:00", "updated_at": "2026-06-12T17:25:00+00:00" }
+```
+
+```json title="409 Conflict"
+{ "detail": "Nao da pra cancelar campanha em status 'sending'", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/newsletters/{id}/pdf">
+Renderiza o PDF a partir do mesmo HTML do email (paridade 1:1). Resposta binária.
+
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/newsletters/0c1d2e3f-4a5b-4c6d-7e8f-9a0b1c2d3e4f/pdf" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -o boletim-87.pdf
+```
+
+```text title="200 OK"
+Content-Type: application/pdf
+Content-Disposition: attachment; filename="boletim-semanal-87.pdf"
+(bytes do PDF)
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/admin/newsletters/{id}/generate-boletim-pdf">
+Gera o PDF da campanha e faz upload direto pro boletim vinculado.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/admin/newsletters/0c1d2e3f-4a5b-4c6d-7e8f-9a0b1c2d3e4f/generate-boletim-pdf" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "pdf_path": "boletins/2026/boletim-semana-08-06-2026.pdf", "pdf_size_bytes": 1248733 }
+```
+
+```json title="400 Bad Request"
+{ "detail": "Campanha nao tem boletim vinculado", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/newsletters/{id}/analytics">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/newsletters/0c1d2e3f-4a5b-4c6d-7e8f-9a0b1c2d3e4f/analytics" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "total": 4820,
+  "sent": 4810,
+  "delivered": 4750,
+  "opened": 2110,
+  "clicked": 640,
+  "bounced": 35,
+  "complained": 2,
+  "delivery_rate": 98.75,
+  "open_rate": 44.42,
+  "click_rate": 13.47,
+  "ctr": 30.33,
+  "bounce_rate": 0.73,
+  "legacy_batch": false
+}
+```
+
+Campanhas antigas (pré-fix) voltam `legacy_batch: true` com `delivered`/`opened`/`clicked`/taxas em `null` — só `total` e `sent` são confiáveis.
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/newsletters/{id}/ratings">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/newsletters/0c1d2e3f-4a5b-4c6d-7e8f-9a0b1c2d3e4f/ratings" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "summary": {
+    "campaign_id": "0c1d2e3f-4a5b-4c6d-7e8f-9a0b1c2d3e4f",
+    "total_votes": 182,
+    "avg_stars": 4.4,
+    "s1": 3,
+    "s2": 5,
+    "s3": 18,
+    "s4": 46,
+    "s5": 110,
+    "with_feedback": 27
+  },
+  "feedbacks": [
+    { "stars": 5, "feedback": "Melhor resumo de jurisprudência do agro que recebo.", "created_at": "2026-06-10T12:00:00+00:00" }
+  ]
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/newsletters/{id}/top-links">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/newsletters/0c1d2e3f-4a5b-4c6d-7e8f-9a0b1c2d3e4f/top-links?limit=10" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  { "url": "https://agropujante.com.br/decisoes/penhora-de-safra-futura-em-execucao-de-cpr", "clicks": 312, "unique_clicks": 268 },
+  { "url": "https://agropujante.com.br/pujante-pro", "clicks": 95, "unique_clicks": 90 }
+]
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/newsletters/recipients/preview">
+`segment` é obrigatório: `all` | `pro` | `supporter` | `free` | `inactive`.
+
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/newsletters/recipients/preview?segment=pro&sample_size=3" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "segment": "pro",
+  "total": 1240,
+  "sample": [
+    { "email": "ana.carvalho@exemplo.com.br", "name": "Ana Beatriz Carvalho" },
+    { "email": "roberto.nogueira@exemplo.com.br", "name": "Roberto Nogueira" },
+    { "email": "fernanda.castro@exemplo.com.br", "name": "Fernanda Oliveira Castro" }
+  ]
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/newsletters/analytics/overview">
+Campanhas enviadas nos últimos `days` dias (default 90), com stats por campanha.
+
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/newsletters/analytics/overview?days=90" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "0c1d2e3f-4a5b-4c6d-7e8f-9a0b1c2d3e4f",
+    "title": "Boletim semanal #87",
+    "slug": "boletim-semanal-87",
+    "subject": "Penhora de safra futura: o que decidiu o STJ — Boletim #87",
+    "segment": "pro",
+    "sent_at": "2026-06-13T08:00:00+00:00",
+    "total": 4820,
+    "delivered": 4750,
+    "opened": 2110,
+    "clicked": 640,
+    "bounced": 35,
+    "delivery_rate": 98.75,
+    "open_rate": 44.42,
+    "click_rate": 13.47,
+    "ctr": 30.33,
+    "bounce_rate": 0.73,
+    "avg_stars": 4.4,
+    "total_votes": 182,
+    "legacy_batch": false
+  }
+]
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/newsletters/analytics/summary">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/newsletters/analytics/summary?days=90" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "campaigns_count": 12,
+  "total_sent": 57600,
+  "total_delivered": 56930,
+  "total_opened": 24800,
+  "total_clicked": 7150,
+  "total_bounced": 410,
+  "avg_open_rate": 43.6,
+  "avg_click_rate": 12.6,
+  "avg_ctr": 28.8,
+  "avg_bounce_rate": 0.72,
+  "total_votes": 1930,
+  "avg_stars": 4.3,
+  "legacy_batch": false
+}
+```
+</Accordion>
+</AccordionGroup>
+
 ## Newsletter ads (`/admin/newsletter-ads`)
 
 | Método | Path | Descrição | Auth |
@@ -47,6 +490,124 @@ Gestão completa de campanhas — ciclo draft → test → send → tracking (ve
 | GET | `/admin/newsletter-ads/{ad_id}` | Detalhe | admin+ |
 | PATCH | `/admin/newsletter-ads/{ad_id}` | Edita | admin+ |
 | DELETE | `/admin/newsletter-ads/{ad_id}` | Remove | admin+ |
+
+<AccordionGroup>
+<Accordion title="POST /api/v1/admin/newsletter-ads">
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/admin/newsletter-ads" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "slug": "escola-mentoria-agro",
+    "titulo": "Mentoria em Direito do Agronegócio",
+    "descricao": "Turma de julho com vagas abertas na Escola Pujante.",
+    "cta_label": "Garantir vaga",
+    "url": "https://escola.agropujante.com.br/mentoria",
+    "weight": 10,
+    "ab_group": "A",
+    "is_active": true
+  }'
+```
+
+```json title="201 Created"
+{
+  "id": "7d8e9f0a-1b2c-4d3e-4f5a-6b7c8d9e0f1a",
+  "slug": "escola-mentoria-agro",
+  "titulo": "Mentoria em Direito do Agronegócio",
+  "descricao": "Turma de julho com vagas abertas na Escola Pujante.",
+  "cta_label": "Garantir vaga",
+  "url": "https://escola.agropujante.com.br/mentoria",
+  "imagem_url": null,
+  "weight": 10,
+  "ab_group": "A",
+  "is_active": true,
+  "starts_at": null,
+  "ends_at": null,
+  "impressions": 0,
+  "clicks": 0,
+  "created_at": "2026-06-12T17:30:00+00:00",
+  "updated_at": "2026-06-12T17:30:00+00:00"
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/newsletter-ads">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/newsletter-ads?is_active=true&ab_group=A&page=1&page_size=50" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "items": [
+    { "id": "7d8e9f0a-1b2c-4d3e-4f5a-6b7c8d9e0f1a", "slug": "escola-mentoria-agro", "titulo": "Mentoria em Direito do Agronegócio", "cta_label": "Garantir vaga", "url": "https://escola.agropujante.com.br/mentoria", "weight": 10, "ab_group": "A", "is_active": true, "impressions": 5230, "clicks": 187, "created_at": "2026-06-12T17:30:00+00:00", "updated_at": "2026-06-12T17:30:00+00:00" }
+  ],
+  "total": 1,
+  "page": 1,
+  "page_size": 50
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/newsletter-ads/stats">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/newsletter-ads/stats" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "7d8e9f0a-1b2c-4d3e-4f5a-6b7c8d9e0f1a",
+    "slug": "escola-mentoria-agro",
+    "titulo": "Mentoria em Direito do Agronegócio",
+    "ab_group": "A",
+    "is_active": true,
+    "impressions_total": 5230,
+    "clicks_total": 187,
+    "ctr_pct": 3.58
+  }
+]
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/newsletter-ads/{ad_id}">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/newsletter-ads/7d8e9f0a-1b2c-4d3e-4f5a-6b7c8d9e0f1a" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "id": "7d8e9f0a-1b2c-4d3e-4f5a-6b7c8d9e0f1a", "slug": "escola-mentoria-agro", "titulo": "Mentoria em Direito do Agronegócio", "descricao": "Turma de julho com vagas abertas na Escola Pujante.", "cta_label": "Garantir vaga", "url": "https://escola.agropujante.com.br/mentoria", "imagem_url": null, "weight": 10, "ab_group": "A", "is_active": true, "starts_at": null, "ends_at": null, "impressions": 5230, "clicks": 187, "created_at": "2026-06-12T17:30:00+00:00", "updated_at": "2026-06-12T17:30:00+00:00" }
+```
+</Accordion>
+
+<Accordion title="PATCH /api/v1/admin/newsletter-ads/{ad_id}">
+```bash title="Requisição"
+curl -X PATCH "https://api.agropujante.com.br/api/v1/admin/newsletter-ads/7d8e9f0a-1b2c-4d3e-4f5a-6b7c8d9e0f1a" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"is_active": false}'
+```
+
+```json title="200 OK"
+{ "id": "7d8e9f0a-1b2c-4d3e-4f5a-6b7c8d9e0f1a", "slug": "escola-mentoria-agro", "titulo": "Mentoria em Direito do Agronegócio", "cta_label": "Garantir vaga", "url": "https://escola.agropujante.com.br/mentoria", "weight": 10, "ab_group": "A", "is_active": false, "impressions": 5230, "clicks": 187, "created_at": "2026-06-12T17:30:00+00:00", "updated_at": "2026-06-12T17:35:00+00:00" }
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v1/admin/newsletter-ads/{ad_id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.agropujante.com.br/api/v1/admin/newsletter-ads/7d8e9f0a-1b2c-4d3e-4f5a-6b7c8d9e0f1a" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem body)
+```
+
+O tracking público dos ads fica em `GET /newsletter/ads/{ad_id}/pixel.gif` (impression) e `GET /newsletter/ads/{ad_id}/click` (302 pro destino).
+</Accordion>
+</AccordionGroup>
 
 ## Vitrine do site
 
@@ -59,6 +620,215 @@ Gestão completa de campanhas — ciclo draft → test → send → tracking (ve
 | GET | `/partners` | Parceiros | Público |
 | POST/PATCH/DELETE | `/partners`, `/partners/{id}` | CRUD | admin+ |
 
+<AccordionGroup>
+<Accordion title="GET /api/v1/banners">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/banners?position=hero"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "8e9f0a1b-2c3d-4e4f-5a6b-7c8d9e0f1a2b",
+    "title": "Congresso de Direito do Agronegócio 2026",
+    "image_url": "https://cdn.agropujante.com.br/banners/congresso-2026.jpg",
+    "link_url": "https://agropujante.com.br/eventos/congresso-2026",
+    "position": "hero",
+    "display_order": 1,
+    "is_active": true,
+    "starts_at": "2026-06-01T00:00:00+00:00",
+    "ends_at": "2026-08-01T00:00:00+00:00"
+  }
+]
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/banners">
+`position`: `hero` | `top` | `bottom` | `sidebar`.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/banners" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Congresso de Direito do Agronegócio 2026",
+    "image_url": "https://cdn.agropujante.com.br/banners/congresso-2026.jpg",
+    "link_url": "https://agropujante.com.br/eventos/congresso-2026",
+    "position": "hero",
+    "display_order": 1
+  }'
+```
+
+```json title="201 Created"
+{
+  "id": "8e9f0a1b-2c3d-4e4f-5a6b-7c8d9e0f1a2b",
+  "title": "Congresso de Direito do Agronegócio 2026",
+  "image_url": "https://cdn.agropujante.com.br/banners/congresso-2026.jpg",
+  "link_url": "https://agropujante.com.br/eventos/congresso-2026",
+  "position": "hero",
+  "display_order": 1,
+  "is_active": true,
+  "starts_at": null,
+  "ends_at": null
+}
+```
+</Accordion>
+
+<Accordion title="PATCH /api/v1/banners/{banner_id}">
+```bash title="Requisição"
+curl -X PATCH "https://api.agropujante.com.br/api/v1/banners/8e9f0a1b-2c3d-4e4f-5a6b-7c8d9e0f1a2b" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"is_active": false}'
+```
+
+```json title="200 OK"
+{ "id": "8e9f0a1b-2c3d-4e4f-5a6b-7c8d9e0f1a2b", "title": "Congresso de Direito do Agronegócio 2026", "image_url": "https://cdn.agropujante.com.br/banners/congresso-2026.jpg", "position": "hero", "display_order": 1, "is_active": false }
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v1/banners/{banner_id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.agropujante.com.br/api/v1/banners/8e9f0a1b-2c3d-4e4f-5a6b-7c8d9e0f1a2b" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem body)
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/supporters">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/supporters"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "9f0a1b2c-3d4e-4f5a-6b7c-8d9e0f1a2b3c",
+    "name": "Castro & Almeida Advocacia Agrária",
+    "slug": "castro-almeida",
+    "description": "Banca especializada em contratos agrários e regularização fundiária.",
+    "logo_url": "https://cdn.agropujante.com.br/supporters/castro-almeida.png",
+    "website_url": "https://castroalmeida.exemplo.com.br",
+    "social_links": { "instagram": "https://instagram.com/castroalmeida", "linkedin": null, "twitter": null, "website": null },
+    "specialties": ["Contratos Agrários", "Regularização Fundiária"],
+    "email": "contato@exemplo.com.br",
+    "phone": "+55 65 3333-1234",
+    "edit_token": null,
+    "display_order": 1,
+    "is_active": true,
+    "type": "escritorio"
+  }
+]
+```
+
+Há também rotas públicas extras: `GET /supporters/slug/{slug}` (perfil enriquecido), `GET /supporters/presence` (mapa por UF) e `GET /supporters/by-state/{uf}`.
+</Accordion>
+
+<Accordion title="POST /api/v1/supporters">
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/supporters" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Castro & Almeida Advocacia Agrária",
+    "slug": "castro-almeida",
+    "description": "Banca especializada em contratos agrários e regularização fundiária.",
+    "specialties": ["Contratos Agrários", "Regularização Fundiária"],
+    "type": "escritorio"
+  }'
+```
+
+```json title="201 Created"
+{ "id": "9f0a1b2c-3d4e-4f5a-6b7c-8d9e0f1a2b3c", "name": "Castro & Almeida Advocacia Agrária", "slug": "castro-almeida", "description": "Banca especializada em contratos agrários e regularização fundiária.", "specialties": ["Contratos Agrários", "Regularização Fundiária"], "display_order": 0, "is_active": true, "type": "escritorio" }
+```
+</Accordion>
+
+<Accordion title="PATCH /api/v1/supporters/{supporter_id}">
+```bash title="Requisição"
+curl -X PATCH "https://api.agropujante.com.br/api/v1/supporters/9f0a1b2c-3d4e-4f5a-6b7c-8d9e0f1a2b3c" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"display_order": 2}'
+```
+
+```json title="200 OK"
+{ "id": "9f0a1b2c-3d4e-4f5a-6b7c-8d9e0f1a2b3c", "name": "Castro & Almeida Advocacia Agrária", "slug": "castro-almeida", "display_order": 2, "is_active": true, "type": "escritorio" }
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v1/supporters/{supporter_id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.agropujante.com.br/api/v1/supporters/9f0a1b2c-3d4e-4f5a-6b7c-8d9e0f1a2b3c" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem body)
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/partners">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/partners"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "0a1b2c3d-4e5f-4a6b-7c8d-9e0f1a2b3c4d",
+    "name": "Cooperativa Agro Vale Verde",
+    "description": "Cooperativa parceira do movimento.",
+    "logo_url": "https://cdn.agropujante.com.br/partners/vale-verde.png",
+    "website_url": "https://valeverde.exemplo.com.br",
+    "social_links": null,
+    "display_order": 1,
+    "is_active": true
+  }
+]
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/partners">
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/partners" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Cooperativa Agro Vale Verde", "description": "Cooperativa parceira do movimento.", "website_url": "https://valeverde.exemplo.com.br"}'
+```
+
+```json title="201 Created"
+{ "id": "0a1b2c3d-4e5f-4a6b-7c8d-9e0f1a2b3c4d", "name": "Cooperativa Agro Vale Verde", "description": "Cooperativa parceira do movimento.", "website_url": "https://valeverde.exemplo.com.br", "display_order": 0, "is_active": true }
+```
+</Accordion>
+
+<Accordion title="PATCH /api/v1/partners/{partner_id}">
+```bash title="Requisição"
+curl -X PATCH "https://api.agropujante.com.br/api/v1/partners/0a1b2c3d-4e5f-4a6b-7c8d-9e0f1a2b3c4d" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"display_order": 3}'
+```
+
+```json title="200 OK"
+{ "id": "0a1b2c3d-4e5f-4a6b-7c8d-9e0f1a2b3c4d", "name": "Cooperativa Agro Vale Verde", "display_order": 3, "is_active": true }
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v1/partners/{partner_id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.agropujante.com.br/api/v1/partners/0a1b2c3d-4e5f-4a6b-7c8d-9e0f1a2b3c4d" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem body)
+```
+</Accordion>
+</AccordionGroup>
+
 ## Events (`/events`)
 
 | Método | Path | Descrição | Auth |
@@ -69,15 +839,157 @@ Gestão completa de campanhas — ciclo draft → test → send → tracking (ve
 | PATCH | `/events/{event_id}` | Edita | admin+ |
 | DELETE | `/events/{event_id}` | Remove | admin+ |
 
+<AccordionGroup>
+<Accordion title="GET /api/v1/events">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/events"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5f",
+    "title": "Congresso de Direito do Agronegócio 2026",
+    "description": "Dois dias de painéis sobre contratos, tributação e ESG no agro.",
+    "cover_image_url": "https://cdn.agropujante.com.br/events/congresso-2026.jpg",
+    "start_date": "2026-07-23T00:00:00+00:00",
+    "end_date": "2026-07-24T00:00:00+00:00",
+    "start_time": "08:30",
+    "end_time": "18:00",
+    "location": "Cuiabá/MT — Centro de Eventos do Pantanal",
+    "event_url": "https://agropujante.com.br/eventos/congresso-2026",
+    "event_type": "congresso",
+    "is_confirmed": true,
+    "is_featured": true,
+    "display_order": 1,
+    "created_at": "2026-05-10T12:00:00+00:00"
+  }
+]
+```
+
+Rotas públicas extras: `GET /events/upcoming`, `GET /events/featured`, `GET /events/month/{year}/{month}`.
+</Accordion>
+
+<Accordion title="POST /api/v1/events">
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/events" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Webinário: ITR e Funrural na prática",
+    "start_date": "2026-08-05T00:00:00+00:00",
+    "start_time": "19:00",
+    "event_type": "aula",
+    "event_url": "https://escola.agropujante.com.br/webinario-itr"
+  }'
+```
+
+```json title="201 Created"
+{
+  "id": "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e60",
+  "title": "Webinário: ITR e Funrural na prática",
+  "description": null,
+  "cover_image_url": null,
+  "start_date": "2026-08-05T00:00:00+00:00",
+  "end_date": null,
+  "start_time": "19:00",
+  "end_time": null,
+  "location": null,
+  "event_url": "https://escola.agropujante.com.br/webinario-itr",
+  "event_type": "aula",
+  "is_confirmed": true,
+  "is_featured": false,
+  "display_order": 0,
+  "created_at": "2026-06-12T17:45:00+00:00"
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/events/{event_id}">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/events/2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e60"
+```
+
+```json title="200 OK"
+{ "id": "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e60", "title": "Webinário: ITR e Funrural na prática", "start_date": "2026-08-05T00:00:00+00:00", "start_time": "19:00", "event_type": "aula", "event_url": "https://escola.agropujante.com.br/webinario-itr", "is_confirmed": true, "is_featured": false, "display_order": 0 }
+```
+
+```json title="404 Not Found"
+{ "detail": "Event not found", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="PATCH /api/v1/events/{event_id}">
+```bash title="Requisição"
+curl -X PATCH "https://api.agropujante.com.br/api/v1/events/2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e60" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"is_featured": true, "location": "Online (YouTube)"}'
+```
+
+```json title="200 OK"
+{ "id": "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e60", "title": "Webinário: ITR e Funrural na prática", "start_date": "2026-08-05T00:00:00+00:00", "start_time": "19:00", "location": "Online (YouTube)", "event_type": "aula", "is_confirmed": true, "is_featured": true, "display_order": 0 }
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v1/events/{event_id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.agropujante.com.br/api/v1/events/2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e60" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem body)
+```
+</Accordion>
+</AccordionGroup>
+
 ## Ticker (`/ticker`)
 
 Snapshots de cotações/mercado exibidos no ticker do site.
+
+<AccordionGroup>
+<Accordion title="GET /api/v1/ticker">
+Cotações do agro (CEPEA via scraping + dólar via AwesomeAPI), cache de 1 h.
+
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/ticker"
+```
+
+```json title="200 OK"
+[
+  { "name": "Soja", "unit": "saca 60kg", "value": 134.52, "change": 0.45, "up": true },
+  { "name": "Milho", "unit": "saca 60kg", "value": 62.18, "change": -0.31, "up": false },
+  { "name": "Dólar", "unit": "R$", "value": 5.2143, "change": 0.12, "up": true }
+]
+```
+</Accordion>
+</AccordionGroup>
 
 ## Redirects (`/r/{tracking_code}`)
 
 | Método | Path | Descrição | Auth |
 |---|---|---|---|
 | GET | `/r/{tracking_code}` | Redirect público com tracking UTM (links de campanha) | Público |
+
+<AccordionGroup>
+<Accordion title="GET /r/{tracking_code}">
+Montado **fora** do `/api/v1` (prefixo `/r`). Os tracking codes são rotas fixas: `wa-cashback`, `news-pro`, `news-apoiador`. Cada uma seta cookies `pujante_utm_*` (domínio `.agropujante.com.br`, 30 dias) e responde 302.
+
+```bash title="Requisição"
+curl -i "https://api.agropujante.com.br/r/wa-cashback?u=9a1d4f22-3b5c-4e7d-8f90-1a2b3c4d5e6f"
+```
+
+```text title="302 Found"
+Location: https://wa.me/556298563333?text=Oi%21%20Vi%20no%20email%20do%20Plano%20Pujante%20Anual...
+Set-Cookie: pujante_utm_source=whatsapp; Domain=.agropujante.com.br; Max-Age=2592000; Path=/; SameSite=lax; Secure
+Set-Cookie: pujante_utm_medium=email; ...
+Set-Cookie: pujante_utm_campaign=pro_annual_cashback; ...
+```
+
+`news-pro` → 302 para `/pujante-pro` (campaign `semanal_AAAAMMDD`); `news-apoiador` → 302 para `/apoiadores`.
+</Accordion>
+</AccordionGroup>
 
 ## OG/SEO (`/og`)
 
@@ -86,3 +998,36 @@ Snapshots de cotações/mercado exibidos no ticker do site.
 | GET | `/og/{type}/{slug}` | HTML com OG tags para bots (`noticia`/`artigo`/`julgado`); 301 para slugs antigos | Público |
 
 Consumido pelo `server.js` Express quando detecta crawler — ver [Arquitetura](/agropujante/arquitetura#serverjs-og-proxy-e-spa-fallback).
+
+<AccordionGroup>
+<Accordion title="GET /api/v1/og/{type}/{slug}">
+Resposta é **HTML** (não JSON) com as meta tags OG/Twitter. `type`: `noticia` | `artigo` | `julgado`.
+
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/og/artigo/marco-temporal-seguranca-juridica-no-campo"
+```
+
+```html title="200 OK (text/html)"
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <title>Marco temporal e a segurança jurídica no campo | AgroPujante</title>
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://agropujante.com.br/artigo/marco-temporal-seguranca-juridica-no-campo">
+    <meta property="og:title" content="Marco temporal e a segurança jurídica no campo | AgroPujante">
+    <meta property="og:description" content="O que muda para o produtor rural após a decisão do STF...">
+    <meta property="og:image" content="https://cdn.agropujante.com.br/posts/marco-temporal.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    ...
+</head>
+...
+</html>
+```
+
+```html title="404 Not Found (text/html) — tipo ou slug inexistente"
+<html><head><meta http-equiv='refresh' content='0;url=https://agropujante.com.br'></head></html>
+```
+
+O mesmo router serve `GET /sitemap.xml`, `GET /news-sitemap.xml` e `GET /feed.xml` (todos sob `/api/v1`).
+</Accordion>
+</AccordionGroup>

@@ -10,7 +10,7 @@ description: "Trial → PRO, apoiador, publicação de artigo, ciclo de vida do 
     `GET /subscriptions/plans` lista mensal, trimestral e anual (com desconto progressivo).
   </Step>
   <Step title="Checkout">
-    `POST /subscriptions/checkout` (JWT) cria a cobrança no Asaas — PIX ou cartão (tokenizado via `/card-tokens`).
+    `POST /subscriptions/checkout` (JWT) cria a cobrança no Asaas — PIX ou cartão (tokenizado via `POST /checkout/cards`).
   </Step>
   <Step title="Webhook Asaas confirma o pagamento">
     O Asaas chama `POST /subscriptions/webhook` (validado por `asaas-access-token`). O evento é logado em `asaas_webhooks_log`.

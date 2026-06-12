@@ -7,14 +7,53 @@ O Gantt do Pujante Admin organiza o trabalho do time na hierarquia **Time &gt; P
 
 Todos os endpoints exigem **JWT Bearer** — API keys não têm acesso ao Gantt.
 
+<Note>
+A URL base `https://admin-api.pujante.com.br` usada nos exemplos é **ilustrativa** — a base real depende do deploy no Railway.
+</Note>
+
+## Erros comuns
+
+Shapes padrão do FastAPI, válidos para todos os endpoints desta página. Os exemplos por endpoint referenciam esta seção em vez de repeti-los.
+
+```json title="401 Unauthorized — sem credencial"
+{ "detail": "nao autenticado" }
+```
+
+```json title="401 Unauthorized — JWT inválido ou expirado"
+{ "detail": "token invalido: Signature has expired" }
+```
+
+```json title="403 Forbidden — email fora de ALLOWED_ADMIN_EMAILS"
+{ "detail": "usuario nao autorizado" }
+```
+
+Caso específico do Admin: API key tentando um método de **escrita** (POST/PATCH/DELETE) — a chave é read-only e nunca passa em escrita:
+
+```json title="403 Forbidden — API key em método de escrita"
+{ "detail": "API key e somente leitura — apenas requisicoes GET sao permitidas" }
+```
+
+```json title="422 Unprocessable Entity — validação de body/params"
+{
+  "detail": [
+    {
+      "type": "missing",
+      "loc": ["body", "title"],
+      "msg": "Field required",
+      "input": {}
+    }
+  ]
+}
+```
+
 ## Regras de negócio
 
 <Accordion title="Status e status_dates automáticos">
-Macros e subs têm status `backlog`, `progress` ou `done`. Ao mudar o status via `PATCH`, o backend aplica automaticamente as `status_dates` (data de início real ao entrar em `progress`, data de conclusão ao entrar em `done`). Você não gerencia essas datas manualmente.
+Macros e subs têm status `todo` (padrão), `progress`, `done`, `blocked` ou `postponed`. Ao mudar o status via `PATCH`, o backend aplica automaticamente as `status_dates` (data de início real ao entrar em `progress`, data de conclusão ao entrar em `done`). Você não gerencia essas datas manualmente — valores enviados explicitamente prevalecem.
 </Accordion>
 
 <Accordion title="Só o dono conclui">
-Apenas o **dono** da macro/sub (a pessoa atribuída em `person_id`) pode mover o item para `done`. Outros usuários recebem erro ao tentar concluir trabalho que não é deles.
+Apenas o **dono** da macro/sub — a pessoa registrada em `requested_by_id` (quem pediu a entrega) — pode mover o item para `done`. A verificação é feita pelo e-mail do usuário logado contra o e-mail da pessoa em `requested_by_id`; outros usuários recebem **403** ao tentar concluir.
 </Accordion>
 
 <Accordion title="Hierarquia Time > Projeto > Pessoa > Task">
@@ -26,6 +65,67 @@ Times agrupam projetos (macros). Cada macro tem um líder (`person_id`) e pode t
 | Método | Path | Descrição | Auth |
 |---|---|---|---|
 | GET | `/gantt/tree` | Pessoas com macros e subs aninhados, ordenados por `sort_order` | JWT |
+
+<AccordionGroup>
+<Accordion title="GET /gantt/tree">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/gantt/tree" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+Lista de pessoas, cada uma com `macros[]` aninhadas (e cada macro com `subs[]` e `members[]` — ids das pessoas alocadas):
+
+```json title="200 OK"
+[
+  {
+    "id": "p_1a2b3c4d",
+    "name": "Ana Beatriz",
+    "role": "Editorial",
+    "initials": "AB",
+    "sort_order": 0,
+    "email": "ana@pujante.com.br",
+    "created_at": "2026-05-02T12:00:00+00:00",
+    "macros": [
+      {
+        "id": "m_9f8e7d6c",
+        "person_id": "p_1a2b3c4d",
+        "team_id": "t_5a6b7c8d",
+        "title": "Portal do Professor",
+        "status": "progress",
+        "start_date": "2026-06-01",
+        "end_date": "2026-07-15",
+        "actual_start": "2026-06-03",
+        "actual_end": null,
+        "sort_order": 0,
+        "completion_note": null,
+        "requested_by_id": "p_0d1e2f3a",
+        "description": "Nova área de gestão de turmas na Escola",
+        "members": ["p_1a2b3c4d", "p_4e5f6a7b"],
+        "subs": [
+          {
+            "id": "s_2c3d4e5f",
+            "macro_id": "m_9f8e7d6c",
+            "person_id": "p_1a2b3c4d",
+            "title": "CRUD de turmas",
+            "status": "progress",
+            "start_date": "2026-06-03",
+            "end_date": "2026-06-14",
+            "actual_start": "2026-06-03",
+            "actual_end": null,
+            "sort_order": 0,
+            "requested_by_id": "p_0d1e2f3a",
+            "description": null
+          }
+        ]
+      }
+    ]
+  }
+]
+```
+
+Se as migrations base ainda não foram aplicadas, retorna **200** com `[]` (estado vazio, sem erro). Erros 401/403: veja [Erros comuns](#erros-comuns).
+</Accordion>
+</AccordionGroup>
 
 ## Teams
 
@@ -45,6 +145,101 @@ Nome do time.
 <ParamField body="sort_order" type="integer">
 Posição na ordenação.
 </ParamField>
+
+<AccordionGroup>
+<Accordion title="GET /gantt/teams">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/gantt/teams" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "t_5a6b7c8d",
+    "name": "Produto Escola",
+    "sort_order": 0,
+    "created_at": "2026-05-02T12:00:00+00:00"
+  },
+  {
+    "id": "t_6b7c8d9e",
+    "name": "Editorial AgroPujante",
+    "sort_order": 1,
+    "created_at": "2026-05-02T12:01:00+00:00"
+  }
+]
+```
+
+Schema indisponível (migration pendente) → **200** com `[]`. Erros 401/403: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="POST /gantt/teams">
+```bash title="Requisição (JWT)"
+curl -X POST "https://admin-api.pujante.com.br/gantt/teams" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Produto Escola", "sort_order": 0 }'
+```
+
+```json title="201 Created"
+{
+  "id": "t_5a6b7c8d",
+  "name": "Produto Escola",
+  "sort_order": 0,
+  "created_at": "2026-06-12T15:00:00+00:00"
+}
+```
+
+Erro do banco (PostgREST) é repassado como **502** com o corpo cru no `detail`:
+
+```json title="502 Bad Gateway — falha no insert"
+{ "detail": "{'message': 'duplicate key value violates unique constraint \"gantt_teams_name_key\"', 'code': '23505'}" }
+```
+
+A criação grava o evento `created` em `gantt_events`. Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="PATCH /gantt/teams/{id}">
+```bash title="Requisição (JWT)"
+curl -X PATCH "https://admin-api.pujante.com.br/gantt/teams/t_5a6b7c8d" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Produto Escola Pujante" }'
+```
+
+```json title="200 OK"
+{
+  "id": "t_5a6b7c8d",
+  "name": "Produto Escola Pujante",
+  "sort_order": 0,
+  "created_at": "2026-06-12T15:00:00+00:00"
+}
+```
+
+```json title="400 Bad Request — body vazio"
+{ "detail": "nada para atualizar" }
+```
+
+```json title="404 Not Found — id inexistente"
+{ "detail": "não encontrado" }
+```
+
+Mudança real em `name` gera evento `updated` com o diff `{from, to}`. Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="DELETE /gantt/teams/{id}">
+```bash title="Requisição (JWT)"
+curl -X DELETE "https://admin-api.pujante.com.br/gantt/teams/t_5a6b7c8d" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem corpo — projetos do time ficam sem time, FK on delete set null)
+```
+
+Erros 401/403: veja [Erros comuns](#erros-comuns).
+</Accordion>
+</AccordionGroup>
 
 ## Persons
 
@@ -71,6 +266,84 @@ Iniciais exibidas no avatar.
 <ParamField body="sort_order" type="integer">
 Posição na ordenação.
 </ParamField>
+
+<AccordionGroup>
+<Accordion title="POST /gantt/persons">
+Se `initials` não vier, o backend deriva do nome (ex.: "Ana Beatriz" → "AB").
+
+```bash title="Requisição (JWT)"
+curl -X POST "https://admin-api.pujante.com.br/gantt/persons" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Ana Beatriz",
+    "role": "Editorial",
+    "email": "ana@pujante.com.br",
+    "sort_order": 0
+  }'
+```
+
+```json title="201 Created"
+{
+  "id": "p_1a2b3c4d",
+  "name": "Ana Beatriz",
+  "role": "Editorial",
+  "initials": "AB",
+  "sort_order": 0,
+  "email": "ana@pujante.com.br",
+  "created_at": "2026-06-12T15:05:00+00:00"
+}
+```
+
+```json title="502 Bad Gateway — falha no insert (corpo do PostgREST no detail)"
+{ "detail": "{'message': 'duplicate key value violates unique constraint \"gantt_persons_email_key\"', 'code': '23505'}" }
+```
+
+Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="PATCH /gantt/persons/{id}">
+```bash title="Requisição (JWT) — vincular email pra trava de conclusão"
+curl -X PATCH "https://admin-api.pujante.com.br/gantt/persons/p_1a2b3c4d" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{ "email": "ana@pujante.com.br" }'
+```
+
+```json title="200 OK"
+{
+  "id": "p_1a2b3c4d",
+  "name": "Ana Beatriz",
+  "role": "Editorial",
+  "initials": "AB",
+  "sort_order": 0,
+  "email": "ana@pujante.com.br",
+  "created_at": "2026-06-12T15:05:00+00:00"
+}
+```
+
+```json title="400 Bad Request — body vazio"
+{ "detail": "nada para atualizar" }
+```
+
+```json title="404 Not Found — id inexistente"
+{ "detail": "não encontrado" }
+```
+</Accordion>
+
+<Accordion title="DELETE /gantt/persons/{id}">
+```bash title="Requisição (JWT)"
+curl -X DELETE "https://admin-api.pujante.com.br/gantt/persons/p_1a2b3c4d" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem corpo)
+```
+
+Erros 401/403: veja [Erros comuns](#erros-comuns).
+</Accordion>
+</AccordionGroup>
 
 ## Macros (projetos)
 
@@ -116,6 +389,153 @@ Líder do projeto — única pessoa que pode movê-lo para `done`.
 Pessoa que solicitou o projeto.
 </ParamField>
 
+<AccordionGroup>
+<Accordion title="POST /gantt/macros">
+Ao criar com `status: "progress"`, o backend preenche `actual_start`/`actual_end` automaticamente (regra de `status_dates` — valores enviados explicitamente prevalecem). O líder (`person_id`) entra automaticamente como membro do projeto.
+
+```bash title="Requisição (JWT)"
+curl -X POST "https://admin-api.pujante.com.br/gantt/macros" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Portal do Professor",
+    "description": "Nova área de gestão de turmas na Escola",
+    "start_date": "2026-06-01",
+    "end_date": "2026-07-15",
+    "status": "progress",
+    "team_id": "t_5a6b7c8d",
+    "person_id": "p_1a2b3c4d",
+    "requested_by_id": "p_0d1e2f3a"
+  }'
+```
+
+```json title="201 Created"
+{
+  "id": "m_9f8e7d6c",
+  "person_id": "p_1a2b3c4d",
+  "team_id": "t_5a6b7c8d",
+  "title": "Portal do Professor",
+  "status": "progress",
+  "start_date": "2026-06-01",
+  "end_date": "2026-07-15",
+  "actual_start": "2026-06-12",
+  "actual_end": "2026-06-12",
+  "sort_order": 0,
+  "completion_note": null,
+  "requested_by_id": "p_0d1e2f3a",
+  "description": "Nova área de gestão de turmas na Escola"
+}
+```
+
+```json title="502 Bad Gateway — FK inválida (corpo do PostgREST no detail)"
+{ "detail": "{'message': 'insert or update on table \"gantt_macros\" violates foreign key constraint \"gantt_macros_person_id_fkey\"', 'code': '23503'}" }
+```
+
+Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="PATCH /gantt/macros/{id}">
+Mover para `done` dispara a **trava de conclusão**: o backend busca o e-mail da pessoa em `requested_by_id` (quem pediu o projeto) e compara com o e-mail do JWT logado.
+
+```bash title="Requisição (JWT) — concluir o projeto"
+curl -X PATCH "https://admin-api.pujante.com.br/gantt/macros/m_9f8e7d6c" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{ "status": "done", "completion_note": "Entregue com as 3 telas previstas" }'
+```
+
+```json title="200 OK — actual_end preenchido automaticamente"
+{
+  "id": "m_9f8e7d6c",
+  "person_id": "p_1a2b3c4d",
+  "team_id": "t_5a6b7c8d",
+  "title": "Portal do Professor",
+  "status": "done",
+  "start_date": "2026-06-01",
+  "end_date": "2026-07-15",
+  "actual_start": "2026-06-03",
+  "actual_end": "2026-06-12",
+  "sort_order": 0,
+  "completion_note": "Entregue com as 3 telas previstas",
+  "requested_by_id": "p_0d1e2f3a",
+  "description": "Nova área de gestão de turmas na Escola"
+}
+```
+
+Tentar concluir sem ser o dono (e-mail do logado ≠ e-mail de quem pediu):
+
+```json title="403 Forbidden — só o dono conclui"
+{ "detail": "Só Ana Beatriz (quem pediu) pode marcar como concluído." }
+```
+
+Dono sem e-mail vinculado em `gantt_persons` (não dá pra verificar):
+
+```json title="403 Forbidden — dono sem e-mail vinculado"
+{ "detail": "Ana Beatriz (dono) não tem e-mail vinculado — peça a um admin pra definir antes de concluir." }
+```
+
+```json title="400 Bad Request — body vazio"
+{ "detail": "nada para atualizar" }
+```
+
+```json title="404 Not Found — id inexistente"
+{ "detail": "não encontrado" }
+```
+
+Mudanças reais geram evento `updated` em `gantt_events` com diff `{from, to}` por campo. Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="DELETE /gantt/macros/{id}">
+```bash title="Requisição (JWT)"
+curl -X DELETE "https://admin-api.pujante.com.br/gantt/macros/m_9f8e7d6c" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem corpo — grava evento "deleted" na timeline)
+```
+
+Erros 401/403: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="POST /gantt/macros/{id}/members">
+Upsert idempotente — adicionar a mesma pessoa duas vezes não duplica.
+
+```bash title="Requisição (JWT)"
+curl -X POST "https://admin-api.pujante.com.br/gantt/macros/m_9f8e7d6c/members" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{ "person_id": "p_4e5f6a7b" }'
+```
+
+```json title="201 Created"
+{
+  "macro_id": "m_9f8e7d6c",
+  "person_id": "p_4e5f6a7b"
+}
+```
+
+```json title="502 Bad Gateway — FK inválida (corpo do PostgREST no detail)"
+{ "detail": "{'message': 'insert or update on table \"gantt_macro_members\" violates foreign key constraint \"gantt_macro_members_person_id_fkey\"', 'code': '23503'}" }
+```
+
+Grava evento `member_added`. Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="DELETE /gantt/macros/{id}/members/{person_id}">
+```bash title="Requisição (JWT)"
+curl -X DELETE "https://admin-api.pujante.com.br/gantt/macros/m_9f8e7d6c/members/p_4e5f6a7b" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem corpo — as tasks da pessoa nesse projeto ficam com person_id null; grava evento "member_removed")
+```
+
+Erros 401/403: veja [Erros comuns](#erros-comuns).
+</Accordion>
+</AccordionGroup>
+
 ## Subs (tasks)
 
 | Método | Path | Descrição | Auth |
@@ -158,6 +578,107 @@ Dona da task.
 Pessoa que solicitou a task.
 </ParamField>
 
+<AccordionGroup>
+<Accordion title="POST /gantt/subs">
+```bash title="Requisição (JWT)"
+curl -X POST "https://admin-api.pujante.com.br/gantt/subs" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "macro_id": "m_9f8e7d6c",
+    "person_id": "p_1a2b3c4d",
+    "title": "CRUD de turmas",
+    "start_date": "2026-06-03",
+    "end_date": "2026-06-14",
+    "status": "progress",
+    "requested_by_id": "p_0d1e2f3a"
+  }'
+```
+
+```json title="201 Created — status_dates aplicadas"
+{
+  "id": "s_2c3d4e5f",
+  "macro_id": "m_9f8e7d6c",
+  "person_id": "p_1a2b3c4d",
+  "title": "CRUD de turmas",
+  "status": "progress",
+  "start_date": "2026-06-03",
+  "end_date": "2026-06-14",
+  "actual_start": "2026-06-12",
+  "actual_end": "2026-06-12",
+  "sort_order": 0,
+  "requested_by_id": "p_0d1e2f3a",
+  "description": null
+}
+```
+
+```json title="502 Bad Gateway — macro_id inexistente (corpo do PostgREST no detail)"
+{ "detail": "{'message': 'insert or update on table \"gantt_subs\" violates foreign key constraint \"gantt_subs_macro_id_fkey\"', 'code': '23503'}" }
+```
+
+Grava evento `created` na timeline da task. Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="PATCH /gantt/subs/{id}">
+Mesmas regras das macros: `status_dates` automáticas e trava "só o dono conclui" (verificada contra o e-mail da pessoa em `requested_by_id`).
+
+```bash title="Requisição (JWT) — concluir a task"
+curl -X PATCH "https://admin-api.pujante.com.br/gantt/subs/s_2c3d4e5f" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{ "status": "done" }'
+```
+
+```json title="200 OK"
+{
+  "id": "s_2c3d4e5f",
+  "macro_id": "m_9f8e7d6c",
+  "person_id": "p_1a2b3c4d",
+  "title": "CRUD de turmas",
+  "status": "done",
+  "start_date": "2026-06-03",
+  "end_date": "2026-06-14",
+  "actual_start": "2026-06-03",
+  "actual_end": "2026-06-12",
+  "sort_order": 0,
+  "requested_by_id": "p_0d1e2f3a",
+  "description": null
+}
+```
+
+Tentar concluir task de outra pessoa:
+
+```json title="403 Forbidden — só o dono conclui"
+{ "detail": "Só Ana Beatriz (quem pediu) pode marcar como concluído." }
+```
+
+```json title="403 Forbidden — dono sem e-mail vinculado"
+{ "detail": "Ana Beatriz (dono) não tem e-mail vinculado — peça a um admin pra definir antes de concluir." }
+```
+
+```json title="400 Bad Request — body vazio"
+{ "detail": "nada para atualizar" }
+```
+
+```json title="404 Not Found — id inexistente"
+{ "detail": "não encontrado" }
+```
+</Accordion>
+
+<Accordion title="DELETE /gantt/subs/{id}">
+```bash title="Requisição (JWT)"
+curl -X DELETE "https://admin-api.pujante.com.br/gantt/subs/s_2c3d4e5f" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem corpo — grava evento "deleted" na timeline)
+```
+
+Erros 401/403: veja [Erros comuns](#erros-comuns).
+</Accordion>
+</AccordionGroup>
+
 ## Events (timeline)
 
 | Método | Path | Descrição | Auth |
@@ -179,3 +700,48 @@ Máximo de eventos retornados.
 <Note>
 Os eventos são gravados em `gantt_events` a cada mudança relevante (criação, mudança de status, datas, atribuições), formando o histórico auditável do Gantt.
 </Note>
+
+<AccordionGroup>
+<Accordion title="GET /gantt/events">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/gantt/events?entity_type=project&entity_id=m_9f8e7d6c&limit=100" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "ev_7a8b9c0d",
+    "entity_type": "project",
+    "entity_id": "m_9f8e7d6c",
+    "kind": "updated",
+    "payload": {
+      "changes": {
+        "status": { "from": "progress", "to": "done" },
+        "actual_end": { "from": null, "to": "2026-06-12" }
+      }
+    },
+    "created_at": "2026-06-12T15:20:00+00:00"
+  },
+  {
+    "id": "ev_6f7a8b9c",
+    "entity_type": "project",
+    "entity_id": "m_9f8e7d6c",
+    "kind": "member_added",
+    "payload": { "person_id": "p_4e5f6a7b" },
+    "created_at": "2026-06-10T09:15:00+00:00"
+  },
+  {
+    "id": "ev_5e6f7a8b",
+    "entity_type": "project",
+    "entity_id": "m_9f8e7d6c",
+    "kind": "created",
+    "payload": { "title": "Portal do Professor" },
+    "created_at": "2026-06-01T08:00:00+00:00"
+  }
+]
+```
+
+`entity_type` ou `entity_id` ausentes → **422** (veja [Erros comuns](#erros-comuns)). Se a tabela `gantt_events` ainda não existe (migration pendente), retorna **200** com `[]`.
+</Accordion>
+</AccordionGroup>

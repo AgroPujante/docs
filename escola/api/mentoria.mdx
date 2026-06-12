@@ -4,6 +4,24 @@ description: "Tracking de mentorados (GDA), análises por IA, performance e Care
 icon: "users"
 ---
 
+## Erros comuns
+
+Erros de `HTTPException`/`AppException` saem com `detail` + `code` (handler global em `core/exceptions.py`). O 422 de validação segue o shape padrão do FastAPI.
+
+```json title="401 Unauthorized"
+{ "detail": "Token de autenticacao nao fornecido", "code": "http_error" }
+```
+
+```json title="403 Forbidden (rota MANAGER sem role ADMIN/COMMUNITY_MANAGER)"
+{ "detail": "Acesso restrito", "code": "http_error" }
+```
+
+```json title="422 Unprocessable Entity"
+{ "detail": [{ "loc": ["body", "memberId"], "msg": "field required", "type": "missing" }] }
+```
+
+Rotas `my-*` exigem user com member vinculado — sem isso: `400 { "detail": "Usuario nao vinculado a member — sem dados de mentoria.", "code": "http_error" }`.
+
 ## Mentored tracking (`/mentored-tracking`)
 
 Rotas `my-*` são a visão do **mentorado** (aluno); as demais são da equipe (MANAGER).
@@ -25,6 +43,204 @@ Rotas `my-*` são a visão do **mentorado** (aluno); as demais são da equipe (M
 `POST /mentored-tracking/my-action-plan/save-pdf` retorna **501 — não implementado**.
 </Warning>
 
+### Exemplos
+
+<AccordionGroup>
+
+<Accordion title="GET /api/v2/mentored-tracking/my-profile">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/mentored-tracking/my-profile" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK (resumido — o profile traz todos os campos flat de DISC/socioemocional/procrastinação/atenção-memória)"
+{
+  "profile": {
+    "id": "f2a3b4c5-d6e7-4f8a-9b0c-1d2e3f4a5b6c",
+    "fullName": "Ana Carolina Souza",
+    "gender": "female",
+    "whatsapp": "(11) 98765-4321",
+    "birthDate": "1992-03-18",
+    "cep": "01310-100",
+    "address": "Avenida Paulista",
+    "number": "1578",
+    "complement": null,
+    "state": "SP",
+    "city": "São Paulo",
+    "profilePhoto": null,
+    "academicBackground": "Direito — USP",
+    "specialties": ["Agrário", "Tributário"],
+    "discAnswers": { "1": "D", "2": "I" },
+    "discResultD": 7,
+    "discResultI": 4,
+    "discResultS": 3,
+    "discResultC": 2,
+    "discPrimaryProfile": "D",
+    "discSecondaryProfile": "I",
+    "discAnalysis": "Perfil dominante orientado a resultados...",
+    "createdAt": "2026-04-01T10:00:00.000000+00:00",
+    "updatedAt": "2026-06-10T15:20:00.000000+00:00"
+  },
+  "trackingId": "a3b4c5d6-e7f8-4a9b-0c1d-2e3f4a5b6c7d"
+}
+```
+
+Sem tracking criado ainda: `{ "profile": { "fullName": "Ana Carolina Souza" }, "trackingId": null }`.
+
+</Accordion>
+
+<Accordion title="PUT /api/v2/mentored-tracking/my-profile">
+
+Body flat camelCase — qualquer subconjunto dos campos do profile. Cria o `mentored_tracking` e o `mentored_profiles` automaticamente se não existirem.
+
+```bash title="Requisição"
+curl -X PUT "https://api.escolapujante.com.br/api/v2/mentored-tracking/my-profile" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "fullName": "Ana Carolina Souza", "gender": "female", "whatsapp": "(11) 98765-4321", "birthDate": "1992-03-18", "cep": "01310-100" }'
+```
+
+Resposta 200: mesmo shape do `GET /my-profile` (profile atualizado + `trackingId`).
+
+```json title="422 Unprocessable Entity (falha ao gravar)"
+{ "detail": "Falha ao gravar perfil: <erro do Supabase>", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/mentored-tracking/my-tests-status">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/mentored-tracking/my-tests-status" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{
+  "personalInfo": true,
+  "professionalInfo": true,
+  "disc": true,
+  "socioemocional": false,
+  "procrastination": false,
+  "attentionMemory": false
+}
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/mentored-tracking/my-tasks-status">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/mentored-tracking/my-tasks-status?month=2026-06" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+Mapa `task_number -> concluída?`. Retorna `{}` se não há mentoria ativa ou documento do mês:
+
+```json title="200 OK"
+{ "1": true, "2": true, "3": false, "4": false }
+```
+
+</Accordion>
+
+<Accordion title="PUT /api/v2/mentored-tracking/my-tasks/{task_number}">
+
+```bash title="Requisição"
+curl -X PUT "https://api.escolapujante.com.br/api/v2/mentored-tracking/my-tasks/3" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "completed": true, "month": "2026-06" }'
+```
+
+```json title="200 OK"
+{ "taskNumber": 3, "completed": true }
+```
+
+```json title="400 Bad Request"
+{ "detail": "Numero da tarefa invalido.", "code": "http_error" }
+```
+
+```json title="404 Not Found (sem plano do mês)"
+{ "detail": "Sem plano de acao ativo para atualizar tasks.", "code": "http_error" }
+```
+
+```json title="404 Not Found (task fora do plano)"
+{ "detail": "Task 3 nao existe no plano deste mes.", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/mentored-tracking/my-available-months">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/mentored-tracking/my-available-months" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+Array de strings `YYYY-MM` direto (vazio se não há documentos):
+
+```json title="200 OK"
+["2026-06", "2026-05", "2026-04"]
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/mentored-tracking/my-action-plan">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/mentored-tracking/my-action-plan?referenceMonth=2026-06" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{
+  "member": {
+    "id": "clx3k9d2f0001mk08yq4w7d1z",
+    "fullName": "Ana Carolina Souza",
+    "email": "ana.souza@exemplo.com.br"
+  },
+  "tracking": {
+    "id": "a3b4c5d6-e7f8-4a9b-0c1d-2e3f4a5b6c7d",
+    "memberId": "clx3k9d2f0001mk08yq4w7d1z",
+    "location": "São Paulo/SP",
+    "specialty": "Direito Agrário",
+    "team": "Solo",
+    "blocker": "Captação de clientes",
+    "themes": ["prospecção", "precificação"],
+    "monthlyGoal": "Fechar 3 contratos de consultoria",
+    "goalReason": "Aumentar receita recorrente"
+  },
+  "actionPlan": { "weeks": [{ "week": 1, "tasks": ["..."] }] },
+  "generatedAt": "2026-06-01T08:00:00.000000+00:00"
+}
+```
+
+```json title="404 Not Found (sem tracking)"
+{ "detail": "Acompanhamento de mentoria nao encontrado.", "code": "http_error" }
+```
+
+```json title="404 Not Found (sem plano)"
+{ "detail": "Nenhum plano de acao encontrado.", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/mentored-tracking/my-action-plan/save-pdf (501)">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/mentored-tracking/my-action-plan/save-pdf" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Geracao de PDF nao migrada. Use Nest legado.", "code": "http_error" }
+```
+
+</Accordion>
+
+</AccordionGroup>
+
 ### PUT /mentored-tracking/my-tasks/\{task_number\}
 
 <ParamField body="completed" type="boolean" required>Tarefa concluída ou não.</ParamField>
@@ -40,6 +256,89 @@ Analisam respostas de testes com OpenAI e persistem o resultado em `mentored_pro
 | POST | `/mentored-tracking/analyze-socioemocional` | Análise socioemocional | JWT |
 | POST | `/mentored-tracking/analyze-procrastination` | Análise de procrastinação | JWT |
 | POST | `/mentored-tracking/analyze-attention-memory` | Análise atenção/memória | JWT |
+
+#### Exemplos
+
+Erros comuns às quatro análises: `503 { "detail": "OPENAI_API_KEY nao configurada no backend." }` e `502` (`"Falha ao consultar OpenAI."`, `"OpenAI falhou (<status>)."`, `"OpenAI retornou resposta vazia."`, `"Resposta da IA nao e JSON valido."`).
+
+<AccordionGroup>
+
+<Accordion title="POST /api/v2/mentored-tracking/analyze-disc">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/mentored-tracking/analyze-disc" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "answers": [{ "question": 1, "choice": "D" }], "scores": { "D": 7, "I": 4, "S": 3, "C": 2 }, "percentages": { "D": 43.75, "I": 25, "S": 18.75, "C": 12.5 } }'
+```
+
+```json title="200 OK"
+{
+  "analysis": "Seu perfil DISC indica predominância de Dominância...",
+  "primaryProfile": "D",
+  "secondaryProfile": "I"
+}
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/mentored-tracking/analyze-socioemocional">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/mentored-tracking/analyze-socioemocional" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "answers": [{ "question": 1, "choice": "A" }], "counts": { "A": 9, "B": 5, "C": 4, "D": 2 }, "percentages": { "A": 45, "B": 25, "C": 20, "D": 10 } }'
+```
+
+```json title="200 OK"
+{
+  "analysis": "Suas respostas indicam forte competência de autoconsciência...",
+  "primaryProfile": "A",
+  "secondaryProfile": "B"
+}
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/mentored-tracking/analyze-procrastination">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/mentored-tracking/analyze-procrastination" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "answers": [{ "question": 1, "value": 3 }], "totalScore": 42, "percentage": 52.5, "level": "moderate" }'
+```
+
+```json title="200 OK"
+{
+  "analysis": "Seu nível de procrastinação é moderado, com gatilhos ligados a tarefas longas...",
+  "level": "moderate"
+}
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/mentored-tracking/analyze-attention-memory">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/mentored-tracking/analyze-attention-memory" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "digitSpanResults": [{ "digits": 5, "correct": true }], "stroopResults": [{ "congruent": false, "correct": true, "timeMs": 820 }], "digitSpanMaxDigits": 7, "digitSpanScore": 80, "stroopCorrectAnswers": 28, "stroopAverageTime": 850, "stroopScore": 75, "memoryLevel": "high", "attentionLevel": "medium" }'
+```
+
+```json title="200 OK"
+{
+  "analysis": "Sua memória de trabalho está acima da média (span de 7 dígitos)...",
+  "memoryLevel": "high",
+  "attentionLevel": "medium"
+}
+```
+
+</Accordion>
+
+</AccordionGroup>
 
 #### POST /mentored-tracking/analyze-disc
 
@@ -67,6 +366,156 @@ Analisam respostas de testes com OpenAI e persistem o resultado em `mentored_pro
 Retornam **501 — não implementado**: `POST /extract-transcription`, `POST /{tracking_id}/save-pdf`, `GET /{tracking_id}/action-plan` e `POST /{tracking_id}/generate-action-plan`.
 </Warning>
 
+#### Exemplos
+
+<AccordionGroup>
+
+<Accordion title="GET /api/v2/mentored-tracking/{member_id}">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/mentored-tracking/clx3k9d2f0001mk08yq4w7d1z" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{
+  "id": "a3b4c5d6-e7f8-4a9b-0c1d-2e3f4a5b6c7d",
+  "memberId": "clx3k9d2f0001mk08yq4w7d1z",
+  "officeId": null,
+  "location": "São Paulo/SP",
+  "specialty": "Direito Agrário",
+  "team": "Solo",
+  "blocker": "Captação de clientes",
+  "themes": ["prospecção", "precificação"],
+  "monthlyGoal": "Fechar 3 contratos de consultoria",
+  "goalReason": "Aumentar receita recorrente",
+  "createdAt": "2026-04-01T10:00:00.000000+00:00",
+  "updatedAt": "2026-06-10T15:20:00.000000+00:00"
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Acompanhamento nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/mentored-tracking">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/mentored-tracking" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "memberId": "clx3k9d2f0001mk08yq4w7d1z", "officeId": null, "location": "São Paulo/SP", "specialty": "Direito Agrário" }'
+```
+
+Resposta 201: linha crua de `mentored_tracking` (snake_case do banco):
+
+```json title="201 Created"
+{
+  "id": "a3b4c5d6-e7f8-4a9b-0c1d-2e3f4a5b6c7d",
+  "member_id": "clx3k9d2f0001mk08yq4w7d1z",
+  "office_id": null,
+  "location": "São Paulo/SP",
+  "specialty": "Direito Agrário",
+  "team": null,
+  "blocker": null,
+  "themes": null,
+  "monthly_goal": null,
+  "goal_reason": null,
+  "created_at": "2026-06-12T11:30:02.881000+00:00",
+  "updated_at": "2026-06-12T11:30:02.881000+00:00"
+}
+```
+
+```json title="422 Unprocessable Entity"
+{ "detail": "memberId obrigatorio", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/mentored-tracking/extract-transcription (501)">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/mentored-tracking/extract-transcription" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Extracao de transcricao depende Whisper/IA.", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/mentored-tracking/{tracking_id}/save-pdf (501)">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/mentored-tracking/a3b4c5d6-e7f8-4a9b-0c1d-2e3f4a5b6c7d/save-pdf" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Geracao de PDF nao migrada.", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/mentored-tracking/{tracking_id}/available-months">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/mentored-tracking/a3b4c5d6-e7f8-4a9b-0c1d-2e3f4a5b6c7d/available-months" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+Stub honesto — sempre retorna lista vazia por ora:
+
+```json title="200 OK"
+{ "months": [], "note": "Depende do JSON do action-plan no Nest." }
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/mentored-tracking/{tracking_id}/document-status">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/mentored-tracking/a3b4c5d6-e7f8-4a9b-0c1d-2e3f4a5b6c7d/document-status" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{ "trackingId": "a3b4c5d6-e7f8-4a9b-0c1d-2e3f4a5b6c7d", "documentsCount": 3 }
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/mentored-tracking/{tracking_id}/action-plan (501)">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/mentored-tracking/a3b4c5d6-e7f8-4a9b-0c1d-2e3f4a5b6c7d/action-plan" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Action plan depende JSON proprietario.", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/mentored-tracking/{tracking_id}/generate-action-plan (501)">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/mentored-tracking/a3b4c5d6-e7f8-4a9b-0c1d-2e3f4a5b6c7d/generate-action-plan" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Geracao depende IA.", "code": "http_error" }
+```
+
+</Accordion>
+
+</AccordionGroup>
+
 #### POST /mentored-tracking
 
 <ParamField body="memberId" type="string" required>Member acompanhado.</ParamField>
@@ -89,6 +538,131 @@ Retornam **501 — não implementado**: `POST /extract-transcription`, `POST /{t
 Retornam **501 — não implementado**: `GET /mentored/{tracking_id}`, `PUT /task/{task_id}` e `POST /mentored/{document_id}/initialize-tasks`.
 </Warning>
 
+### Exemplos
+
+<AccordionGroup>
+
+<Accordion title="GET /api/v2/mentored-performance/dashboard">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/mentored-performance/dashboard" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{
+  "stats": {
+    "totalMentoreds": 48,
+    "averageCompletionRate": 62.4,
+    "totalTasksCompleted": 312,
+    "totalTasks": 500,
+    "activeThisWeek": 21
+  },
+  "weeklyTrend": [],
+  "completionDistribution": [
+    { "status": "COMPLETED", "count": 312, "percentage": 62.4 },
+    { "status": "IN_PROGRESS", "count": 80, "percentage": 16.0 },
+    { "status": "PENDING", "count": 96, "percentage": 19.2 },
+    { "status": "SKIPPED", "count": 12, "percentage": 2.4 }
+  ]
+}
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/mentored-performance/mentoreds">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/mentored-performance/mentoreds?search=ana&page=1&limit=12" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{
+  "data": [
+    {
+      "id": "a3b4c5d6-e7f8-4a9b-0c1d-2e3f4a5b6c7d",
+      "memberId": "clx3k9d2f0001mk08yq4w7d1z",
+      "memberName": "Ana Carolina Souza",
+      "memberEmail": "ana.souza@exemplo.com.br",
+      "specialty": "Direito Agrário",
+      "team": "Solo",
+      "documentId": null,
+      "hasActionPlan": false,
+      "totalTasks": 0,
+      "completedTasks": 0,
+      "completionRate": 0,
+      "currentWeek": 1,
+      "lastActivity": "2026-06-10T20:01:12.000000+00:00"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "limit": 12,
+  "totalPages": 1
+}
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/mentored-performance/mentored/{tracking_id} (501)">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/mentored-performance/mentored/a3b4c5d6-e7f8-4a9b-0c1d-2e3f4a5b6c7d" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Detalhe de mentorado com weekly breakdown nao migrado — use Nest legado.", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/mentored-performance/mentored/{tracking_id}/tasks">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/mentored-performance/mentored/a3b4c5d6-e7f8-4a9b-0c1d-2e3f4a5b6c7d/tasks" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+Stub atual — sempre retorna lista vazia:
+
+```json title="200 OK"
+[]
+```
+
+</Accordion>
+
+<Accordion title="PUT /api/v2/mentored-performance/task/{task_id} (501)">
+
+```bash title="Requisição"
+curl -X PUT "https://api.escolapujante.com.br/api/v2/mentored-performance/task/123" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "status": "COMPLETED" }'
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Update de task GDA nao migrado.", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/mentored-performance/mentored/{document_id}/initialize-tasks (501)">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/mentored-performance/mentored/42/initialize-tasks" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Initialize tasks GDA nao migrado.", "code": "http_error" }
+```
+
+</Accordion>
+
+</AccordionGroup>
+
 ## Career Booster (`/career-booster`)
 
 Gestão de carreira dos funcionários de offices apoiadores (perfis, trilhas de carreira e PDIs).
@@ -101,6 +675,173 @@ Gestão de carreira dos funcionários de offices apoiadores (perfis, trilhas de 
 | GET | `/career-booster/offices/{office_id}/employees/{member_id}/pdis` | Listar PDIs | JWT |
 | POST | `/career-booster/offices/{office_id}/employees/{member_id}/pdis` | Criar PDI | JWT |
 | PATCH | `/career-booster/pdis/{pdi_id}` | Atualizar PDI | JWT |
+
+### Exemplos
+
+Acesso por office: ADMIN/COMMUNITY_MANAGER veem qualquer office; demais users só os offices a que pertencem — caso contrário `403 { "detail": "Sem acesso a esse escritorio.", "code": "http_error" }`.
+
+<AccordionGroup>
+
+<Accordion title="GET /api/v2/career-booster/offices/my">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/career-booster/offices/my" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{
+  "offices": [
+    {
+      "id": "clx5m1b8c0001mk08tr4e6f9a",
+      "name": "Souza & Pereira Advocacia",
+      "legalName": "Souza e Pereira Sociedade de Advogados",
+      "document": "12.345.678/0001-90",
+      "email": "contato@souzapereira.exemplo.com.br",
+      "phone": "(11) 3344-5566",
+      "status": "ACTIVE"
+    }
+  ]
+}
+```
+
+User sem office vinculado (e sem role de manager): `{ "offices": [] }`.
+
+</Accordion>
+
+<Accordion title="GET /api/v2/career-booster/offices/{office_id}/employees">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/career-booster/offices/clx5m1b8c0001mk08tr4e6f9a/employees" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{
+  "employees": [
+    {
+      "id": "b4c5d6e7-f8a9-4b0c-1d2e-3f4a5b6c7d8e",
+      "memberId": "clx9q4n7v0001mk08hf2g5j8w",
+      "fullName": "João Pereira da Silva",
+      "email": "joao.pereira@exemplo.com.br",
+      "phone": "(62) 99888-1122",
+      "jobTitle": "Advogado Júnior",
+      "department": "Contencioso",
+      "hiredAt": "2025-02-01",
+      "trackId": "c5d6e7f8-a9b0-4c1d-2e3f-4a5b6c7d8e9f",
+      "trackTitle": "Carreira Jurídica",
+      "roleId": "d6e7f8a9-b0c1-4d2e-3f4a-5b6c7d8e9f0a",
+      "roleTitle": "Advogado Júnior",
+      "roleLevel": 1
+    }
+  ]
+}
+```
+
+```json title="403 Forbidden"
+{ "detail": "Sem acesso a esse escritorio.", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="PATCH /api/v2/career-booster/offices/{office_id}/employees/{member_id}/profile">
+
+Upsert por `(office_id, member_id)` — cria o perfil se ainda não existir.
+
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/career-booster/offices/clx5m1b8c0001mk08tr4e6f9a/employees/clx9q4n7v0001mk08hf2g5j8w/profile" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "jobTitle": "Advogado Pleno", "department": "Contencioso", "hiredAt": "2025-02-01", "trackId": "c5d6e7f8-a9b0-4c1d-2e3f-4a5b6c7d8e9f", "roleId": "d6e7f8a9-b0c1-4d2e-3f4a-5b6c7d8e9f0a" }'
+```
+
+Resposta 200: linha crua de `career_employee_profiles` (snake_case do banco):
+
+```json title="200 OK"
+{
+  "id": "b4c5d6e7-f8a9-4b0c-1d2e-3f4a5b6c7d8e",
+  "office_id": "clx5m1b8c0001mk08tr4e6f9a",
+  "member_id": "clx9q4n7v0001mk08hf2g5j8w",
+  "job_title": "Advogado Pleno",
+  "department": "Contencioso",
+  "hired_at": "2025-02-01",
+  "track_id": "c5d6e7f8-a9b0-4c1d-2e3f-4a5b6c7d8e9f",
+  "role_id": "d6e7f8a9-b0c1-4d2e-3f4a-5b6c7d8e9f0a"
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Perfil de funcionario nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/career-booster/offices/{office_id}/employees/{member_id}/pdis">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/career-booster/offices/clx5m1b8c0001mk08tr4e6f9a/employees/clx9q4n7v0001mk08hf2g5j8w/pdis" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "e7f8a9b0-c1d2-4e3f-4a5b-6c7d8e9f0a1b",
+    "officeId": "clx5m1b8c0001mk08tr4e6f9a",
+    "memberId": "clx9q4n7v0001mk08hf2g5j8w",
+    "title": "PDI 2026 — Contencioso Agrário",
+    "status": "ACTIVE",
+    "startDate": "2026-01-10",
+    "endDate": "2026-12-20",
+    "items": [{ "label": "Concluir trilha de contratos agrários", "done": false }],
+    "notes": "Revisão trimestral com o sócio responsável.",
+    "createdAt": "2026-01-10T09:00:00.000000+00:00",
+    "updatedAt": "2026-06-01T10:00:00.000000+00:00"
+  }
+]
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/career-booster/offices/{office_id}/employees/{member_id}/pdis">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/career-booster/offices/clx5m1b8c0001mk08tr4e6f9a/employees/clx9q4n7v0001mk08hf2g5j8w/pdis" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "title": "PDI 2026 — Contencioso Agrário", "status": "ACTIVE", "endDate": "2026-12-20", "items": [{ "label": "Concluir trilha de contratos agrários", "done": false }], "notes": "Revisão trimestral." }'
+```
+
+Resposta 201: objeto PDI (mesmo shape do GET de PDIs).
+
+```json title="422 Unprocessable Entity (regra de negócio)"
+{ "detail": "title obrigatorio", "code": "validation_error" }
+```
+
+</Accordion>
+
+<Accordion title="PATCH /api/v2/career-booster/pdis/{pdi_id}">
+
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/career-booster/pdis/e7f8a9b0-c1d2-4e3f-4a5b-6c7d8e9f0a1b" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "status": "COMPLETED", "notes": "Concluído antes do prazo." }'
+```
+
+Resposta 200: objeto PDI atualizado.
+
+```json title="404 Not Found"
+{ "detail": "PDI nao encontrado", "code": "not_found" }
+```
+
+```json title="403 Forbidden"
+{ "detail": "Sem acesso a esse escritorio.", "code": "http_error" }
+```
+
+</Accordion>
+
+</AccordionGroup>
 
 ### PATCH .../employees/\{member_id\}/profile
 

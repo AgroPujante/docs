@@ -6,6 +6,22 @@ icon: "address-book"
 
 Lembre a distinção: **users** são contas de acesso (vinculadas ao Supabase Auth), **members** são pessoas físicas (cadastro comercial) e **offices** são escritórios (CNPJ). Veja [Modelos](/escola/modelos).
 
+## Erros comuns
+
+Erros de `HTTPException`/`AppException` saem com `detail` + `code` (handler global em `core/exceptions.py`). O 422 de validação segue o shape padrão do FastAPI.
+
+```json title="401 Unauthorized"
+{ "detail": "Token de autenticacao nao fornecido", "code": "http_error" }
+```
+
+```json title="403 Forbidden (rota MANAGER sem role ADMIN/COMMUNITY_MANAGER)"
+{ "detail": "Acesso restrito", "code": "http_error" }
+```
+
+```json title="422 Unprocessable Entity"
+{ "detail": [{ "loc": ["body", "email"], "msg": "field required", "type": "missing" }] }
+```
+
 ## Users (`/users`)
 
 | Método | Path | Descrição | Auth |
@@ -15,6 +31,145 @@ Lembre a distinção: **users** são contas de acesso (vinculadas ao Supabase Au
 | GET | `/users/{user_id}` | Detalhe de um user | JWT |
 | PATCH | `/users/{user_id}` | Atualizar user | JWT |
 | DELETE | `/users/{user_id}` | Remover user | JWT |
+
+### Exemplos
+
+<AccordionGroup>
+
+<Accordion title="GET /api/v2/users/profile/me">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/users/profile/me" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{
+  "user": {
+    "id": "clx3k9d2f0002mk08ab1c2d3e",
+    "email": "ana.souza@exemplo.com.br",
+    "name": "Ana Carolina Souza",
+    "role": "OPERATOR",
+    "userType": "MENTORED",
+    "mustChangePassword": false,
+    "avatarUrl": null,
+    "createdAt": "2025-11-03T14:22:10.512000+00:00",
+    "updatedAt": "2026-06-01T09:15:44.103000+00:00"
+  },
+  "enrollment": {
+    "memberId": "clx3k9d2f0001mk08yq4w7d1z",
+    "mentorship": {
+      "active": true,
+      "subscriptionId": "clx7p2m9t0003mk08w1r5b8qu",
+      "startDate": "2026-01-15T00:00:00+00:00",
+      "endDate": "2027-01-15T00:00:00+00:00",
+      "nextDueDate": "2026-07-15T00:00:00+00:00",
+      "isLate": false
+    },
+    "schoolTrial": null
+  }
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Usuario nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/users">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/users?search=ana&role=OPERATOR" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "clx3k9d2f0002mk08ab1c2d3e",
+    "email": "ana.souza@exemplo.com.br",
+    "name": "Ana Carolina Souza",
+    "phone": "(11) 98765-4321",
+    "role": "OPERATOR",
+    "createdAt": "2025-11-03T14:22:10.512000+00:00",
+    "updatedAt": "2026-06-01T09:15:44.103000+00:00"
+  }
+]
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/users/{user_id}">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/users/clx3k9d2f0002mk08ab1c2d3e" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{
+  "id": "clx3k9d2f0002mk08ab1c2d3e",
+  "email": "ana.souza@exemplo.com.br",
+  "name": "Ana Carolina Souza",
+  "phone": null,
+  "role": "OPERATOR",
+  "createdAt": "2025-11-03T14:22:10.512000+00:00",
+  "updatedAt": "2026-06-01T09:15:44.103000+00:00"
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Usuario nao encontrado", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="PATCH /api/v2/users/{user_id}">
+
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/users/clx3k9d2f0002mk08ab1c2d3e" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Ana Carolina Souza Lima", "phone": "(11) 98765-4321", "role": "COMMUNITY_MANAGER" }'
+```
+
+```json title="200 OK"
+{
+  "id": "clx3k9d2f0002mk08ab1c2d3e",
+  "email": "ana.souza@exemplo.com.br",
+  "name": "Ana Carolina Souza Lima",
+  "phone": null,
+  "role": "COMMUNITY_MANAGER",
+  "createdAt": "2025-11-03T14:22:10.512000+00:00",
+  "updatedAt": "2026-06-12T11:30:02.881000+00:00"
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Usuario nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+<Accordion title="DELETE /api/v2/users/{user_id}">
+
+```bash title="Requisição"
+curl -X DELETE "https://api.escolapujante.com.br/api/v2/users/clx3k9d2f0002mk08ab1c2d3e" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{ "id": "clx3k9d2f0002mk08ab1c2d3e" }
+```
+
+```json title="404 Not Found"
+{ "detail": "Usuario nao encontrado", "code": "http_error" }
+```
+
+</Accordion>
+
+</AccordionGroup>
 
 ### PATCH /users/\{user_id\}
 
@@ -38,6 +193,228 @@ Lembre a distinção: **users** são contas de acesso (vinculadas ao Supabase Au
 <Warning>
 `POST /members/bulk-create-users` retorna **501 — não implementado**.
 </Warning>
+
+### Exemplos
+
+<AccordionGroup>
+
+<Accordion title="GET /api/v2/members">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/members?search=ana&status=ACTIVE" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "clx3k9d2f0001mk08yq4w7d1z",
+    "fullName": "Ana Carolina Souza",
+    "email": "ana.souza@exemplo.com.br",
+    "phone": "(11) 98765-4321",
+    "cpf": "123.456.789-09",
+    "gender": "FEMALE",
+    "status": "ACTIVE",
+    "createdAt": "2025-11-03T14:22:10.512000+00:00",
+    "updatedAt": "2026-06-01T09:15:44.103000+00:00",
+    "lastLoginAt": "2026-06-10T20:01:12.000000+00:00",
+    "userType": "MENTORED",
+    "user": { "lastLoginAt": "2026-06-10T20:01:12.000000+00:00", "userType": "MENTORED" },
+    "subscriptions": [
+      {
+        "id": "clx7p2m9t0003mk08w1r5b8qu",
+        "status": "ACTIVE",
+        "startDate": "2026-01-15T00:00:00+00:00",
+        "endDate": "2027-01-15T00:00:00+00:00",
+        "price": 297.0,
+        "billingCycle": "ANNUAL",
+        "isLate": false,
+        "cancellationReason": null,
+        "product": { "name": "Clube de Membros", "type": "MEMBERS_CLUB" },
+        "productName": "Clube de Membros",
+        "productType": "MEMBERS_CLUB"
+      }
+    ]
+  }
+]
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/members">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/members" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "fullName": "João Pereira da Silva", "email": "joao.pereira@exemplo.com.br", "phone": "(62) 99888-1122", "cpf": "987.654.321-00", "gender": "MALE", "status": "ACTIVE" }'
+```
+
+```json title="201 Created"
+{
+  "id": "clx9q4n7v0001mk08hf2g5j8w",
+  "fullName": "João Pereira da Silva",
+  "email": "joao.pereira@exemplo.com.br",
+  "phone": "(62) 99888-1122",
+  "cpf": "987.654.321-00",
+  "gender": "MALE",
+  "status": "ACTIVE",
+  "createdAt": "2026-06-12T11:30:02.881000+00:00",
+  "updatedAt": "2026-06-12T11:30:02.881000+00:00"
+}
+```
+
+```json title="422 Unprocessable Entity (regra de negócio)"
+{ "detail": "Informe o nome do membro.", "code": "validation_error" }
+```
+
+Email duplicado (unique violation traduzida pelo handler de `APIError`): `409 { "detail": "Registro ja existe.", "code": "conflict" }`.
+
+</Accordion>
+
+<Accordion title="PATCH /api/v2/members/{member_id}">
+
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/members/clx9q4n7v0001mk08hf2g5j8w" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "phone": "(62) 99777-3344", "status": "INACTIVE" }'
+```
+
+```json title="200 OK"
+{
+  "id": "clx9q4n7v0001mk08hf2g5j8w",
+  "fullName": "João Pereira da Silva",
+  "email": "joao.pereira@exemplo.com.br",
+  "phone": "(62) 99777-3344",
+  "cpf": "987.654.321-00",
+  "gender": "MALE",
+  "status": "INACTIVE",
+  "createdAt": "2026-06-12T11:30:02.881000+00:00",
+  "updatedAt": "2026-06-12T11:45:10.020000+00:00"
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Membro nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+<Accordion title="DELETE /api/v2/members/{member_id}">
+
+```bash title="Requisição"
+curl -X DELETE "https://api.escolapujante.com.br/api/v2/members/clx9q4n7v0001mk08hf2g5j8w" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{ "id": "clx9q4n7v0001mk08hf2g5j8w" }
+```
+
+```json title="404 Not Found"
+{ "detail": "Membro nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/members/send-email">
+
+Hoje só suporta `emailType: "WELCOME_SCHOOL"` — qualquer outro tipo retorna 501.
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/members/send-email" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "memberIds": ["clx3k9d2f0001mk08yq4w7d1z", "clx9q4n7v0001mk08hf2g5j8w"], "emailType": "WELCOME_SCHOOL" }'
+```
+
+```json title="200 OK"
+{
+  "sent": 1,
+  "failed": 0,
+  "skipped": 1,
+  "details": [
+    { "memberName": "Ana Carolina Souza", "memberEmail": "ana.souza@exemplo.com.br", "status": "SENT", "errorMessage": null },
+    { "memberName": "João Pereira da Silva", "memberEmail": "", "status": "SKIPPED", "errorMessage": "Email vazio ou invalido." }
+  ]
+}
+```
+
+```json title="501 Not Implemented (outro emailType)"
+{ "detail": "Tipo 'RESET_PASSWORD' nao suportado neste endpoint. Apenas WELCOME_SCHOOL. RESET_PASSWORD virou self-service (usuario clica em 'Esqueci minha senha').", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/members/email-logs">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/members/email-logs?emailType=WELCOME_SCHOOL&limit=50&offset=0" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{
+  "logs": [
+    {
+      "id": "9b1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f",
+      "memberName": "Ana Carolina Souza",
+      "memberEmail": "ana.souza@exemplo.com.br",
+      "emailType": "WELCOME_SCHOOL",
+      "status": "SENT",
+      "errorMessage": null,
+      "createdAt": "2026-06-12T11:50:33.412000+00:00"
+    }
+  ],
+  "total": 1
+}
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/members/bulk-assign-plan">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/members/bulk-assign-plan" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "memberIds": ["clx3k9d2f0001mk08yq4w7d1z", "clx9q4n7v0001mk08hf2g5j8w"], "productType": "MEMBERS_CLUB" }'
+```
+
+```json title="200 OK"
+{
+  "assigned": 1,
+  "exists": 1,
+  "failed": 0,
+  "productName": "Clube de Membros",
+  "details": [
+    { "memberName": "Ana Carolina Souza", "memberEmail": "ana.souza@exemplo.com.br", "status": "EXISTS", "errorMessage": "Ja possui assinatura ativa deste tipo" },
+    { "memberName": "João Pereira da Silva", "memberEmail": "joao.pereira@exemplo.com.br", "status": "ASSIGNED", "errorMessage": null }
+  ]
+}
+```
+
+```json title="422 Unprocessable Entity"
+{ "detail": "Produto do tipo MEMBERS_CLUB nao encontrado.", "code": "validation_error" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/members/bulk-create-users (501)">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/members/bulk-create-users" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Criacao em massa de usuarios + envio de welcome email ainda nao migrada. Use o endpoint equivalente no Nest legado (/api/members/bulk-create-users) ate a Onda 2.", "code": "http_error" }
+```
+
+</Accordion>
+
+</AccordionGroup>
 
 ### POST /members
 
@@ -67,6 +444,112 @@ Lembre a distinção: **users** são contas de acesso (vinculadas ao Supabase Au
 | PATCH | `/offices/{office_id}` | Atualizar office | MANAGER |
 | DELETE | `/offices/{office_id}` | Remover office | MANAGER |
 
+### Exemplos
+
+<AccordionGroup>
+
+<Accordion title="GET /api/v2/offices">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/offices?search=advocacia&status=ACTIVE" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "clx5m1b8c0001mk08tr4e6f9a",
+    "name": "Souza & Pereira Advocacia",
+    "legalName": "Souza e Pereira Sociedade de Advogados",
+    "document": "12.345.678/0001-90",
+    "email": "contato@souzapereira.exemplo.com.br",
+    "phone": "(11) 3344-5566",
+    "status": "ACTIVE",
+    "createdAt": "2025-08-20T13:00:00.000000+00:00",
+    "updatedAt": "2026-05-30T16:42:18.207000+00:00"
+  }
+]
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/offices">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/offices" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Souza & Pereira Advocacia", "legalName": "Souza e Pereira Sociedade de Advogados", "document": "12.345.678/0001-90", "email": "contato@souzapereira.exemplo.com.br", "phone": "(11) 3344-5566", "status": "ACTIVE" }'
+```
+
+```json title="201 Created"
+{
+  "id": "clx5m1b8c0001mk08tr4e6f9a",
+  "name": "Souza & Pereira Advocacia",
+  "legalName": "Souza e Pereira Sociedade de Advogados",
+  "document": "12.345.678/0001-90",
+  "email": "contato@souzapereira.exemplo.com.br",
+  "phone": "(11) 3344-5566",
+  "status": "ACTIVE",
+  "createdAt": "2026-06-12T11:30:02.881000+00:00",
+  "updatedAt": "2026-06-12T11:30:02.881000+00:00"
+}
+```
+
+```json title="422 Unprocessable Entity (regra de negócio)"
+{ "detail": "Informe o nome do escritorio.", "code": "validation_error" }
+```
+
+</Accordion>
+
+<Accordion title="PATCH /api/v2/offices/{office_id}">
+
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/offices/clx5m1b8c0001mk08tr4e6f9a" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "phone": "(11) 3344-7788", "status": "INACTIVE" }'
+```
+
+```json title="200 OK"
+{
+  "id": "clx5m1b8c0001mk08tr4e6f9a",
+  "name": "Souza & Pereira Advocacia",
+  "legalName": "Souza e Pereira Sociedade de Advogados",
+  "document": "12.345.678/0001-90",
+  "email": "contato@souzapereira.exemplo.com.br",
+  "phone": "(11) 3344-7788",
+  "status": "INACTIVE",
+  "createdAt": "2025-08-20T13:00:00.000000+00:00",
+  "updatedAt": "2026-06-12T11:48:55.610000+00:00"
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Escritorio nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+<Accordion title="DELETE /api/v2/offices/{office_id}">
+
+```bash title="Requisição"
+curl -X DELETE "https://api.escolapujante.com.br/api/v2/offices/clx5m1b8c0001mk08tr4e6f9a" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{ "id": "clx5m1b8c0001mk08tr4e6f9a" }
+```
+
+```json title="404 Not Found"
+{ "detail": "Escritorio nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+</AccordionGroup>
+
 ### POST /offices
 
 <ParamField body="name" type="string" required>Nome fantasia.</ParamField>
@@ -87,3 +570,85 @@ Lembre a distinção: **users** são contas de acesso (vinculadas ao Supabase Au
 <Warning>
 `GET /addresses/cities/list` retorna **501 — não implementado**.
 </Warning>
+
+### Exemplos
+
+<AccordionGroup>
+
+<Accordion title="GET /api/v2/addresses">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/addresses?officeId=clx5m1b8c0001mk08tr4e6f9a&page=1&pageSize=20" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{
+  "data": [
+    {
+      "id": "clx6n2c9d0001mk08us5f7g0b",
+      "street": "Avenida Paulista",
+      "number": "1578",
+      "complement": "Conjunto 1203",
+      "district": "Bela Vista",
+      "city": "São Paulo",
+      "state": "SP",
+      "postalCode": "01310-200",
+      "country": "Brasil",
+      "officeId": "clx5m1b8c0001mk08tr4e6f9a",
+      "memberId": null,
+      "createdAt": "2025-08-20T13:00:00.000000+00:00",
+      "updatedAt": "2025-08-20T13:00:00.000000+00:00"
+    }
+  ],
+  "meta": { "page": 1, "pageSize": 20, "totalItems": 1, "totalPages": 1 }
+}
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/addresses/{address_id}">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/addresses/clx6n2c9d0001mk08us5f7g0b" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{
+  "id": "clx6n2c9d0001mk08us5f7g0b",
+  "street": "Avenida Paulista",
+  "number": "1578",
+  "complement": "Conjunto 1203",
+  "district": "Bela Vista",
+  "city": "São Paulo",
+  "state": "SP",
+  "postalCode": "01310-200",
+  "country": "Brasil",
+  "officeId": "clx5m1b8c0001mk08tr4e6f9a",
+  "memberId": null,
+  "createdAt": "2025-08-20T13:00:00.000000+00:00",
+  "updatedAt": "2025-08-20T13:00:00.000000+00:00"
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Endereco nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/addresses/cities/list (501)">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/addresses/cities/list" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Listagem de cidades depende da tabela `cities` (fora do schema pujante). Use Nest legado.", "code": "http_error" }
+```
+
+</Accordion>
+
+</AccordionGroup>

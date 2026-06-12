@@ -5,6 +5,50 @@ description: "Endpoints de operação do painel: tickets, reuniões, acesso ao p
 
 Estes endpoints cobrem a operação interna do time. A maioria exige **JWT Bearer** (escrita nunca aceita API key). Veja [Autenticação](/admin/autenticacao).
 
+<Note>
+A URL base `https://admin-api.pujante.com.br` usada nos exemplos é **ilustrativa** — a base real depende do deploy no Railway.
+</Note>
+
+## Erros comuns
+
+Shapes padrão do FastAPI, válidos para todos os endpoints desta página. Os exemplos por endpoint referenciam esta seção em vez de repeti-los.
+
+```json title="401 Unauthorized — sem credencial"
+{ "detail": "nao autenticado" }
+```
+
+```json title="401 Unauthorized — JWT inválido ou expirado"
+{ "detail": "token invalido: Signature has expired" }
+```
+
+```json title="401 Unauthorized — API key inválida, revogada ou expirada"
+{ "detail": "API key invalida ou expirada" }
+```
+
+```json title="403 Forbidden — email fora de ALLOWED_ADMIN_EMAILS"
+{ "detail": "usuario nao autorizado" }
+```
+
+Caso específico do Admin: API key tentando um método de **escrita** (POST/PATCH/PUT/DELETE) — a chave é read-only e só passa em GET. Como quase tudo nesta página é escrita, API key praticamente não serve aqui:
+
+```json title="403 Forbidden — API key em método de escrita"
+{ "detail": "API key e somente leitura — apenas requisicoes GET sao permitidas" }
+```
+
+```json title="422 Unprocessable Entity — validação de body/params"
+{
+  "detail": [
+    {
+      "type": "string_too_short",
+      "loc": ["body", "problema"],
+      "msg": "String should have at least 1 character",
+      "input": "",
+      "ctx": { "min_length": 1 }
+    }
+  ]
+}
+```
+
 ## Tickets
 
 Tickets internos de suporte/incidentes, gravados em `pujante.admin_tickets`.
@@ -60,6 +104,141 @@ Observações adicionais.
 URLs de imagens anexadas.
 </ParamField>
 
+<AccordionGroup>
+<Accordion title="GET /admin/tickets">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/tickets?status=aberto&sistema=agropujante&prioridade=alta" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "3f6a1b2c-4d5e-6f7a-8b9c-0d1e2f3a4b5c",
+    "data": "2026-06-11",
+    "responsavel_nome": "Ana Beatriz",
+    "responsavel_email": "ana@pujante.com.br",
+    "responsavel_telefone": "+55 62 99777-1234",
+    "sistema": "agropujante",
+    "prioridade": "alta",
+    "problema": "Página de jurisprudência retornando 500 para usuários PRO",
+    "observacao": "Começou após o deploy de ontem à noite",
+    "status": "aberto",
+    "imagens": ["https://storage.pujante.com.br/tickets/print-erro.png"],
+    "resolvido_em": null,
+    "criado_por": "pedro@pujante.com.br",
+    "created_at": "2026-06-11T16:40:00+00:00",
+    "updated_at": "2026-06-11T16:40:00+00:00"
+  }
+]
+```
+
+Se a migration ainda não foi aplicada:
+
+```json title="503 Service Unavailable"
+{ "detail": "A tabela pujante.admin_tickets ainda nao existe. Aplique a migration 005_admin_tickets.sql no Supabase." }
+```
+
+Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="POST /admin/tickets">
+```bash title="Requisição (JWT)"
+curl -X POST "https://admin-api.pujante.com.br/admin/tickets" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": "2026-06-11",
+    "responsavel_nome": "Ana Beatriz",
+    "responsavel_email": "ana@pujante.com.br",
+    "sistema": "agropujante",
+    "prioridade": "alta",
+    "problema": "Página de jurisprudência retornando 500 para usuários PRO",
+    "observacao": "Começou após o deploy de ontem à noite",
+    "imagens": []
+  }'
+```
+
+```json title="201 Created"
+{
+  "id": "3f6a1b2c-4d5e-6f7a-8b9c-0d1e2f3a4b5c",
+  "data": "2026-06-11",
+  "responsavel_nome": "Ana Beatriz",
+  "responsavel_email": "ana@pujante.com.br",
+  "responsavel_telefone": null,
+  "sistema": "agropujante",
+  "prioridade": "alta",
+  "problema": "Página de jurisprudência retornando 500 para usuários PRO",
+  "observacao": "Começou após o deploy de ontem à noite",
+  "status": "aberto",
+  "imagens": [],
+  "resolvido_em": null,
+  "criado_por": "pedro@pujante.com.br",
+  "created_at": "2026-06-11T16:40:00+00:00",
+  "updated_at": "2026-06-11T16:40:00+00:00"
+}
+```
+
+```json title="500 Internal Server Error — insert sem retorno"
+{ "detail": "falha ao criar chamado" }
+```
+
+Erros 401/403/422 e 503 (migration): veja [Erros comuns](#erros-comuns) e o GET acima.
+</Accordion>
+
+<Accordion title="PATCH /admin/tickets/{id}">
+```bash title="Requisição (JWT) — marcar resolvido"
+curl -X PATCH "https://admin-api.pujante.com.br/admin/tickets/3f6a1b2c-4d5e-6f7a-8b9c-0d1e2f3a4b5c" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{ "status": "resolvido" }'
+```
+
+```json title="200 OK — resolvido_em preenchido automaticamente"
+{
+  "id": "3f6a1b2c-4d5e-6f7a-8b9c-0d1e2f3a4b5c",
+  "data": "2026-06-11",
+  "responsavel_nome": "Ana Beatriz",
+  "responsavel_email": "ana@pujante.com.br",
+  "responsavel_telefone": null,
+  "sistema": "agropujante",
+  "prioridade": "alta",
+  "problema": "Página de jurisprudência retornando 500 para usuários PRO",
+  "observacao": "Começou após o deploy de ontem à noite",
+  "status": "resolvido",
+  "imagens": [],
+  "resolvido_em": "2026-06-12T14:20:11+00:00",
+  "criado_por": "pedro@pujante.com.br",
+  "created_at": "2026-06-11T16:40:00+00:00",
+  "updated_at": "2026-06-12T14:20:11+00:00"
+}
+```
+
+```json title="400 Bad Request — body vazio"
+{ "detail": "nada para atualizar" }
+```
+
+```json title="404 Not Found — id inexistente"
+{ "detail": "chamado nao encontrado" }
+```
+
+Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="DELETE /admin/tickets/{id}">
+```bash title="Requisição (JWT)"
+curl -X DELETE "https://admin-api.pujante.com.br/admin/tickets/3f6a1b2c-4d5e-6f7a-8b9c-0d1e2f3a4b5c" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem corpo)
+```
+
+Erros 401/403: veja [Erros comuns](#erros-comuns).
+</Accordion>
+</AccordionGroup>
+
 ## Reuniões
 
 Registro de reuniões do time em `pujante.admin_reunioes`, com suporte a áudio e transcrição.
@@ -101,6 +280,126 @@ Transcrição em texto.
 URL do arquivo de transcrição.
 </ParamField>
 
+<AccordionGroup>
+<Accordion title="GET /admin/reunioes">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/reunioes" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "7c8d9e0f-1a2b-3c4d-5e6f-7a8b9c0d1e2f",
+    "data": "2026-06-10",
+    "assunto": "Planejamento Q3 — Escola Pujante",
+    "participantes": "Pedro, Ana, Thiago, Kevin",
+    "descricao": "Definição das trilhas novas e meta de MRR do trimestre",
+    "audio_url": "https://storage.pujante.com.br/reunioes/2026-06-10-q3.mp3",
+    "transcricao_texto": null,
+    "transcricao_arquivo_url": "https://storage.pujante.com.br/reunioes/2026-06-10-q3.txt",
+    "criado_por": "pedro@pujante.com.br",
+    "created_at": "2026-06-10T18:05:00+00:00",
+    "updated_at": "2026-06-10T18:05:00+00:00"
+  }
+]
+```
+
+Se a migration ainda não foi aplicada:
+
+```json title="503 Service Unavailable"
+{ "detail": "A tabela pujante.admin_reunioes ainda nao existe. Aplique a migration 014_admin_reunioes.sql no Supabase." }
+```
+
+Erros 401/403: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="POST /admin/reunioes">
+```bash title="Requisição (JWT)"
+curl -X POST "https://admin-api.pujante.com.br/admin/reunioes" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": "2026-06-10",
+    "assunto": "Planejamento Q3 — Escola Pujante",
+    "participantes": "Pedro, Ana, Thiago, Kevin",
+    "descricao": "Definição das trilhas novas e meta de MRR do trimestre",
+    "audio_url": "https://storage.pujante.com.br/reunioes/2026-06-10-q3.mp3"
+  }'
+```
+
+```json title="201 Created"
+{
+  "id": "7c8d9e0f-1a2b-3c4d-5e6f-7a8b9c0d1e2f",
+  "data": "2026-06-10",
+  "assunto": "Planejamento Q3 — Escola Pujante",
+  "participantes": "Pedro, Ana, Thiago, Kevin",
+  "descricao": "Definição das trilhas novas e meta de MRR do trimestre",
+  "audio_url": "https://storage.pujante.com.br/reunioes/2026-06-10-q3.mp3",
+  "transcricao_texto": null,
+  "transcricao_arquivo_url": null,
+  "criado_por": "pedro@pujante.com.br",
+  "created_at": "2026-06-10T18:05:00+00:00",
+  "updated_at": "2026-06-10T18:05:00+00:00"
+}
+```
+
+```json title="500 Internal Server Error — insert sem retorno"
+{ "detail": "falha ao criar reuniao" }
+```
+
+Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="PATCH /admin/reunioes/{id}">
+```bash title="Requisição (JWT)"
+curl -X PATCH "https://admin-api.pujante.com.br/admin/reunioes/7c8d9e0f-1a2b-3c4d-5e6f-7a8b9c0d1e2f" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{ "transcricao_texto": "Resumo: aprovadas 3 trilhas novas para o Q3..." }'
+```
+
+```json title="200 OK"
+{
+  "id": "7c8d9e0f-1a2b-3c4d-5e6f-7a8b9c0d1e2f",
+  "data": "2026-06-10",
+  "assunto": "Planejamento Q3 — Escola Pujante",
+  "participantes": "Pedro, Ana, Thiago, Kevin",
+  "descricao": "Definição das trilhas novas e meta de MRR do trimestre",
+  "audio_url": "https://storage.pujante.com.br/reunioes/2026-06-10-q3.mp3",
+  "transcricao_texto": "Resumo: aprovadas 3 trilhas novas para o Q3...",
+  "transcricao_arquivo_url": null,
+  "criado_por": "pedro@pujante.com.br",
+  "created_at": "2026-06-10T18:05:00+00:00",
+  "updated_at": "2026-06-12T14:25:00+00:00"
+}
+```
+
+```json title="400 Bad Request — body vazio"
+{ "detail": "nada para atualizar" }
+```
+
+```json title="404 Not Found — id inexistente"
+{ "detail": "reuniao nao encontrada" }
+```
+
+Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="DELETE /admin/reunioes/{id}">
+```bash title="Requisição (JWT)"
+curl -X DELETE "https://admin-api.pujante.com.br/admin/reunioes/7c8d9e0f-1a2b-3c4d-5e6f-7a8b9c0d1e2f" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem corpo)
+```
+
+Erros 401/403: veja [Erros comuns](#erros-comuns).
+</Accordion>
+</AccordionGroup>
+
 ## Panel access
 
 Gestão de membros e cargos do painel (RBAC). Detalhes em [Autenticação](/admin/autenticacao#rbac-cargos-do-painel).
@@ -113,6 +412,139 @@ Gestão de membros e cargos do painel (RBAC). Detalhes em [Autenticação](/admi
 | DELETE | `/admin/panel-access/members/{member_id}` | Remove membro | JWT |
 | GET | `/admin/panel-access/logs` | Últimas 200 atividades | JWT (administrador ou auditoria) |
 | POST | `/admin/panel-access/log-login` | Registra acesso ao painel | JWT |
+
+<AccordionGroup>
+<Accordion title="GET /admin/panel-access/me">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/panel-access/me" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "email": "pedro@pujante.com.br", "cargo": "administrador" }
+```
+
+Cargos possíveis: `administrador`, `editorial`, `financeiro`, `auditoria`. Quem não tem registro é tratado como `administrador` (retrocompat). Erros 401/403: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="GET /admin/panel-access/members">
+```bash title="Requisição (JWT — exige cargo administrador)"
+curl "https://admin-api.pujante.com.br/admin/panel-access/members" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+    "email": "ana@pujante.com.br",
+    "cargo": "editorial",
+    "criado_por": "pedro@pujante.com.br"
+  }
+]
+```
+
+```json title="403 Forbidden — cargo insuficiente"
+{ "detail": "Cargo sem permissão para esta ação." }
+```
+
+Se a migration ainda não foi aplicada:
+
+```json title="503 Service Unavailable"
+{ "detail": "Tabelas de acesso ainda não existem. Aplique a migration 006_admin_panel_access.sql no Supabase." }
+```
+</Accordion>
+
+<Accordion title="POST /admin/panel-access/members">
+```bash title="Requisição (JWT — exige cargo administrador)"
+curl -X POST "https://admin-api.pujante.com.br/admin/panel-access/members" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{ "email": "kevin@pujante.com.br", "cargo": "financeiro" }'
+```
+
+```json title="201 Created"
+{
+  "id": "9d0e1f2a-3b4c-5d6e-7f8a-9b0c1d2e3f4a",
+  "email": "kevin@pujante.com.br",
+  "cargo": "financeiro",
+  "criado_por": "pedro@pujante.com.br"
+}
+```
+
+```json title="400 Bad Request — email vazio"
+{ "detail": "e-mail obrigatório" }
+```
+
+```json title="403 Forbidden — cargo insuficiente"
+{ "detail": "Cargo sem permissão para esta ação." }
+```
+
+`cargo` fora de `administrador|editorial|financeiro|auditoria` → **422**. Erros 401/403 genéricos: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="DELETE /admin/panel-access/members/{member_id}">
+```bash title="Requisição (JWT — exige cargo administrador)"
+curl -X DELETE "https://admin-api.pujante.com.br/admin/panel-access/members/9d0e1f2a-3b4c-5d6e-7f8a-9b0c1d2e3f4a" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem corpo — a pessoa volta a ser tratada como administrador)
+```
+
+```json title="403 Forbidden — cargo insuficiente"
+{ "detail": "Cargo sem permissão para esta ação." }
+```
+</Accordion>
+
+<Accordion title="GET /admin/panel-access/logs">
+```bash title="Requisição (JWT — administrador ou auditoria)"
+curl "https://admin-api.pujante.com.br/admin/panel-access/logs" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "at": "2026-06-12T14:20:11+00:00",
+    "actor_email": "pedro@pujante.com.br",
+    "action": "chamado.resolver",
+    "detail": "Página de jurisprudência retornando 500 para usuários PRO",
+    "entity_type": "chamado",
+    "entity_id": "3f6a1b2c-4d5e-6f7a-8b9c-0d1e2f3a4b5c",
+    "payload": null
+  },
+  {
+    "at": "2026-06-12T09:01:00+00:00",
+    "actor_email": "ana@pujante.com.br",
+    "action": "login",
+    "detail": "acesso ao painel",
+    "entity_type": null,
+    "entity_id": null,
+    "payload": null
+  }
+]
+```
+
+```json title="403 Forbidden — cargo insuficiente"
+{ "detail": "Cargo sem permissão para esta ação." }
+```
+</Accordion>
+
+<Accordion title="POST /admin/panel-access/log-login">
+```bash title="Requisição (JWT)"
+curl -X POST "https://admin-api.pujante.com.br/admin/panel-access/log-login" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem corpo — registro é best-effort, nunca falha a chamada)
+```
+
+Erros 401/403: veja [Erros comuns](#erros-comuns).
+</Accordion>
+</AccordionGroup>
 
 ## Cobrança notes
 
@@ -127,6 +559,81 @@ Anotações de cobrança vinculadas a um assinante, em `pujante.cobranca_notes`.
 <ParamField body="note" type="string" required>
 Texto da anotação, de 1 a 2000 caracteres.
 </ParamField>
+
+<AccordionGroup>
+<Accordion title="GET /admin/cobranca-notes/{subscriber_id}">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/cobranca-notes/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "n_5f6a7b8c-9d0e-1f2a-3b4c-5d6e7f8a9b0c",
+    "subscriber_id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+    "author_email": "kevin@pujante.com.br",
+    "note": "Cobrei por WhatsApp dia 10/06 — pediu boleto com novo vencimento",
+    "created_at": "2026-06-10T13:30:00+00:00"
+  }
+]
+```
+
+```json title="503 Service Unavailable — tabela indisponível"
+{ "detail": "Anotações de cobrança indisponíveis no momento." }
+```
+
+```json title="500 Internal Server Error — erro de banco"
+{ "detail": "Erro ao acessar as anotações de cobrança." }
+```
+
+Erros 401/403: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="POST /admin/cobranca-notes/{subscriber_id}">
+```bash title="Requisição (JWT)"
+curl -X POST "https://admin-api.pujante.com.br/admin/cobranca-notes/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{ "note": "Cobrei por WhatsApp dia 10/06 — pediu boleto com novo vencimento" }'
+```
+
+```json title="201 Created"
+{
+  "id": "n_5f6a7b8c-9d0e-1f2a-3b4c-5d6e7f8a9b0c",
+  "subscriber_id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+  "author_email": "pedro@pujante.com.br",
+  "note": "Cobrei por WhatsApp dia 10/06 — pediu boleto com novo vencimento",
+  "created_at": "2026-06-12T14:31:00+00:00"
+}
+```
+
+Nota só com espaços em branco (passa no Pydantic, falha no strip):
+
+```json title="422 Unprocessable Entity — nota vazia"
+{ "detail": "nota vazia" }
+```
+
+```json title="500 Internal Server Error — insert sem retorno"
+{ "detail": "falha ao gravar anotacao" }
+```
+
+Erros 401/403/422 genéricos: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="DELETE /admin/cobranca-notes/note/{note_id}">
+```bash title="Requisição (JWT)"
+curl -X DELETE "https://admin-api.pujante.com.br/admin/cobranca-notes/note/n_5f6a7b8c-9d0e-1f2a-3b4c-5d6e7f8a9b0c" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem corpo)
+```
+
+Erros 401/403: veja [Erros comuns](#erros-comuns).
+</Accordion>
+</AccordionGroup>
 
 ## Custos
 
@@ -150,24 +657,28 @@ Mês de referência no formato `YYYY-MM`.
 
 ### POST /admin/custos
 
-<ParamField body="mes" type="string" required>
-Mês de competência (`YYYY-MM`).
-</ParamField>
-
-<ParamField body="categoria" type="string" required>
-Categoria (use os valores de `/admin/custos/taxonomias`).
-</ParamField>
-
-<ParamField body="frente" type="string" required>
-Frente de negócio.
-</ParamField>
-
 <ParamField body="descricao" type="string" required>
 Descrição do custo.
 </ParamField>
 
-<ParamField body="valor" type="number" required>
+<ParamField body="valor_brl" type="number" required>
 Valor em reais.
+</ParamField>
+
+<ParamField body="data_competencia" type="string" required>
+Data de competência (`YYYY-MM-DD`).
+</ParamField>
+
+<ParamField body="categoria" type="string">
+Categoria — validada contra os valores de `/admin/custos/taxonomias`.
+</ParamField>
+
+<ParamField body="frente" type="string">
+Frente de negócio — validada contra as taxonomias.
+</ParamField>
+
+<ParamField body="status" type="string">
+Status de pagamento.
 </ParamField>
 
 <ParamField body="forma_pagamento" type="string">
@@ -175,16 +686,248 @@ Forma de pagamento.
 </ParamField>
 
 <ParamField body="frequencia" type="string">
-Frequência (ex.: fixo mensal, pontual).
+Frequência (ex.: mensal, trimestral, anual) — relevante quando `recorrente` é true.
 </ParamField>
 
-<ParamField body="status" type="string">
-Status de pagamento.
+<ParamField body="recorrente" type="boolean">
+Marca o custo como recorrente.
 </ParamField>
 
-<ParamField body="observacao" type="string">
-Observações.
-</ParamField>
+Demais campos opcionais do `CustoIn`: `data_vencimento`, `data_pagamento`, `fornecedor`, `aprovado_por`, `tags`, `anexo_url`, `observacao`.
+
+<AccordionGroup>
+<Accordion title="GET /admin/custos/taxonomias">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/custos/taxonomias" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "categorias": ["Infraestrutura", "IA & APIs", "Software & Produtividade", "Marketing & Aquisição", "Conteúdo & Pesquisa", "Pessoal & Equipe", "Parceiros & Consultorias", "Viagens & Deslocamento", "Impostos & Tarifas", "Estrutura & Administrativo"],
+  "frentes": ["Mentoria GDA", "Editorial", "Escola Pujante", "Plataforma Pujante", "Clube de Membros", "Escritórios Apoiadores", "Estrutura/Holding"],
+  "formas_pagamento": ["pix", "boleto", "cartao_credito", "debito", "transferencia", "dinheiro"],
+  "frequencias": ["mensal", "trimestral", "anual"],
+  "statuses": ["a_pagar", "pago", "atrasado", "cancelado"]
+}
+```
+
+Erros 401/403: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="GET /admin/custos/kpis">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/custos/kpis?mes=2026-06" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "custo_mes": 18420.5,
+  "custo_mes_anterior": 17110.0,
+  "variacao_pct": 7.7,
+  "fixos_recorrentes": 11200.0,
+  "a_pagar_valor": 4320.0,
+  "a_pagar_count": 6,
+  "maior_frente": "Plataforma Pujante",
+  "maior_frente_valor": 6890.0
+}
+```
+
+`mes` fora do formato `YYYY-MM` retorna **422** (validação de pattern). Erros 401/403: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="GET /admin/custos">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/custos?mes=2026-06&frente=Editorial&status=a_pagar" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "c_2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
+    "descricao": "Railway — hosting AgroPujante-LP",
+    "valor_brl": 480.0,
+    "status": "a_pagar",
+    "data_competencia": "2026-06-01",
+    "data_vencimento": "2026-06-15",
+    "data_pagamento": null,
+    "categoria": "Infraestrutura",
+    "frente": "Editorial",
+    "fornecedor": "Railway",
+    "forma_pagamento": "cartao_credito",
+    "recorrente": true,
+    "frequencia": "mensal",
+    "aprovado_por": "pedro@pujante.com.br",
+    "tags": ["hosting"],
+    "anexo_url": null,
+    "observacao": null,
+    "created_by": "pedro@pujante.com.br",
+    "created_at": "2026-06-01T10:00:00+00:00",
+    "updated_at": "2026-06-01T10:00:00+00:00"
+  }
+]
+```
+
+Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="POST /admin/custos">
+Campos reais do payload (`CustoIn`): `descricao`, `valor_brl`, `data_competencia` (obrigatórios), `categoria`, `frente` (validados contra as taxonomias) e opcionais `status`, `data_vencimento`, `data_pagamento`, `fornecedor`, `forma_pagamento`, `recorrente`, `frequencia`, `aprovado_por`, `tags`, `anexo_url`, `observacao`.
+
+```bash title="Requisição (JWT)"
+curl -X POST "https://admin-api.pujante.com.br/admin/custos" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "descricao": "Railway — hosting AgroPujante-LP",
+    "valor_brl": 480.0,
+    "data_competencia": "2026-06-01",
+    "data_vencimento": "2026-06-15",
+    "categoria": "Infraestrutura",
+    "frente": "Editorial",
+    "fornecedor": "Railway",
+    "forma_pagamento": "cartao_credito",
+    "recorrente": true,
+    "frequencia": "mensal"
+  }'
+```
+
+```json title="201 Created"
+{
+  "id": "c_2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
+  "descricao": "Railway — hosting AgroPujante-LP",
+  "valor_brl": 480.0,
+  "status": "a_pagar",
+  "data_competencia": "2026-06-01",
+  "data_vencimento": "2026-06-15",
+  "data_pagamento": null,
+  "categoria": "Infraestrutura",
+  "frente": "Editorial",
+  "fornecedor": "Railway",
+  "forma_pagamento": "cartao_credito",
+  "recorrente": true,
+  "frequencia": "mensal",
+  "aprovado_por": null,
+  "tags": [],
+  "anexo_url": null,
+  "observacao": null,
+  "created_by": "pedro@pujante.com.br",
+  "created_at": "2026-06-12T14:35:00+00:00",
+  "updated_at": "2026-06-12T14:35:00+00:00"
+}
+```
+
+Categoria/frente/forma/frequência fora das taxonomias caem na validação Pydantic:
+
+```json title="422 Unprocessable Entity — categoria inválida"
+{
+  "detail": [
+    {
+      "type": "value_error",
+      "loc": ["body", "categoria"],
+      "msg": "Value error, categoria invalido: 'Hosting'. Permitidos: ('Infraestrutura', 'IA & APIs', 'Software & Produtividade', 'Marketing & Aquisição', 'Conteúdo & Pesquisa', 'Pessoal & Equipe', 'Parceiros & Consultorias', 'Viagens & Deslocamento', 'Impostos & Tarifas', 'Estrutura & Administrativo')",
+      "input": "Hosting"
+    }
+  ]
+}
+```
+
+```json title="500 Internal Server Error — insert sem retorno"
+{ "detail": "falha ao criar custo" }
+```
+</Accordion>
+
+<Accordion title="PATCH /admin/custos/{id}">
+```bash title="Requisição (JWT)"
+curl -X PATCH "https://admin-api.pujante.com.br/admin/custos/c_2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{ "valor_brl": 520.0, "observacao": "Reajuste do plano em junho" }'
+```
+
+```json title="200 OK"
+{
+  "id": "c_2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
+  "descricao": "Railway — hosting AgroPujante-LP",
+  "valor_brl": 520.0,
+  "status": "a_pagar",
+  "data_competencia": "2026-06-01",
+  "data_vencimento": "2026-06-15",
+  "data_pagamento": null,
+  "categoria": "Infraestrutura",
+  "frente": "Editorial",
+  "fornecedor": "Railway",
+  "forma_pagamento": "cartao_credito",
+  "recorrente": true,
+  "frequencia": "mensal",
+  "aprovado_por": null,
+  "tags": [],
+  "anexo_url": null,
+  "observacao": "Reajuste do plano em junho",
+  "created_by": "pedro@pujante.com.br",
+  "created_at": "2026-06-12T14:35:00+00:00",
+  "updated_at": "2026-06-12T14:40:00+00:00"
+}
+```
+
+```json title="404 Not Found — id inexistente"
+{ "detail": "custo nao encontrado" }
+```
+
+Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="PATCH /admin/custos/{id}/pagar">
+```bash title="Requisição (JWT)"
+curl -X PATCH "https://admin-api.pujante.com.br/admin/custos/c_2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e/pagar" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK — status e data_pagamento atualizados"
+{
+  "id": "c_2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
+  "descricao": "Railway — hosting AgroPujante-LP",
+  "valor_brl": 520.0,
+  "status": "pago",
+  "data_competencia": "2026-06-01",
+  "data_vencimento": "2026-06-15",
+  "data_pagamento": "2026-06-12",
+  "categoria": "Infraestrutura",
+  "frente": "Editorial",
+  "fornecedor": "Railway",
+  "forma_pagamento": "cartao_credito",
+  "recorrente": true,
+  "frequencia": "mensal",
+  "aprovado_por": null,
+  "tags": [],
+  "anexo_url": null,
+  "observacao": "Reajuste do plano em junho",
+  "created_by": "pedro@pujante.com.br",
+  "created_at": "2026-06-12T14:35:00+00:00",
+  "updated_at": "2026-06-12T14:45:00+00:00"
+}
+```
+
+```json title="404 Not Found — id inexistente"
+{ "detail": "custo nao encontrado" }
+```
+</Accordion>
+
+<Accordion title="DELETE /admin/custos/{id}">
+```bash title="Requisição (JWT)"
+curl -X DELETE "https://admin-api.pujante.com.br/admin/custos/c_2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem corpo)
+```
+
+Erros 401/403: veja [Erros comuns](#erros-comuns).
+</Accordion>
+</AccordionGroup>
 
 ## API keys
 
@@ -198,12 +941,166 @@ Observações.
 A chave criada concede acesso read-only (somente `GET`) aos endpoints marcados JWT/Key. Detalhes em [Autenticação](/admin/autenticacao#api-key-read-only).
 </Warning>
 
+<AccordionGroup>
+<Accordion title="POST /admin/api-keys">
+Escrita: **somente JWT** — uma API key não pode criar outra chave (403, veja [Erros comuns](#erros-comuns)).
+
+```bash title="Requisição (JWT)"
+curl -X POST "https://admin-api.pujante.com.br/admin/api-keys" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Wander - Codex", "expires_at": "2026-12-31T23:59:59Z" }'
+```
+
+```json title="200 OK — o campo key só aparece aqui"
+{
+  "id": "f3a9c1d2-5e6b-4a7c-8d9e-0f1a2b3c4d5e",
+  "name": "Wander - Codex",
+  "key_prefix": "pjk_live_a1b2",
+  "scope": "read",
+  "active": true,
+  "last_used_at": null,
+  "expires_at": "2026-12-31T23:59:59+00:00",
+  "revoked_at": null,
+  "created_at": "2026-06-12T14:50:00+00:00",
+  "key": "<API_KEY>"
+}
+```
+
+Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="GET /admin/api-keys">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/api-keys" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK — sem o segredo"
+[
+  {
+    "id": "f3a9c1d2-5e6b-4a7c-8d9e-0f1a2b3c4d5e",
+    "name": "Wander - Codex",
+    "key_prefix": "pjk_live_a1b2",
+    "scope": "read",
+    "active": true,
+    "last_used_at": "2026-06-12T10:12:00+00:00",
+    "expires_at": "2026-12-31T23:59:59+00:00",
+    "revoked_at": null,
+    "created_at": "2026-06-12T14:50:00+00:00"
+  }
+]
+```
+
+Erros 401/403: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="DELETE /admin/api-keys/{key_id}">
+```bash title="Requisição (JWT)"
+curl -X DELETE "https://admin-api.pujante.com.br/admin/api-keys/f3a9c1d2-5e6b-4a7c-8d9e-0f1a2b3c4d5e?reason=chave%20vazada%20em%20log" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "status": "revoked", "id": "f3a9c1d2-5e6b-4a7c-8d9e-0f1a2b3c4d5e" }
+```
+
+```json title="404 Not Found — id inexistente"
+{ "detail": "API key nao encontrada" }
+```
+
+Erros 401/403: veja [Erros comuns](#erros-comuns).
+</Accordion>
+</AccordionGroup>
+
 ## System
 
 | Método | Path | Descrição | Auth |
 |---|---|---|---|
 | GET | `/admin/system/health` | Estado consolidado: gateways, webhooks, jobs, latência | JWT/Key |
 | POST | `/admin/system/webhooks/{webhook_id}/retry` | Reenfileira um webhook que falhou | JWT |
+
+<AccordionGroup>
+<Accordion title="GET /admin/system/health">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/system/health" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/system/health" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK"
+{
+  "refreshed_at": "2026-06-12T14:55:00+00:00",
+  "has_data": true,
+  "note": null,
+  "gateways": [
+    {
+      "name": "Asaas (Site)",
+      "kind": "asaas",
+      "origin": "site",
+      "status": "healthy",
+      "success_rate_24h": 0.991,
+      "total_24h": 228,
+      "failures_24h": 2,
+      "webhook_ok": true,
+      "last_webhook_at": "2026-06-12T14:48:00+00:00"
+    }
+  ],
+  "webhook_failures": [
+    {
+      "id": "wh_8a9b0c1d",
+      "at": "2026-06-12T11:02:00+00:00",
+      "gateway": "pagarme",
+      "origin": "escola",
+      "event": "subscription.charged",
+      "user_ref": "mariana.souza@fazendaboavista.com.br",
+      "error": "timeout ao confirmar pagamento"
+    }
+  ],
+  "jobs": [
+    {
+      "id": "mv_refresh",
+      "name": "Refresh das MVs admin",
+      "last_run_at": "2026-06-12T03:00:00+00:00",
+      "next_run_at": "2026-06-13T03:00:00+00:00",
+      "status": "ok",
+      "detail": null
+    }
+  ],
+  "latency": [
+    {
+      "path": "/admin/overview",
+      "p95_ms": 320.5,
+      "series": [ { "label": "14:00", "p95_ms": 298.0 } ]
+    }
+  ]
+}
+```
+
+Erros 401/403: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="POST /admin/system/webhooks/{webhook_id}/retry">
+Escrita: **somente JWT** (API key recebe 403 — veja [Erros comuns](#erros-comuns)).
+
+```bash title="Requisição (JWT)"
+curl -X POST "https://admin-api.pujante.com.br/admin/system/webhooks/wh_8a9b0c1d/retry" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="202 Accepted"
+{
+  "id": "wh_8a9b0c1d",
+  "queued": true,
+  "note": null
+}
+```
+</Accordion>
+</AccordionGroup>
 
 ## Launches
 
@@ -216,12 +1113,8 @@ Lançamentos cross-product. A leitura é agregada; a **escrita é delegada** ao 
 
 ### POST /admin/launches
 
-<ParamField body="origin" type="string" required>
-`site` (delega ao AgroPujante) ou `escola` (delega à Escola).
-</ParamField>
-
 <ParamField body="kind" type="string" required>
-Tipo do lançamento.
+Tipo do lançamento — também determina o destino da delegação: `post`, `news`, `newsletter` e `bulletin` vão para o AgroPujante (`site`); `lesson`, `track`, `event` e `broadcast` vão para a Escola. Não existe campo `origin` no body — a origem é derivada do `kind`.
 </ParamField>
 
 <ParamField body="title" type="string" required>
@@ -236,6 +1129,92 @@ Descrição. O `CreateLaunchRequest` aceita campos adicionais conforme o tipo.
 O Bearer token do usuário é repassado ao backend de destino. Falha no upstream resulta em **502** com o detalhe do erro.
 </Note>
 
+<AccordionGroup>
+<Accordion title="GET /admin/launches">
+```bash title="Requisição (JWT)"
+curl "https://admin-api.pujante.com.br/admin/launches?origin=site&kind=post&status=published&limit=50&offset=0" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```bash title="Requisição (API key)"
+curl "https://admin-api.pujante.com.br/admin/launches?origin=site&limit=50" \
+  -H "X-API-Key: <API_KEY>"
+```
+
+```json title="200 OK"
+{
+  "total": 87,
+  "limit": 50,
+  "offset": 0,
+  "items": [
+    {
+      "id": "9b2f4e61-3c5d-4a8e-9f0a-1b2c3d4e5f6a",
+      "at": "2026-06-11T18:30:00+00:00",
+      "origin": "site",
+      "kind": "post",
+      "kind_label": "Artigo",
+      "title": "Marco legal do agro: o que muda em 2026",
+      "detail": null,
+      "status": "published",
+      "author": "pedro@pujante.com.br",
+      "external_url": "https://agropujante.com.br/posts/marco-legal-do-agro-2026"
+    }
+  ],
+  "has_data": true,
+  "note": null
+}
+```
+
+`kind` aceita `post`, `news`, `newsletter`, `bulletin`, `lesson`, `track`, `event`, `broadcast`; `status` aceita `all`, `draft`, `scheduled`, `delegated`, `published`, `failed` (outros valores → **422**). Erros 401/403: veja [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="POST /admin/launches">
+Escrita delegada: **somente JWT** (API key recebe 403 — veja [Erros comuns](#erros-comuns)). O body é uma união discriminada por `kind` — a origem é derivada do tipo (`post`/`news`/`newsletter`/`bulletin` → site; `lesson`/`track`/`event`/`broadcast` → escola).
+
+```bash title="Requisição (JWT) — artigo do Site"
+curl -X POST "https://admin-api.pujante.com.br/admin/launches" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "kind": "post",
+    "title": "Marco legal do agro: o que muda em 2026",
+    "detail": "Análise das mudanças regulatórias para produtores",
+    "slug": "marco-legal-do-agro-2026",
+    "scheduled_at": null
+  }'
+```
+
+```json title="201 Created"
+{
+  "id": "9b2f4e61-3c5d-4a8e-9f0a-1b2c3d4e5f6a",
+  "kind": "post",
+  "origin": "site",
+  "status": "published",
+  "title": "Marco legal do agro: o que muda em 2026",
+  "delegated_to": "agropujante",
+  "external_id": "post_4218",
+  "external_url": "https://agropujante.com.br/posts/marco-legal-do-agro-2026",
+  "note": null
+}
+```
+
+Quando o backend de destino falha, o registro fica como `failed` na auditoria e a resposta é **502** com o detalhe estruturado:
+
+```json title="502 Bad Gateway — upstream falhou"
+{
+  "detail": {
+    "error": "HTTP 500 do AgroPujante: erro interno ao criar post",
+    "delegated_to": "agropujante",
+    "audit_id": "9b2f4e61-3c5d-4a8e-9f0a-1b2c3d4e5f6a",
+    "kind": "post"
+  }
+}
+```
+
+Erros 401/403/422: veja [Erros comuns](#erros-comuns).
+</Accordion>
+</AccordionGroup>
+
 ## Proxy genérico
 
 Repassa qualquer chamada para os backends dos produtos, preservando body, query e header `Authorization`.
@@ -248,3 +1227,55 @@ Repassa qualquer chamada para os backends dos produtos, preservando body, query 
 <Note>
 Operações de escrita via proxy geram registro assíncrono de auditoria em `admin_activity_log`.
 </Note>
+
+<AccordionGroup>
+<Accordion title="GET/POST/PUT/PATCH/DELETE /admin/escola/{path}">
+O status e o corpo da resposta são os do **upstream** (Escola) — o Admin só repassa.
+
+```bash title="Requisição (JWT) — leitura proxiada"
+curl "https://admin-api.pujante.com.br/admin/escola/api/v2/admin/members?limit=20" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK — corpo retornado pela API da Escola (shape definido lá)"
+{ "...": "resposta da Escola, repassada sem modificação" }
+```
+
+Erros próprios do proxy (não do upstream):
+
+```json title="502 Bad Gateway — upstream inacessível"
+{ "detail": "falha ao chamar escola: All connection attempts failed" }
+```
+
+```json title="503 Service Unavailable — env ausente"
+{ "detail": "ESCOLA_API_URL não configurada no backend Pujante-Admin" }
+```
+
+Erros 401/403 do próprio Admin (antes de proxiar): veja [Erros comuns](#erros-comuns). Erros 4xx/5xx vindos da Escola são repassados como estão.
+</Accordion>
+
+<Accordion title="GET/POST/PUT/PATCH/DELETE /admin/agropujante/{path}">
+```bash title="Requisição (JWT) — escrita proxiada (gera auditoria)"
+curl -X PATCH "https://admin-api.pujante.com.br/admin/agropujante/admin/posts/4218" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{ "status": "published" }'
+```
+
+```json title="200 OK — corpo retornado pela API do AgroPujante (shape definido lá)"
+{ "...": "resposta do AgroPujante, repassada sem modificação" }
+```
+
+Erros próprios do proxy (não do upstream):
+
+```json title="502 Bad Gateway — upstream inacessível"
+{ "detail": "falha ao chamar agropujante: All connection attempts failed" }
+```
+
+```json title="503 Service Unavailable — env ausente"
+{ "detail": "AGROPUJANTE_API_URL não configurada no backend Pujante-Admin" }
+```
+
+Erros 401/403 do próprio Admin: veja [Erros comuns](#erros-comuns). Erros 4xx/5xx vindos do AgroPujante são repassados como estão.
+</Accordion>
+</AccordionGroup>

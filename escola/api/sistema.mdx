@@ -4,6 +4,34 @@ description: "Wiki de docs, knowledge base, permissões de menu, reconciliação
 icon: "wrench"
 ---
 
+## Erros comuns
+
+Todos os endpoints autenticados podem retornar os shapes abaixo (FastAPI + handler global, que acrescenta o campo `code`):
+
+```json title="401 Unauthorized — sem token"
+{ "detail": "Token de autenticacao nao fornecido", "code": "http_error" }
+```
+
+```json title="401 Unauthorized — token inválido ou usuário não mapeado"
+{ "detail": "Token invalido ou expirado", "code": "http_error" }
+```
+
+Também pode ocorrer `{ "detail": "Usuario nao mapeado. Contate o suporte." }` quando o JWT é válido mas não há registro em `pujante.users`.
+
+```json title="403 Forbidden — role insuficiente (MANAGER/ADMIN)"
+{ "detail": "Acesso restrito", "code": "http_error" }
+```
+
+```json title="422 Unprocessable Entity — validação Pydantic"
+{
+  "detail": [
+    { "type": "missing", "loc": ["body", "campo"], "msg": "Field required", "input": {} }
+  ]
+}
+```
+
+Validações de negócio respondem 422 com `{ "detail": "...", "code": "validation_error" }`. Nos accordions abaixo, os erros genéricos não são repetidos — apenas os específicos de cada endpoint.
+
 ## Docs wiki (`/docs`)
 
 Wiki interna armazenada em `doc_sections`.
@@ -17,6 +45,185 @@ Wiki interna armazenada em `doc_sections`.
 | PATCH | `/docs/{doc_id}` | Atualizar doc | MANAGER |
 | DELETE | `/docs/{doc_id}` | Remover doc | MANAGER |
 | POST | `/docs/seed` | Seed da estrutura padrão | MANAGER |
+
+<AccordionGroup>
+<Accordion title="GET /api/v2/docs">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/docs"
+```
+
+Rota pública — não exige token. Retorna apenas docs com `published: true`.
+
+```json title="200 OK"
+[
+  {
+    "id": "doc_10aa01",
+    "slug": "visao-geral",
+    "title": "Visão geral",
+    "parentSlug": null,
+    "content": "# Pujante — visão geral\n\nA Pujante é uma plataforma...",
+    "published": true,
+    "sortOrder": 10,
+    "createdAt": "2026-05-01T12:00:00+00:00",
+    "updatedAt": "2026-05-01T12:00:00+00:00"
+  }
+]
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/docs/admin">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/docs/admin" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "doc_10aa01",
+    "slug": "visao-geral",
+    "title": "Visão geral",
+    "parentSlug": null,
+    "content": "# Pujante — visão geral\n\n...",
+    "published": true,
+    "sortOrder": 10,
+    "createdAt": "2026-05-01T12:00:00+00:00",
+    "updatedAt": "2026-05-01T12:00:00+00:00"
+  },
+  {
+    "id": "doc_22bb02",
+    "slug": "runbook-incidentes",
+    "title": "Runbook de incidentes",
+    "parentSlug": "deploy",
+    "content": "# Rascunho...",
+    "published": false,
+    "sortOrder": 95,
+    "createdAt": "2026-06-02T09:00:00+00:00",
+    "updatedAt": "2026-06-02T09:00:00+00:00"
+  }
+]
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/docs/{slug}">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/docs/visao-geral"
+```
+
+Rota pública — só retorna docs publicados.
+
+```json title="200 OK"
+{
+  "id": "doc_10aa01",
+  "slug": "visao-geral",
+  "title": "Visão geral",
+  "parentSlug": null,
+  "content": "# Pujante — visão geral\n\nA Pujante é uma plataforma...",
+  "published": true,
+  "sortOrder": 10,
+  "createdAt": "2026-05-01T12:00:00+00:00",
+  "updatedAt": "2026-05-01T12:00:00+00:00"
+}
+```
+
+```json title="404 Not Found — slug inexistente ou doc não publicado"
+{ "detail": "Documento nao encontrado", "code": "not_found" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/docs">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/docs" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "slug": "runbook-incidentes",
+    "title": "Runbook de incidentes",
+    "parentSlug": "deploy",
+    "content": "# Runbook\n\n1. Verificar status do Railway...",
+    "published": false,
+    "sortOrder": 95
+  }'
+```
+
+```json title="201 Created"
+{
+  "id": "doc_22bb02",
+  "slug": "runbook-incidentes",
+  "title": "Runbook de incidentes",
+  "parentSlug": "deploy",
+  "content": "# Runbook\n\n1. Verificar status do Railway...",
+  "published": false,
+  "sortOrder": 95,
+  "createdAt": "2026-06-12T16:00:00+00:00",
+  "updatedAt": "2026-06-12T16:00:00+00:00"
+}
+```
+
+```json title="422 Unprocessable Entity"
+{ "detail": "slug e title obrigatorios.", "code": "validation_error" }
+```
+
+Slug duplicado responde `409 { "detail": "Registro ja existe.", "code": "conflict" }`.
+</Accordion>
+
+<Accordion title="PATCH /api/v2/docs/{doc_id}">
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/docs/doc_22bb02" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"published": true, "sortOrder": 90}'
+```
+
+```json title="200 OK"
+{
+  "id": "doc_22bb02",
+  "slug": "runbook-incidentes",
+  "title": "Runbook de incidentes",
+  "parentSlug": "deploy",
+  "content": "# Runbook\n\n1. Verificar status do Railway...",
+  "published": true,
+  "sortOrder": 90,
+  "createdAt": "2026-06-12T16:00:00+00:00",
+  "updatedAt": "2026-06-12T16:05:00+00:00"
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Documento nao encontrado", "code": "not_found" }
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v2/docs/{doc_id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.escolapujante.com.br/api/v2/docs/doc_22bb02" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "id": "doc_22bb02" }
+```
+
+```json title="404 Not Found"
+{ "detail": "Documento nao encontrado", "code": "not_found" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/docs/seed">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/docs/seed" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="201 Created"
+{ "message": "10 seções criadas com sucesso.", "count": 10 }
+```
+
+<Warning>
+O seed **apaga todas as seções existentes** e re-insere o conteúdo padrão (todas publicadas).
+</Warning>
+</Accordion>
+</AccordionGroup>
 
 ### POST /docs
 
@@ -41,6 +248,41 @@ Base de conhecimento com embeddings (tabela `knowledge_base`).
 Retornam **501 — não implementado**: `POST /knowledge-base/index` e `GET /knowledge-base/search`.
 </Warning>
 
+<AccordionGroup>
+<Accordion title="POST /api/v2/knowledge-base/index">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/knowledge-base/index" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Indexacao depende de OpenAI embeddings. Use Nest legado por ora.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/knowledge-base/search">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/knowledge-base/search" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Busca semantica depende de OpenAI. Use Nest legado.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/knowledge-base/stats">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/knowledge-base/stats" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "totalDocuments": 142 }
+```
+</Accordion>
+</AccordionGroup>
+
 ## Menu permissions (`/menu-permissions`)
 
 Matriz de itens de menu visíveis por tipo de usuário (tabela `menu_permissions`).
@@ -51,6 +293,106 @@ Matriz de itens de menu visíveis por tipo de usuário (tabela `menu_permissions
 | GET | `/menu-permissions/{user_type}` | Permissões de um tipo de usuário | JWT |
 | PUT | `/menu-permissions/{user_type}` | Substituir permissões do tipo | ADMIN |
 
+<AccordionGroup>
+<Accordion title="GET /api/v2/menu-permissions">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/menu-permissions" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "menuItems": [
+    { "id": "dashboards.mentoria-home", "label": "Inicio" },
+    { "id": "dashboards.meu-painel", "label": "Meu Painel" },
+    { "id": "dashboards.cursos", "label": "Escola Pujante" }
+  ],
+  "userTypes": ["COURSE_OF_MONTH", "OFFICE_SUPPORTER", "MEMBERS_CLUB", "MENTORED"],
+  "permissions": [
+    {
+      "menuItemId": "dashboards.mentoria-home",
+      "label": "Inicio",
+      "types": {
+        "COURSE_OF_MONTH": true,
+        "OFFICE_SUPPORTER": true,
+        "MEMBERS_CLUB": true,
+        "MENTORED": true
+      }
+    },
+    {
+      "menuItemId": "dashboards.meu-painel",
+      "label": "Meu Painel",
+      "types": {
+        "COURSE_OF_MONTH": false,
+        "OFFICE_SUPPORTER": false,
+        "MEMBERS_CLUB": false,
+        "MENTORED": true
+      }
+    }
+  ]
+}
+```
+
+Se a tabela estiver vazia, a primeira chamada faz seed automático com as permissões default.
+</Accordion>
+
+<Accordion title="GET /api/v2/menu-permissions/{user_type}">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/menu-permissions/MENTORED" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "userType": "MENTORED",
+  "menuItemIds": [
+    "dashboards.mentoria-home",
+    "dashboards.meu-painel",
+    "dashboards.action-plan",
+    "dashboards.cursos",
+    "dashboards.calendario"
+  ]
+}
+```
+
+```json title="400 Bad Request — tipo inválido"
+{
+  "detail": "Tipo de usuario invalido: ALUNO. Aceitos: COURSE_OF_MONTH, OFFICE_SUPPORTER, MEMBERS_CLUB, MENTORED",
+  "code": "http_error"
+}
+```
+</Accordion>
+
+<Accordion title="PUT /api/v2/menu-permissions/{user_type}">
+```bash title="Requisição"
+curl -X PUT "https://api.escolapujante.com.br/api/v2/menu-permissions/MEMBERS_CLUB" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"menuItemIds": ["dashboards.mentoria-home", "dashboards.cursos", "dashboards.noticias", "dashboards.calendario"]}'
+```
+
+```json title="200 OK"
+{
+  "userType": "MEMBERS_CLUB",
+  "menuItemIds": [
+    "dashboards.mentoria-home",
+    "dashboards.cursos",
+    "dashboards.noticias",
+    "dashboards.calendario"
+  ]
+}
+```
+
+A lista enviada **substitui** integralmente a configuração anterior do tipo.
+
+```json title="422 Unprocessable Entity"
+{ "detail": "menuItemIds deve ser lista", "code": "http_error" }
+```
+
+Tipo inválido responde o mesmo 400 do GET.
+</Accordion>
+</AccordionGroup>
+
 ### PUT /menu-permissions/\{user_type\}
 
 <ParamField body="menuItemIds" type="string[]" required>Lista completa de IDs de itens de menu visíveis para o tipo — substitui a configuração anterior.</ParamField>
@@ -60,6 +402,28 @@ Matriz de itens de menu visíveis por tipo de usuário (tabela `menu_permissions
 | Método | Path | Descrição | Auth |
 |---|---|---|---|
 | POST | `/admin/reconciliation/run` | Disparar reconciliação manual | ADMIN |
+
+<AccordionGroup>
+<Accordion title="POST /api/v2/admin/reconciliation/run">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/admin/reconciliation/run" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "started_at": "2026-06-12T16:30:00+00:00",
+  "orphan_pagarme_payments": { "checked": 120, "alerts": [] },
+  "stale_paused_subs": { "checked": 4, "alerts": [] },
+  "orphan_active_subs": { "checked": 18, "fixed": 1, "details": [ "..." ] },
+  "paid_paused_subs": { "checked": 2, "fixed": 0, "details": [] },
+  "finished_at": "2026-06-12T16:30:09+00:00"
+}
+```
+
+Cada check roda isolado — se um falhar, a chave correspondente vem como `{ "error": "<mensagem>" }` sem derrubar o restante do relatório. Erros 401/403: ver [Erros comuns](#erros-comuns).
+</Accordion>
+</AccordionGroup>
 
 ## Stubs da Onda 4
 
@@ -82,6 +446,171 @@ Os módulos abaixo existem apenas como **stubs** — todos os seus endpoints ret
 | `/contracts` | Contratos |
 | `/assessments` | Avaliações |
 | `/offers` | Ofertas |
+
+Todos exigem JWT (alguns endpoints de escrita exigem MANAGER) e respondem com o template abaixo, trocando o nome do módulo:
+
+```json title="501 Not Implemented (template)"
+{ "detail": "Modulo '<modulo>' ainda nao migrado. Use Nest legado em /api/<modulo>.", "code": "http_error" }
+```
+
+<AccordionGroup>
+<Accordion title="GET /api/v2/demands (todas as rotas do grupo)">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/demands" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Modulo 'demands' ainda nao migrado. Use Nest legado em /api/demands.", "code": "http_error" }
+```
+
+Vale também para `GET /demands/{feature_id}`.
+</Accordion>
+
+<Accordion title="GET /api/v2/contacts (todas as rotas do grupo)">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/contacts" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Modulo 'contacts' ainda nao migrado. Use Nest legado em /api/contacts.", "code": "http_error" }
+```
+
+Vale também para `POST /contacts`, `GET /contacts/user/{user_id}`, `GET /contacts/entity/{entity_id}`, `GET/PATCH/DELETE /contacts/{contact_id}`.
+</Accordion>
+
+<Accordion title="GET /api/v2/negotiations (todas as rotas do grupo)">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/negotiations" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Modulo 'negotiations' ainda nao migrado. Use Nest legado em /api/negotiations.", "code": "http_error" }
+```
+
+Vale também para `POST /negotiations` e `GET/PATCH/DELETE /negotiations/{neg_id}`.
+</Accordion>
+
+<Accordion title="GET /api/v2/opportunities (todas as rotas do grupo)">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/opportunities" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Modulo 'opportunities' ainda nao migrado. Use Nest legado em /api/opportunities.", "code": "http_error" }
+```
+
+Vale também para `POST /opportunities`, `GET/PATCH/DELETE /opportunities/{opp_id}`, `POST /opportunities/{opp_id}/move` e `GET /opportunities/{opp_id}/stage-history`.
+</Accordion>
+
+<Accordion title="GET /api/v2/companies (todas as rotas do grupo)">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/companies" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Modulo 'companies' ainda nao migrado. Use Nest legado em /api/companies.", "code": "http_error" }
+```
+
+Vale também para `POST /companies`, `PATCH /companies/{company_id}`, `POST /companies/{company_id}/users` e `DELETE /companies/{company_id}/users/{user_id}` (escrita exige MANAGER).
+</Accordion>
+
+<Accordion title="GET /api/v2/centi (todas as rotas do grupo)">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/centi" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Modulo 'centi' ainda nao migrado. Use Nest legado em /api/centi.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/maps (todas as rotas do grupo)">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/maps" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Modulo 'maps' ainda nao migrado. Use Nest legado em /api/maps.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v2/exordial/generate (todas as rotas do grupo)">
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/exordial/generate" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Modulo 'exordial (depende chave Exordial exposta)' ainda nao migrado. Use Nest legado em /api/exordial (depende chave Exordial exposta).", "code": "http_error" }
+```
+
+Vale também para `GET /exordial/status/{job_id}` (que responde com `Modulo 'exordial'...`).
+</Accordion>
+
+<Accordion title="GET /api/v2/backups/run (todas as rotas do grupo)">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/backups/run" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Modulo 'backups (operacao sensivel — manter no Nest)' ainda nao migrado. Use Nest legado em /api/backups (operacao sensivel — manter no Nest).", "code": "http_error" }
+```
+
+Exige MANAGER.
+</Accordion>
+
+<Accordion title="GET /api/v2/entities (todas as rotas do grupo)">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/entities" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Modulo 'entities (3061 linhas — CRM juridico)' ainda nao migrado. Use Nest legado em /api/entities (3061 linhas — CRM juridico).", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/contracts (todas as rotas do grupo)">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/contracts" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Modulo 'contracts (1570 linhas — gestao de contratos juridicos)' ainda nao migrado. Use Nest legado em /api/contracts (1570 linhas — gestao de contratos juridicos).", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/assessments (todas as rotas do grupo)">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/assessments" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Modulo 'assessments (1936 linhas — provas/notas/correcao)' ainda nao migrado. Use Nest legado em /api/assessments (1936 linhas — provas/notas/correcao).", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v2/offers (todas as rotas do grupo)">
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/offers" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="501 Not Implemented"
+{ "detail": "Modulo 'offers (2181 linhas — CRM de propostas)' ainda nao migrado. Use Nest legado em /api/offers (2181 linhas — CRM de propostas).", "code": "http_error" }
+```
+</Accordion>
+</AccordionGroup>
 
 <Note>
 Enquanto os stubs não são implementados, as funcionalidades correspondentes (quando existem) continuam servidas pelo NestJS legado em `/api`.

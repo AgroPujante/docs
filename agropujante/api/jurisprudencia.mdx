@@ -5,6 +5,37 @@ description: "Consulta de jurisprudência (jurisprudencias.ai), boletins em PDF,
 
 Base: `/api/v1`.
 
+## Erros comuns
+
+O handler global adiciona `code` ao body. Shapes que se repetem:
+
+```json title="401 Unauthorized — sem credencial"
+{ "detail": "Token de autenticação não fornecido", "code": "http_error" }
+```
+
+```json title="401 Unauthorized — token ruim"
+{ "detail": "Token inválido ou expirado", "code": "http_error" }
+```
+
+```json title="403 Forbidden — role insuficiente (admin)"
+{ "detail": "Acesso negado — permissão insuficiente", "code": "http_error" }
+```
+
+```json title="422 Unprocessable Entity — validação Pydantic (shape padrão FastAPI)"
+{
+  "detail": [
+    {
+      "type": "missing",
+      "loc": ["query", "tribunal_code"],
+      "msg": "Field required",
+      "input": null
+    }
+  ]
+}
+```
+
+A busca de jurisprudência é rate-limited: o 429 vem como `HTTPException` de regra de negócio (limite mensal do plano ou limite diário do provedor), com `detail` específico — exemplos no accordion do endpoint. O shape do slowapi (`{"error": "Rate limit exceeded: ..."}`) também pode aparecer em endpoints com limite por IP.
+
 <Warning>
 **Três conceitos distintos** — não os misture ao trabalhar nesses routers:
 
@@ -21,6 +52,116 @@ Base: `/api/v1`.
 | GET | `/boletins/{slug}` | Detalhe — `julgados[]` completo apenas para PRO/apoiador | Público/PRO |
 | GET | `/boletins/{slug}/download` | Signed URL do PDF | PRO+ |
 
+<AccordionGroup>
+<Accordion title="GET /api/v1/boletins">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/boletins?page=1&page_size=12"
+```
+
+```json title="200 OK"
+{
+  "items": [
+    {
+      "id": "8a9b0c1d-2e3f-4a4b-5c6d-7e8f9a0b1c2d",
+      "slug": "boletim-semana-08-06-2026",
+      "title": "Boletim de Julgados — semana de 08/06/2026",
+      "description": "Seleção curada de decisões em direito do agronegócio.",
+      "cover_url": "https://cdn.agropujante.com.br/boletins/2026-06-08.jpg",
+      "period_start_date": "2026-06-08",
+      "julgados_count": 12,
+      "sample_julgado": {
+        "tribunal": "STJ",
+        "processo": "REsp 2.104.512/MT",
+        "titulo": "Penhora de safra futura em execução de CPR",
+        "ementa_resumo": "A penhora de safra futura vinculada a CPR exige...",
+        "ementa_completa": null,
+        "link_exordial": null,
+        "tags": ["CPR", "Execução"],
+        "slug": "penhora-de-safra-futura-em-execucao-de-cpr",
+        "integra_pdf_path": null
+      },
+      "access_tier": "pro",
+      "published_at": "2026-06-09T08:00:00+00:00",
+      "download_count": 134,
+      "has_pdf": true
+    }
+  ],
+  "total": 28,
+  "page": 1,
+  "page_size": 12
+}
+```
+
+A listagem nunca expõe `pdf_path` — a URL do PDF é assinada sob demanda no `/download`.
+</Accordion>
+
+<Accordion title="GET /api/v1/boletins/{slug}">
+Bearer opcional — PRO/apoiador recebe `julgados[]` completo; free recebe só o `sample_julgado`.
+
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/boletins/boletim-semana-08-06-2026" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK — viewer PRO"
+{
+  "id": "8a9b0c1d-2e3f-4a4b-5c6d-7e8f9a0b1c2d",
+  "slug": "boletim-semana-08-06-2026",
+  "title": "Boletim de Julgados — semana de 08/06/2026",
+  "description": "Seleção curada de decisões em direito do agronegócio.",
+  "cover_url": "https://cdn.agropujante.com.br/boletins/2026-06-08.jpg",
+  "period_start_date": "2026-06-08",
+  "julgados_count": 12,
+  "sample_julgado": { "tribunal": "STJ", "titulo": "Penhora de safra futura em execução de CPR" },
+  "access_tier": "pro",
+  "published_at": "2026-06-09T08:00:00+00:00",
+  "download_count": 134,
+  "has_pdf": true,
+  "julgados": [
+    {
+      "tribunal": "STJ",
+      "processo": "REsp 2.104.512/MT",
+      "titulo": "Penhora de safra futura em execução de CPR",
+      "ementa_resumo": "A penhora de safra futura vinculada a CPR exige...",
+      "tags": ["CPR", "Execução"],
+      "slug": "penhora-de-safra-futura-em-execucao-de-cpr"
+    }
+  ]
+}
+```
+
+Sem acesso, a resposta é a mesma **sem** o campo `julgados` (não é erro).
+
+```json title="404 Not Found"
+{ "detail": "Boletim nao encontrado", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/boletins/{slug}/download">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/boletins/boletim-semana-08-06-2026/download" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "url": "https://xyz.supabase.co/storage/v1/object/sign/boletins/2026/boletim-semana-08-06-2026.pdf?token=<TOKEN>",
+  "expires_at": "2026-06-12T15:35:00+00:00"
+}
+```
+
+A URL assinada expira em 5 minutos.
+
+```json title="403 Forbidden — tier insuficiente"
+{ "detail": "Acesso restrito a usuarios PRO", "code": "http_error" }
+```
+
+```json title="404 Not Found — boletim sem PDF"
+{ "detail": "Boletim sem PDF disponivel", "code": "http_error" }
+```
+</Accordion>
+</AccordionGroup>
+
 ## Boletins — admin (`/admin/boletins`)
 
 | Método | Path | Descrição | Auth |
@@ -34,6 +175,192 @@ Base: `/api/v1`.
 | POST | `/admin/boletins/{id}/publish` | Publica | admin+ |
 | POST | `/admin/boletins/{id}/archive` | Arquiva (tira do ar sem apagar) | admin+ |
 | DELETE | `/admin/boletins/{id}` | Remove | admin+ |
+
+<AccordionGroup>
+<Accordion title="POST /api/v1/admin/boletins">
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/admin/boletins" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Boletim de Julgados — semana de 15/06/2026",
+    "description": "Seleção curada de decisões em direito do agronegócio.",
+    "period_start_date": "2026-06-15",
+    "access_tier": "pro",
+    "julgados": [
+      {
+        "tribunal": "STJ",
+        "processo": "REsp 2.104.512/MT",
+        "titulo": "Penhora de safra futura em execução de CPR",
+        "ementa_resumo": "A penhora de safra futura vinculada a CPR exige...",
+        "tags": ["CPR", "Execução"]
+      }
+    ]
+  }'
+```
+
+```json title="201 Created"
+{
+  "id": "9b0c1d2e-3f4a-4b5c-6d7e-8f9a0b1c2d3e",
+  "slug": "boletim-semana-15-06-2026",
+  "title": "Boletim de Julgados — semana de 15/06/2026",
+  "description": "Seleção curada de decisões em direito do agronegócio.",
+  "cover_url": null,
+  "pdf_path": null,
+  "pdf_size_bytes": null,
+  "period_start_date": "2026-06-15",
+  "julgados": [{ "tribunal": "STJ", "processo": "REsp 2.104.512/MT", "titulo": "Penhora de safra futura em execução de CPR", "ementa_resumo": "A penhora de safra futura vinculada a CPR exige...", "tags": ["CPR", "Execução"], "slug": "penhora-de-safra-futura-em-execucao-de-cpr" }],
+  "sample_julgado": null,
+  "access_tier": "pro",
+  "status": "draft",
+  "published_at": null,
+  "created_by": "7f3b2c10-9d4e-4a8b-b1c2-5e6f7a8b9c0d",
+  "download_count": 0,
+  "view_count": 0,
+  "created_at": "2026-06-12T15:40:00+00:00",
+  "updated_at": "2026-06-12T15:40:00+00:00"
+}
+```
+
+```json title="409 Conflict — semana duplicada"
+{ "detail": "Ja existe boletim para a semana iniciando em 2026-06-15", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/boletins">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/boletins?status=draft&page=1&page_size=20" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "items": [
+    { "id": "9b0c1d2e-3f4a-4b5c-6d7e-8f9a0b1c2d3e", "slug": "boletim-semana-15-06-2026", "title": "Boletim de Julgados — semana de 15/06/2026", "period_start_date": "2026-06-15", "julgados": [], "access_tier": "pro", "status": "draft", "published_at": null, "download_count": 0, "view_count": 0, "created_at": "2026-06-12T15:40:00+00:00", "updated_at": "2026-06-12T15:40:00+00:00" }
+  ],
+  "total": 3,
+  "page": 1,
+  "page_size": 20
+}
+```
+
+`status`: `draft` | `published` | `archived`. Itens no shape `BoletimOut` (ver `POST`).
+</Accordion>
+
+<Accordion title="GET /api/v1/admin/boletins/{id}">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/admin/boletins/9b0c1d2e-3f4a-4b5c-6d7e-8f9a0b1c2d3e" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "id": "9b0c1d2e-3f4a-4b5c-6d7e-8f9a0b1c2d3e", "slug": "boletim-semana-15-06-2026", "title": "Boletim de Julgados — semana de 15/06/2026", "period_start_date": "2026-06-15", "julgados": [], "access_tier": "pro", "status": "draft", "created_at": "2026-06-12T15:40:00+00:00", "updated_at": "2026-06-12T15:40:00+00:00" }
+```
+
+```json title="404 Not Found"
+{ "detail": "Boletim nao encontrado", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="PATCH /api/v1/admin/boletins/{id}">
+```bash title="Requisição"
+curl -X PATCH "https://api.agropujante.com.br/api/v1/admin/boletins/9b0c1d2e-3f4a-4b5c-6d7e-8f9a0b1c2d3e" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"access_tier": "supporter"}'
+```
+
+```json title="200 OK"
+{ "id": "9b0c1d2e-3f4a-4b5c-6d7e-8f9a0b1c2d3e", "slug": "boletim-semana-15-06-2026", "title": "Boletim de Julgados — semana de 15/06/2026", "period_start_date": "2026-06-15", "julgados": [], "access_tier": "supporter", "status": "draft", "created_at": "2026-06-12T15:40:00+00:00", "updated_at": "2026-06-12T15:45:00+00:00" }
+```
+
+```json title="409 Conflict — boletim arquivado"
+{ "detail": "Boletim arquivado nao pode ser editado", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/admin/boletins/{id}/upload-pdf">
+Multipart. Apenas PDF, com limite de tamanho.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/admin/boletins/9b0c1d2e-3f4a-4b5c-6d7e-8f9a0b1c2d3e/upload-pdf" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -F "file=@boletim-semana-15-06-2026.pdf;type=application/pdf"
+```
+
+```json title="200 OK"
+{ "id": "9b0c1d2e-3f4a-4b5c-6d7e-8f9a0b1c2d3e", "slug": "boletim-semana-15-06-2026", "pdf_path": "boletins/2026/boletim-semana-15-06-2026.pdf", "pdf_size_bytes": 1248733, "status": "draft", "access_tier": "supporter", "period_start_date": "2026-06-15", "title": "Boletim de Julgados — semana de 15/06/2026", "julgados": [], "created_at": "2026-06-12T15:40:00+00:00", "updated_at": "2026-06-12T15:50:00+00:00" }
+```
+
+```json title="400 Bad Request — content-type errado"
+{ "detail": "Apenas PDF e permitido", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/admin/boletins/{id}/upload-cover">
+Multipart. Aceita JPEG/PNG/WebP.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/admin/boletins/9b0c1d2e-3f4a-4b5c-6d7e-8f9a0b1c2d3e/upload-cover" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -F "file=@capa-boletim.jpg;type=image/jpeg"
+```
+
+```json title="200 OK"
+{ "id": "9b0c1d2e-3f4a-4b5c-6d7e-8f9a0b1c2d3e", "slug": "boletim-semana-15-06-2026", "cover_url": "https://xyz.supabase.co/storage/v1/object/public/public-assets/boletins/covers/boletim-semana-15-06-2026.jpg", "status": "draft", "access_tier": "supporter", "period_start_date": "2026-06-15", "title": "Boletim de Julgados — semana de 15/06/2026", "julgados": [], "created_at": "2026-06-12T15:40:00+00:00", "updated_at": "2026-06-12T15:52:00+00:00" }
+```
+
+```json title="400 Bad Request — formato inválido"
+{ "detail": "Apenas JPEG/PNG/WebP", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/admin/boletins/{id}/publish">
+Requer gestor+ — publica e cria automaticamente um rascunho de campanha de newsletter.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/admin/boletins/9b0c1d2e-3f4a-4b5c-6d7e-8f9a0b1c2d3e/publish" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "boletim": { "id": "9b0c1d2e-3f4a-4b5c-6d7e-8f9a0b1c2d3e", "slug": "boletim-semana-15-06-2026", "status": "published", "published_at": "2026-06-12T16:00:00+00:00", "title": "Boletim de Julgados — semana de 15/06/2026", "period_start_date": "2026-06-15", "access_tier": "supporter", "julgados": [] },
+  "campaign_id": "0c1d2e3f-4a5b-4c6d-7e8f-9a0b1c2d3e4f"
+}
+```
+
+```json title="409 Conflict — já publicado"
+{ "detail": "Boletim ja publicado", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/admin/boletins/{id}/archive">
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/admin/boletins/9b0c1d2e-3f4a-4b5c-6d7e-8f9a0b1c2d3e/archive" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "id": "9b0c1d2e-3f4a-4b5c-6d7e-8f9a0b1c2d3e", "slug": "boletim-semana-15-06-2026", "status": "archived", "title": "Boletim de Julgados — semana de 15/06/2026", "period_start_date": "2026-06-15", "access_tier": "supporter", "julgados": [], "created_at": "2026-06-12T15:40:00+00:00", "updated_at": "2026-06-12T16:10:00+00:00" }
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v1/admin/boletins/{id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.agropujante.com.br/api/v1/admin/boletins/9b0c1d2e-3f4a-4b5c-6d7e-8f9a0b1c2d3e" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem body)
+```
+
+```json title="409 Conflict — publicado sem arquivar"
+{ "detail": "Boletim publicado precisa ser arquivado antes de deletar.", "code": "http_error" }
+```
+</Accordion>
+</AccordionGroup>
 
 Ciclo de vida completo no [fluxo de boletim](/agropujante/fluxos#boletim).
 
@@ -53,18 +380,303 @@ Integração com **jurisprudencias.ai** (`JURISPRUDENCIAS_AI_API_KEY`).
 A busca exige login e tem rate limit próprio (slowapi) — cada query consome a API externa.
 </Note>
 
-## Pastas do usuário (`/juris_folders`)
+<AccordionGroup>
+<Accordion title="GET /api/v1/jurisprudencia/tribunais">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/jurisprudencia/tribunais"
+```
+
+```json title="200 OK"
+{
+  "items": [
+    { "code": "STJ", "display_name": "Superior Tribunal de Justiça", "description": "Corte superior infraconstitucional", "kind": "superior" },
+    { "code": "TJMT", "display_name": "Tribunal de Justiça de Mato Grosso", "description": "", "kind": "estadual" }
+  ]
+}
+```
+
+```json title="503 Service Unavailable — provedor fora"
+{ "detail": "Serviço de jurisprudência indisponível", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/jurisprudencia/estados">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/jurisprudencia/estados"
+```
+
+```json title="200 OK"
+{
+  "estados": {
+    "MT": ["TJMT", "TRF1"],
+    "SP": ["TJSP", "TRF3"],
+    "RS": ["TJRS", "TRF4"]
+  }
+}
+```
+
+(Mapa completo com as 27 UFs.)
+</Accordion>
+
+<Accordion title="GET /api/v1/jurisprudencia/estados/{estado}/tribunais">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/jurisprudencia/estados/MT/tribunais"
+```
+
+```json title="200 OK"
+{ "estado": "MT", "tribunais": ["TJMT", "TRF1"] }
+```
+
+```json title="404 Not Found"
+{ "detail": "Estado 'XX' não encontrado", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/jurisprudencia/search">
+Requer PRO (50 buscas/mês) ou Apoiador (ilimitado). Parâmetros via query string.
+
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/jurisprudencia/search?tribunal_code=TJMT&q=arrendamento%20rural&page=1&page_size=20" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "tribunal": { "code": "TJMT", "display_name": "Tribunal de Justiça de Mato Grosso", "description": "", "kind": "estadual" },
+  "items": [
+    {
+      "id": "1009352-45.2024.8.11.0041",
+      "tribunal_code": "TJMT",
+      "tribunal": "Tribunal de Justiça de Mato Grosso",
+      "instancia": "2º Grau",
+      "numero_processo": "1009352-45.2024.8.11.0041",
+      "departamento": "Segunda Câmara de Direito Privado",
+      "julgador": "Des. Sebastião Barbosa Farias",
+      "ementa": "APELAÇÃO CÍVEL — ARRENDAMENTO RURAL — PRORROGAÇÃO TÁCITA...",
+      "data_publicacao": "2026-05-28T00:00:00+00:00",
+      "url": "https://jurisprudencia.tjmt.jus.br/...",
+      "process_type": "Apelação Cível",
+      "trial_date": "2026-05-20"
+    }
+  ],
+  "page": 1,
+  "page_size": 20,
+  "has_more": true,
+  "total_returned": 20
+}
+```
+
+```json title="403 Forbidden — sem plano"
+{ "detail": "Recurso exclusivo para assinantes PRO ou Apoiador", "code": "http_error" }
+```
+
+```json title="429 Too Many Requests — limite mensal do plano"
+{ "detail": "Limite mensal atingido (50/50 buscas). Faça upgrade para Apoiador para buscas ilimitadas.", "code": "http_error" }
+```
+
+```json title="429 Too Many Requests — limite diário do provedor"
+{ "detail": "Limite diário do provedor de jurisprudência atingido. Tente novamente em algumas horas ou reduza o número de tribunais por busca.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/jurisprudencia/{tribunal_code}/{juris_id}">
+`juris_id` é o número do processo (a rota aceita pontos e traços via conversor `:path`).
+
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/jurisprudencia/TJMT/1009352-45.2024.8.11.0041" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "id": "1009352-45.2024.8.11.0041",
+  "tribunal_code": "TJMT",
+  "tribunal": "Tribunal de Justiça de Mato Grosso",
+  "instancia": "2º Grau",
+  "numero_processo": "1009352-45.2024.8.11.0041",
+  "departamento": "Segunda Câmara de Direito Privado",
+  "julgador": "Des. Sebastião Barbosa Farias",
+  "ementa": "APELAÇÃO CÍVEL — ARRENDAMENTO RURAL — PRORROGAÇÃO TÁCITA — ementa completa...",
+  "data_publicacao": "2026-05-28T00:00:00+00:00",
+  "url": "https://jurisprudencia.tjmt.jus.br/...",
+  "process_type": "Apelação Cível",
+  "trial_date": "2026-05-20"
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Jurisprudência não encontrada", "code": "http_error" }
+```
+
+403 sem plano e 429 do provedor: mesmos shapes do `/search`.
+</Accordion>
+</AccordionGroup>
+
+## Pastas do usuário (`/juris-folders`)
 
 O usuário organiza decisões encontradas na consulta em pastas pessoais (RLS: só as próprias).
 
 | Método | Path | Descrição | Auth |
 |---|---|---|---|
-| GET | `/juris_folders` | Pastas do usuário | JWT |
-| POST | `/juris_folders` | Cria pasta | JWT |
-| GET | `/juris_folders/{folder_id}` | Pasta + itens salvos | JWT |
-| PATCH | `/juris_folders/{folder_id}` | Renomeia/edita | JWT |
-| DELETE | `/juris_folders/{folder_id}` | Remove | JWT |
+| GET | `/juris-folders` | Pastas do usuário | JWT |
+| POST | `/juris-folders` | Cria pasta | JWT |
+| GET | `/juris-folders/by-slug/{slug}` | Pasta por slug | JWT |
+| GET | `/juris-folders/{folder_id}/items` | Itens salvos da pasta | JWT |
+| POST | `/juris-folders/{folder_id}/items` | Salva decisão na pasta | JWT |
+| DELETE | `/juris-folders/{folder_id}/items/{item_id}` | Remove item da pasta | JWT |
+| GET | `/juris-folders/saved-map` | Mapa de decisões já salvas | JWT |
+| PATCH | `/juris-folders/{folder_id}` | Renomeia/edita | JWT |
+| DELETE | `/juris-folders/{folder_id}` | Remove | JWT |
+
+<Note>
+O prefixo real do router é `/juris-folders` (hífen). Além do JWT, todos os endpoints exigem plano PRO ou Apoiador (403 abaixo).
+</Note>
+
+<AccordionGroup>
+<Accordion title="GET /api/v1/juris-folders">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/juris-folders" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "1d2e3f4a-5b6c-4d7e-8f9a-0b1c2d3e4f5a",
+    "name": "Arrendamento — teses favoráveis",
+    "slug": "arrendamento-teses-favoraveis",
+    "color": "#2F855A",
+    "item_count": 7,
+    "created_at": "2026-05-02T10:00:00+00:00",
+    "updated_at": "2026-06-10T09:00:00+00:00"
+  }
+]
+```
+
+```json title="403 Forbidden — sem plano"
+{ "detail": "Pastas de jurisprudência estão disponíveis apenas para assinantes PRO ou Apoiadores.", "code": "http_error" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/juris-folders">
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/juris-folders" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "CPR e garantias", "color": "#B7791F"}'
+```
+
+```json title="201 Created"
+{
+  "id": "2e3f4a5b-6c7d-4e8f-9a0b-1c2d3e4f5a6b",
+  "name": "CPR e garantias",
+  "slug": "cpr-e-garantias",
+  "color": "#B7791F",
+  "item_count": 0,
+  "created_at": "2026-06-12T16:20:00+00:00",
+  "updated_at": "2026-06-12T16:20:00+00:00"
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/juris-folders/{folder_id}/items">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/juris-folders/1d2e3f4a-5b6c-4d7e-8f9a-0b1c2d3e4f5a/items" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "3f4a5b6c-7d8e-4f9a-0b1c-2d3e4f5a6b7c",
+    "external_id": "1009352-45.2024.8.11.0041",
+    "tribunal_code": "TJMT",
+    "snapshot": {
+      "id": "1009352-45.2024.8.11.0041",
+      "tribunal_code": "TJMT",
+      "tribunal": "Tribunal de Justiça de Mato Grosso",
+      "ementa": "APELAÇÃO CÍVEL — ARRENDAMENTO RURAL — PRORROGAÇÃO TÁCITA..."
+    },
+    "notes": "Usar na contestação do caso Fazenda Boa Vista.",
+    "added_at": "2026-06-10T09:00:00+00:00"
+  }
+]
+```
+
+`snapshot` é o item completo congelado no momento de salvar. Há também `GET /juris-folders/by-slug/{slug}` (metadados da pasta) e `GET /juris-folders/saved-map` (mapa `"TJMT::<id>": [folder_ids]`).
+</Accordion>
+
+<Accordion title="PATCH /api/v1/juris-folders/{folder_id}">
+```bash title="Requisição"
+curl -X PATCH "https://api.agropujante.com.br/api/v1/juris-folders/2e3f4a5b-6c7d-4e8f-9a0b-1c2d3e4f5a6b" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "CPR, penhor e garantias"}'
+```
+
+```json title="200 OK"
+{
+  "id": "2e3f4a5b-6c7d-4e8f-9a0b-1c2d3e4f5a6b",
+  "name": "CPR, penhor e garantias",
+  "slug": "cpr-e-garantias",
+  "color": "#B7791F",
+  "item_count": 0,
+  "created_at": "2026-06-12T16:20:00+00:00",
+  "updated_at": "2026-06-12T16:25:00+00:00"
+}
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v1/juris-folders/{folder_id}">
+Remove a pasta e os itens (CASCADE).
+
+```bash title="Requisição"
+curl -X DELETE "https://api.agropujante.com.br/api/v1/juris-folders/2e3f4a5b-6c7d-4e8f-9a0b-1c2d3e4f5a6b" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem body)
+```
+</Accordion>
+</AccordionGroup>
 
 ## Decisões (`/decisoes`)
 
 Router sobre a tabela `decisoes` — decisões judiciais armazenadas localmente (distintas tanto dos julgados de boletim quanto da consulta externa).
+
+<AccordionGroup>
+<Accordion title="GET /api/v1/decisoes/{slug}">
+Página pública de uma decisão individual (item do JSONB `julgados` de um boletim publicado) — sem autenticação, por escolha editorial (destino dos links de newsletter).
+
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/decisoes/penhora-de-safra-futura-em-execucao-de-cpr"
+```
+
+```json title="200 OK"
+{
+  "slug": "penhora-de-safra-futura-em-execucao-de-cpr",
+  "tribunal": "STJ",
+  "titulo": "Penhora de safra futura em execução de CPR",
+  "processo": "REsp 2.104.512/MT",
+  "relator": "Min. Nancy Andrighi",
+  "ementa_resumo": "A penhora de safra futura vinculada a CPR exige...",
+  "ementa_completa": "<p>RECURSO ESPECIAL. EXECUÇÃO DE CÉDULA DE PRODUTO RURAL...</p>",
+  "link_exordial": "https://scon.stj.jus.br/...",
+  "integra_url": "https://xyz.supabase.co/storage/v1/object/public/public-assets/decisoes/penhora-de-safra-futura-em-execucao-de-cpr.pdf",
+  "tags": ["CPR", "Execução"],
+  "comentario_editorial": null,
+  "boletim": {
+    "slug": "boletim-semana-08-06-2026",
+    "title": "Boletim de Julgados — semana de 08/06/2026",
+    "period_start_date": "2026-06-08",
+    "published_at": "2026-06-09T08:00:00+00:00"
+  }
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Decisao nao encontrada", "code": "http_error" }
+```
+</Accordion>
+</AccordionGroup>

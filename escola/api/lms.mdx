@@ -6,6 +6,24 @@ icon: "book-open"
 
 Base: `/api/v2/lms` (certificados em `/api/v2/lessons` e `/api/v2/certificates`). Rotas sob `/lms/catalog/*` são a visão do **aluno**; as demais são administração de conteúdo.
 
+## Erros comuns
+
+Erros de `HTTPException`/`AppException` saem com `detail` + `code` (handler global em `core/exceptions.py`). O 422 de validação segue o shape padrão do FastAPI.
+
+```json title="401 Unauthorized"
+{ "detail": "Token de autenticacao nao fornecido", "code": "http_error" }
+```
+
+```json title="403 Forbidden (rota MANAGER sem role ADMIN/COMMUNITY_MANAGER)"
+{ "detail": "Acesso restrito", "code": "http_error" }
+```
+
+```json title="422 Unprocessable Entity"
+{ "detail": [{ "loc": ["body", "name"], "msg": "field required", "type": "missing" }] }
+```
+
+Uploads dependem do Bunny: se não configurado, retornam `503 { "detail": "Bunny Storage não configurado" }` (ou `"Bunny Stream não configurado"` no upload de vídeo).
+
 ## Catálogo (aluno)
 
 | Método | Path | Descrição | Auth |
@@ -13,6 +31,161 @@ Base: `/api/v2/lms` (certificados em `/api/v2/lessons` e `/api/v2/certificates`)
 | GET | `/lms/catalog` | Catálogo de trilhas/cursos (`?kind`) | JWT |
 | GET | `/lms/catalog/{track_id}` | Detalhe de trilha | JWT |
 | GET | `/lms/catalog/progress/recent` | "Continue assistindo" (`?limit`) | JWT |
+
+### Exemplos
+
+<AccordionGroup>
+
+<Accordion title="GET /api/v2/lms/catalog">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/lms/catalog?kind=TRILHA" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+Retorna tracks com `courses` e `lessons` aninhados:
+
+```json title="200 OK"
+[
+  {
+    "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+    "name": "Trilha Direito do Agronegócio",
+    "kind": "TRILHA",
+    "description": "Do contrato de arrendamento ao CPR.",
+    "coverUrl": "https://cdn.escolapujante.com.br/lms/tracks/a1b2.../cover.jpg",
+    "coverImageUrl": "https://cdn.escolapujante.com.br/lms/tracks/a1b2.../cover.jpg",
+    "order": 1,
+    "active": true,
+    "createdAt": "2026-02-01T10:00:00.000000+00:00",
+    "updatedAt": "2026-06-01T09:00:00.000000+00:00",
+    "courses": [
+      {
+        "id": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+        "trackId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+        "title": "Contratos Agrários",
+        "description": null,
+        "status": "PUBLISHED",
+        "order": 1,
+        "coverImageUrl": null,
+        "publishedAt": "2026-02-10T00:00:00+00:00",
+        "createdAt": "2026-02-01T10:05:00.000000+00:00",
+        "updatedAt": "2026-02-10T08:00:00.000000+00:00",
+        "lessons": [
+          {
+            "id": "c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f",
+            "courseId": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+            "title": "Arrendamento rural na prática",
+            "description": null,
+            "type": "VIDEO",
+            "videoUrl": "https://iframe.mediadelivery.net/embed/12345/abc...",
+            "contentUrl": "https://iframe.mediadelivery.net/embed/12345/abc...",
+            "contentText": null,
+            "topicsText": "[00:00] Abertura\n[05:12] Cláusulas essenciais",
+            "transcriptText": null,
+            "transcriptSrtUrl": null,
+            "teacherId": "d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a",
+            "coverUrl": null,
+            "coverImageUrl": null,
+            "order": 1,
+            "durationSeconds": 2700,
+            "durationMinutes": 45,
+            "publishedAt": "2026-02-10T00:00:00+00:00",
+            "isFree": false,
+            "isCourseOfMonth": false,
+            "createdAt": "2026-02-01T10:10:00.000000+00:00",
+            "updatedAt": "2026-02-10T08:00:00.000000+00:00",
+            "teacher": { "id": "d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a", "name": "Dr. Ricardo Albuquerque", "bio": "Advogado agrarista", "avatarUrl": null },
+            "teachers": [{ "id": "d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a", "name": "Dr. Ricardo Albuquerque", "bio": "Advogado agrarista", "avatarUrl": null }],
+            "teacherIds": ["d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a"]
+          }
+        ]
+      }
+    ]
+  }
+]
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/lms/catalog/{track_id}">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/lms/catalog/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+Retorna `{track, lessons}` com as lessons **achatadas** (cada uma com referência ao `course`):
+
+```json title="200 OK"
+{
+  "track": {
+    "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+    "name": "Trilha Direito do Agronegócio",
+    "kind": "TRILHA",
+    "description": "Do contrato de arrendamento ao CPR.",
+    "coverUrl": null,
+    "coverImageUrl": null,
+    "order": 1,
+    "active": true,
+    "createdAt": "2026-02-01T10:00:00.000000+00:00",
+    "updatedAt": "2026-06-01T09:00:00.000000+00:00"
+  },
+  "lessons": [
+    {
+      "id": "c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f",
+      "courseId": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+      "title": "Arrendamento rural na prática",
+      "type": "VIDEO",
+      "order": 1,
+      "durationMinutes": 45,
+      "publishedAt": "2026-02-10T00:00:00+00:00",
+      "isFree": false,
+      "course": { "id": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e", "title": "Contratos Agrários", "status": "PUBLISHED", "order": 1 }
+    }
+  ]
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Track nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/lms/catalog/progress/recent">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/lms/catalog/progress/recent?limit=12" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+[
+  {
+    "lessonId": "c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f",
+    "watchedSeconds": 1320,
+    "lastPositionSeconds": 1320,
+    "completed": false,
+    "accessedAt": "2026-06-11T22:14:05.330000+00:00",
+    "topicsTotal": 8,
+    "topicsChecked": 5,
+    "lesson": {
+      "id": "c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f",
+      "title": "Arrendamento rural na prática",
+      "coverImageUrl": null,
+      "durationMinutes": 45,
+      "course": { "id": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e", "title": "Contratos Agrários", "order": 1 },
+      "track": { "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d", "name": "Trilha Direito do Agronegócio", "kind": "TRILHA" }
+    }
+  }
+]
+```
+
+Retorna `[]` se o aluno nunca acessou nenhuma aula.
+
+</Accordion>
+
+</AccordionGroup>
 
 ## Tracks (admin)
 
@@ -25,10 +198,124 @@ Base: `/api/v2/lms` (certificados em `/api/v2/lessons` e `/api/v2/certificates`)
 | DELETE | `/lms/tracks/{track_id}` | Remover | MANAGER |
 | POST | `/lms/tracks/{track_id}/cover` | Upload de cover (multipart) | MANAGER |
 
+### Exemplos
+
+<AccordionGroup>
+
+<Accordion title="GET /api/v2/lms/tracks">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/lms/tracks?kind=TRILHA" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+    "name": "Trilha Direito do Agronegócio",
+    "kind": "TRILHA",
+    "description": "Do contrato de arrendamento ao CPR.",
+    "coverUrl": null,
+    "coverImageUrl": null,
+    "order": 1,
+    "active": true,
+    "createdAt": "2026-02-01T10:00:00.000000+00:00",
+    "updatedAt": "2026-06-01T09:00:00.000000+00:00"
+  }
+]
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/lms/tracks">
+
+`kind` real (enum do banco): `TRILHA`, `IMERSAO` ou `CURSO_DO_MES`.
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/lms/tracks" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Trilha Direito do Agronegócio", "kind": "TRILHA", "description": "Do contrato de arrendamento ao CPR.", "order": 1, "active": true }'
+```
+
+Resposta 201: objeto track (mesmo shape do `GET /lms/tracks`).
+
+```json title="422 Unprocessable Entity (regra de negócio)"
+{ "detail": "Falha ao criar track.", "code": "validation_error" }
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/lms/tracks/{track_id}">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/lms/tracks/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+Resposta 200: objeto track.
+
+```json title="404 Not Found"
+{ "detail": "Track nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+<Accordion title="PATCH /api/v2/lms/tracks/{track_id}">
+
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/lms/tracks/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "description": "Atualizada para a safra 2026/27.", "active": false }'
+```
+
+Resposta 200: objeto track atualizado. Erros: `404 { "detail": "Track nao encontrado", "code": "not_found" }`.
+
+</Accordion>
+
+<Accordion title="DELETE /api/v2/lms/tracks/{track_id}">
+
+```bash title="Requisição"
+curl -X DELETE "https://api.escolapujante.com.br/api/v2/lms/tracks/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{ "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d" }
+```
+
+```json title="404 Not Found"
+{ "detail": "Track nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/lms/tracks/{track_id}/cover">
+
+```bash title="Requisição (multipart)"
+curl -X POST "https://api.escolapujante.com.br/api/v2/lms/tracks/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d/cover" \
+  -H "Authorization: Bearer eyJ..." \
+  -F "file=@cover.jpg"
+```
+
+Resposta 200: objeto track com `coverImageUrl` apontando pro CDN do Bunny.
+
+```json title="503 Service Unavailable"
+{ "detail": "Bunny Storage não configurado", "code": "http_error" }
+```
+
+`404 { "detail": "Track nao encontrado", "code": "not_found" }` se o id não existe.
+
+</Accordion>
+
+</AccordionGroup>
+
 ### POST /lms/tracks
 
 <ParamField body="name" type="string" required>Nome da trilha.</ParamField>
-<ParamField body="kind" type="string" required>`track`, `imersion` ou `course_of_month`.</ParamField>
+<ParamField body="kind" type="string" required>`TRILHA`, `IMERSAO` ou `CURSO_DO_MES`.</ParamField>
 <ParamField body="description" type="string">Descrição.</ParamField>
 <ParamField body="coverImageUrl" type="string">URL da capa.</ParamField>
 <ParamField body="order" type="number">Ordem de exibição.</ParamField>
@@ -43,6 +330,99 @@ Base: `/api/v2/lms` (certificados em `/api/v2/lessons` e `/api/v2/certificates`)
 | PATCH | `/lms/courses/{course_id}` | Atualizar | MANAGER |
 | DELETE | `/lms/courses/{course_id}` | Remover | MANAGER |
 | POST | `/lms/courses/{course_id}/cover` | Upload de cover (multipart) | MANAGER |
+
+### Exemplos
+
+<AccordionGroup>
+
+<Accordion title="GET /api/v2/lms/courses">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/lms/courses?trackId=a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d&status=PUBLISHED" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+    "trackId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+    "title": "Contratos Agrários",
+    "description": null,
+    "status": "PUBLISHED",
+    "order": 1,
+    "coverImageUrl": null,
+    "publishedAt": "2026-02-10T00:00:00+00:00",
+    "createdAt": "2026-02-01T10:05:00.000000+00:00",
+    "updatedAt": "2026-02-10T08:00:00.000000+00:00"
+  }
+]
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/lms/courses">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/lms/courses" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "trackId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d", "title": "Contratos Agrários", "description": "Arrendamento, parceria e CPR.", "status": "DRAFT" }'
+```
+
+Resposta 201: objeto course (mesmo shape do `GET /lms/courses`).
+
+```json title="422 Unprocessable Entity (regra de negócio)"
+{ "detail": "Falha ao criar course.", "code": "validation_error" }
+```
+
+`trackId` inexistente (FK violation traduzida): `404 { "detail": "Recurso relacionado nao encontrado.", "code": "fk_violation" }`.
+
+</Accordion>
+
+<Accordion title="PATCH /api/v2/lms/courses/{course_id}">
+
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/lms/courses/b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "status": "PUBLISHED" }'
+```
+
+Resposta 200: objeto course atualizado. Erros: `404 { "detail": "Course nao encontrado", "code": "not_found" }`.
+
+</Accordion>
+
+<Accordion title="DELETE /api/v2/lms/courses/{course_id}">
+
+```bash title="Requisição"
+curl -X DELETE "https://api.escolapujante.com.br/api/v2/lms/courses/b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{ "id": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e" }
+```
+
+```json title="404 Not Found"
+{ "detail": "Course nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/lms/courses/{course_id}/cover">
+
+```bash title="Requisição (multipart)"
+curl -X POST "https://api.escolapujante.com.br/api/v2/lms/courses/b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e/cover" \
+  -H "Authorization: Bearer eyJ..." \
+  -F "file=@cover.jpg"
+```
+
+Resposta 200: objeto course com `coverImageUrl` atualizado. Erros: `503 { "detail": "Bunny Storage não configurado" }`, `404 { "detail": "Course nao encontrado", "code": "not_found" }`.
+
+</Accordion>
+
+</AccordionGroup>
 
 ### POST /lms/courses
 
@@ -66,6 +446,184 @@ Base: `/api/v2/lms` (certificados em `/api/v2/lessons` e `/api/v2/certificates`)
 | POST | `/lms/lessons/{lesson_id}/transcript` | Upload de transcrição (multipart) | MANAGER |
 | GET | `/lms/lessons/{lesson_id}/materials` | Listar materiais | JWT |
 
+### Exemplos
+
+<AccordionGroup>
+
+<Accordion title="GET /api/v2/lms/lessons">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/lms/lessons?courseId=b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+Resposta 200: array de lessons no shape completo (igual às lessons aninhadas do `GET /lms/catalog`), incluindo `teacher`, `teachers`, `teacherIds` e `course` (com `track` aninhada).
+
+</Accordion>
+
+<Accordion title="POST /api/v2/lms/lessons">
+
+Body é um dict camelCase livre (campos aceitos: `courseId`, `title`, `description`, `type`, `contentUrl`, `contentText`, `topicsText`, `transcriptText`, `transcriptSrtUrl`, `teacherId`, `coverImageUrl`, `durationMinutes`, `publishedAt`, `isFree`, `isCourseOfMonth`, `aiAgentId`, `order`) + `teacherIds` (M2M).
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/lms/lessons" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "courseId": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e", "title": "Arrendamento rural na prática", "durationMinutes": 45, "topicsText": "[00:00] Abertura\n[05:12] Cláusulas essenciais", "teacherIds": ["d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a"] }'
+```
+
+Resposta 201: lesson completa (mesmo shape do `GET /lms/lessons`).
+
+```json title="422 Unprocessable Entity (regra de negócio)"
+{ "detail": "courseId obrigatorio", "code": "validation_error" }
+```
+
+Outra mensagem 422: `"title obrigatorio"`.
+
+</Accordion>
+
+<Accordion title="PATCH /api/v2/lms/lessons/{lesson_id}">
+
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/lms/lessons/c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "publishedAt": "2026-06-12T00:00:00Z", "isFree": true }'
+```
+
+Resposta 200: lesson completa atualizada. Erros: `404 { "detail": "Lesson nao encontrado", "code": "not_found" }`.
+
+</Accordion>
+
+<Accordion title="DELETE /api/v2/lms/lessons/{lesson_id}">
+
+Apaga a aula e dependências (teachers M2M, materiais, comentários, mensagens de IA, progresso).
+
+```bash title="Requisição"
+curl -X DELETE "https://api.escolapujante.com.br/api/v2/lms/lessons/c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{ "id": "c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f" }
+```
+
+```json title="404 Not Found"
+{ "detail": "Lesson nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/lms/lessons/{lesson_id}/cover">
+
+```bash title="Requisição (multipart)"
+curl -X POST "https://api.escolapujante.com.br/api/v2/lms/lessons/c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f/cover" \
+  -H "Authorization: Bearer eyJ..." \
+  -F "file=@cover.jpg"
+```
+
+Resposta 200: lesson completa com `coverImageUrl` atualizado. Erros: `503 { "detail": "Bunny Storage não configurado" }`, `404 { "detail": "Lesson nao encontrado", "code": "not_found" }`.
+
+</Accordion>
+
+<Accordion title="POST /api/v2/lms/lessons/{lesson_id}/video">
+
+Sobe o vídeo pro Bunny Stream e grava o embed em `contentUrl` (com `type: "VIDEO"`).
+
+```bash title="Requisição (multipart)"
+curl -X POST "https://api.escolapujante.com.br/api/v2/lms/lessons/c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f/video" \
+  -H "Authorization: Bearer eyJ..." \
+  -F "file=@aula-arrendamento.mp4"
+```
+
+Resposta 200: lesson completa com `videoUrl`/`contentUrl` apontando pro embed do Bunny Stream.
+
+```json title="503 Service Unavailable"
+{ "detail": "Bunny Stream não configurado", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/lms/lessons/{lesson_id}/material">
+
+```bash title="Requisição (multipart)"
+curl -X POST "https://api.escolapujante.com.br/api/v2/lms/lessons/c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f/material" \
+  -H "Authorization: Bearer eyJ..." \
+  -F "file=@modelo-contrato.pdf" \
+  -F "title=Modelo de contrato de arrendamento"
+```
+
+```json title="200 OK"
+{
+  "id": "e5f6a7b8-c9d0-4e1f-2a3b-4c5d6e7f8a9b",
+  "lessonId": "c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f",
+  "title": "Modelo de contrato de arrendamento",
+  "fileUrl": "https://cdn.escolapujante.com.br/lms/lessons/c3d4.../materials/modelo-contrato.pdf",
+  "contentType": "application/pdf",
+  "sizeBytes": 184320,
+  "createdAt": "2026-06-12T11:30:02.881000+00:00",
+  "updatedAt": "2026-06-12T11:30:02.881000+00:00"
+}
+```
+
+Erros: `503 { "detail": "Bunny Storage não configurado" }`.
+
+</Accordion>
+
+<Accordion title="DELETE /api/v2/lms/lessons/{lesson_id}/materials/{material_id}">
+
+```bash title="Requisição"
+curl -X DELETE "https://api.escolapujante.com.br/api/v2/lms/lessons/c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f/materials/e5f6a7b8-c9d0-4e1f-2a3b-4c5d6e7f8a9b" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{ "id": "e5f6a7b8-c9d0-4e1f-2a3b-4c5d6e7f8a9b" }
+```
+
+```json title="404 Not Found"
+{ "detail": "Material nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/lms/lessons/{lesson_id}/transcript">
+
+```bash title="Requisição (multipart)"
+curl -X POST "https://api.escolapujante.com.br/api/v2/lms/lessons/c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f/transcript" \
+  -H "Authorization: Bearer eyJ..." \
+  -F "file=@aula-arrendamento.srt"
+```
+
+Resposta 200: lesson completa com `transcriptSrtUrl` atualizado. Erros: `503 { "detail": "Bunny Storage não configurado" }`, `404 { "detail": "Lesson nao encontrado", "code": "not_found" }`.
+
+</Accordion>
+
+<Accordion title="GET /api/v2/lms/lessons/{lesson_id}/materials">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/lms/lessons/c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f/materials" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "e5f6a7b8-c9d0-4e1f-2a3b-4c5d6e7f8a9b",
+    "lessonId": "c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f",
+    "title": "Modelo de contrato de arrendamento",
+    "fileUrl": "https://cdn.escolapujante.com.br/lms/lessons/c3d4.../materials/modelo-contrato.pdf",
+    "fileSize": 184320,
+    "mimeType": "application/pdf",
+    "createdAt": "2026-06-12T11:30:02.881000+00:00"
+  }
+]
+```
+
+</Accordion>
+
+</AccordionGroup>
+
 ## Teachers
 
 | Método | Path | Descrição | Auth |
@@ -74,6 +632,90 @@ Base: `/api/v2/lms` (certificados em `/api/v2/lessons` e `/api/v2/certificates`)
 | POST | `/lms/teachers` | Criar | MANAGER |
 | PATCH | `/lms/teachers/{teacher_id}` | Atualizar | MANAGER |
 | DELETE | `/lms/teachers/{teacher_id}` | Remover | MANAGER |
+
+### Exemplos
+
+<AccordionGroup>
+
+<Accordion title="GET /api/v2/lms/teachers">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/lms/teachers?search=ricardo" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a",
+    "name": "Dr. Ricardo Albuquerque",
+    "bio": "Advogado agrarista com 20 anos de atuação.",
+    "avatarUrl": "https://cdn.escolapujante.com.br/teachers/ricardo.jpg",
+    "createdAt": "2026-01-10T12:00:00.000000+00:00",
+    "updatedAt": "2026-05-02T08:30:00.000000+00:00",
+    "_count": { "lessons": 14 }
+  }
+]
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/lms/teachers">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/lms/teachers" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Dra. Mariana Castro", "bio": "Especialista em crédito rural.", "avatarUrl": "https://cdn.escolapujante.com.br/teachers/mariana.jpg" }'
+```
+
+Resposta 201: objeto teacher (mesmo shape do GET, com `_count.lessons: 0`).
+
+```json title="422 Unprocessable Entity"
+{ "detail": "name obrigatorio", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="PATCH /api/v2/lms/teachers/{teacher_id}">
+
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/lms/teachers/d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "bio": "Advogado agrarista, professor convidado da Escola Pujante." }'
+```
+
+Resposta 200: objeto teacher atualizado.
+
+```json title="404 Not Found"
+{ "detail": "Teacher nao encontrado", "code": "not_found" }
+```
+
+```json title="422 Unprocessable Entity"
+{ "detail": "name nao pode ser vazio", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="DELETE /api/v2/lms/teachers/{teacher_id}">
+
+```bash title="Requisição"
+curl -X DELETE "https://api.escolapujante.com.br/api/v2/lms/teachers/d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{ "id": "d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a" }
+```
+
+```json title="404 Not Found"
+{ "detail": "Teacher nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+</AccordionGroup>
 
 ### POST /lms/teachers
 
@@ -96,6 +738,211 @@ Base: `/api/v2/lms` (certificados em `/api/v2/lessons` e `/api/v2/certificates`)
 | PATCH | `/lms/ai-agents/{agent_id}/knowledge/{knowledge_id}` | Atualizar knowledge | MANAGER |
 | DELETE | `/lms/ai-agents/{agent_id}/knowledge/{knowledge_id}` | Remover knowledge | MANAGER |
 
+### Exemplos
+
+<AccordionGroup>
+
+<Accordion title="GET /api/v2/lms/ai-agents">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/lms/ai-agents?search=tutor&active=true" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "f6a7b8c9-d0e1-4f2a-3b4c-5d6e7f8a9b0c",
+    "name": "Tutor de Contratos Agrários",
+    "description": "Responde dúvidas sobre a aula.",
+    "objective": "Tirar dúvidas dos alunos",
+    "function": "tutor",
+    "openaiAssistantId": "asst_AbC123...",
+    "userTokenLimit": 100000,
+    "isDefault": false,
+    "active": true,
+    "createdAt": "2026-03-01T10:00:00.000000+00:00",
+    "updatedAt": "2026-06-01T10:00:00.000000+00:00",
+    "_count": { "lessons": 6 }
+  }
+]
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/lms/ai-agents/usage-report">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/lms/ai-agents/usage-report?agentId=f6a7b8c9-d0e1-4f2a-3b4c-5d6e7f8a9b0c&days=30" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{
+  "period": { "from": "2026-05-13T11:30:02.881000+00:00", "to": "2026-06-12T11:30:02.881000+00:00", "days": 30 },
+  "totals": { "requests": 152, "promptTokens": 480000, "completionTokens": 92000, "totalTokens": 572000, "avgTokensPerRequest": 3763 },
+  "perUser": [
+    {
+      "userId": "clx3k9d2f0002mk08ab1c2d3e",
+      "userName": "Ana Carolina Souza",
+      "userEmail": "ana.souza@exemplo.com.br",
+      "requests": 41,
+      "promptTokens": 130000,
+      "completionTokens": 25000,
+      "totalTokens": 155000,
+      "lastRequestAt": "2026-06-11T22:14:05.330000+00:00"
+    }
+  ],
+  "perAgent": [
+    { "agentId": "f6a7b8c9-d0e1-4f2a-3b4c-5d6e7f8a9b0c", "agentName": "Tutor de Contratos Agrários", "requests": 152, "promptTokens": 480000, "completionTokens": 92000, "totalTokens": 572000 }
+  ]
+}
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/lms/ai-agents/{agent_id}">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/lms/ai-agents/f6a7b8c9-d0e1-4f2a-3b4c-5d6e7f8a9b0c" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+Resposta 200: objeto agent (mesmo shape do `GET /lms/ai-agents`).
+
+```json title="404 Not Found"
+{ "detail": "AiAgent nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/lms/ai-agents">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/lms/ai-agents" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Tutor de Contratos Agrários", "description": "Responde dúvidas sobre a aula.", "openaiAssistantId": "asst_AbC123...", "userTokenLimit": 100000, "isDefault": false, "active": true }'
+```
+
+Resposta 201: objeto agent criado.
+
+```json title="422 Unprocessable Entity"
+{ "detail": "name obrigatorio", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="PATCH /api/v2/lms/ai-agents/{agent_id}">
+
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/lms/ai-agents/f6a7b8c9-d0e1-4f2a-3b4c-5d6e7f8a9b0c" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "userTokenLimit": 150000, "active": true }'
+```
+
+Resposta 200: objeto agent atualizado. Erros: `404 { "detail": "AiAgent nao encontrado", "code": "not_found" }`.
+
+</Accordion>
+
+<Accordion title="DELETE /api/v2/lms/ai-agents/{agent_id}">
+
+```bash title="Requisição"
+curl -X DELETE "https://api.escolapujante.com.br/api/v2/lms/ai-agents/f6a7b8c9-d0e1-4f2a-3b4c-5d6e7f8a9b0c" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{ "id": "f6a7b8c9-d0e1-4f2a-3b4c-5d6e7f8a9b0c" }
+```
+
+```json title="404 Not Found"
+{ "detail": "AiAgent nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/lms/ai-agents/{agent_id}/knowledge">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/lms/ai-agents/f6a7b8c9-d0e1-4f2a-3b4c-5d6e7f8a9b0c/knowledge" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "a7b8c9d0-e1f2-4a3b-4c5d-6e7f8a9b0c1d",
+    "agentId": "f6a7b8c9-d0e1-4f2a-3b4c-5d6e7f8a9b0c",
+    "title": "Estatuto da Terra comentado",
+    "content": null,
+    "fileUrl": "https://cdn.escolapujante.com.br/lms/ai-agents/f6a7.../knowledge/estatuto.pdf",
+    "contentType": "application/pdf",
+    "sizeBytes": 412000,
+    "order": 0,
+    "active": true,
+    "createdAt": "2026-03-01T10:00:00.000000+00:00",
+    "updatedAt": "2026-03-01T10:00:00.000000+00:00"
+  }
+]
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/lms/ai-agents/{agent_id}/knowledge">
+
+Form-data: `title` (obrigatório), `content` (texto, opcional), `file` (opcional), `order`, `active`.
+
+```bash title="Requisição (multipart)"
+curl -X POST "https://api.escolapujante.com.br/api/v2/lms/ai-agents/f6a7b8c9-d0e1-4f2a-3b4c-5d6e7f8a9b0c/knowledge" \
+  -H "Authorization: Bearer eyJ..." \
+  -F "title=Estatuto da Terra comentado" \
+  -F "file=@estatuto.pdf" \
+  -F "order=0" \
+  -F "active=true"
+```
+
+Resposta 201: objeto knowledge (mesmo shape do GET). Erros: `503 { "detail": "Bunny Storage não configurado" }` quando envia `file` sem Bunny configurado.
+
+</Accordion>
+
+<Accordion title="PATCH /api/v2/lms/ai-agents/{agent_id}/knowledge/{knowledge_id}">
+
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/lms/ai-agents/f6a7b8c9-d0e1-4f2a-3b4c-5d6e7f8a9b0c/knowledge/a7b8c9d0-e1f2-4a3b-4c5d-6e7f8a9b0c1d" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "title": "Estatuto da Terra — edição 2026", "active": false }'
+```
+
+Resposta 200: objeto knowledge atualizado.
+
+```json title="404 Not Found"
+{ "detail": "Knowledge nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+<Accordion title="DELETE /api/v2/lms/ai-agents/{agent_id}/knowledge/{knowledge_id}">
+
+```bash title="Requisição"
+curl -X DELETE "https://api.escolapujante.com.br/api/v2/lms/ai-agents/f6a7b8c9-d0e1-4f2a-3b4c-5d6e7f8a9b0c/knowledge/a7b8c9d0-e1f2-4a3b-4c5d-6e7f8a9b0c1d" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{ "id": "a7b8c9d0-e1f2-4a3b-4c5d-6e7f8a9b0c1d" }
+```
+
+```json title="404 Not Found"
+{ "detail": "Knowledge nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+</AccordionGroup>
+
 ## Progresso e chat de IA (aluno)
 
 | Método | Path | Descrição | Auth |
@@ -106,6 +953,160 @@ Base: `/api/v2/lms` (certificados em `/api/v2/lessons` e `/api/v2/certificates`)
 | PATCH | `/lms/catalog/lessons/{lesson_id}/topics-progress` | Atualizar tópicos checados | JWT |
 | GET | `/lms/catalog/lessons/{lesson_id}/progress` | Progresso de vídeo | JWT |
 | PATCH | `/lms/catalog/lessons/{lesson_id}/progress` | Atualizar progresso de vídeo | JWT |
+
+### Exemplos
+
+<AccordionGroup>
+
+<Accordion title="POST /api/v2/lms/catalog/lessons/{lesson_id}/ai-chat">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/lms/catalog/lessons/c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f/ai-chat" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "message": "Qual a diferença entre arrendamento e parceria rural?" }'
+```
+
+```json title="200 OK"
+{
+  "reply": "A diferença central está na distribuição do risco: no arrendamento...",
+  "agentId": "f6a7b8c9-d0e1-4f2a-3b4c-5d6e7f8a9b0c",
+  "agentName": "Tutor de Contratos Agrários",
+  "threadId": "thread_AbC123...",
+  "promptTokens": 3120,
+  "completionTokens": 410,
+  "totalTokens": 3530
+}
+```
+
+```json title="422 Unprocessable Entity"
+{ "detail": "message obrigatoria", "code": "http_error" }
+```
+
+Outras mensagens 422 (`code: "validation_error"`): `"Aula não tem agente IA vinculado e não há agente padrão ativo"`, `"Agente não tem openai_assistant_id configurado"`, `"OpenAI não configurado no servidor"`, `"Limite mensal de tokens atingido. Aguarde o reset ou fale com o suporte."`.
+
+</Accordion>
+
+<Accordion title="GET /api/v2/lms/catalog/lessons/{lesson_id}/ai-chat/history">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/lms/catalog/lessons/c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f/ai-chat/history" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{
+  "lessonId": "c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f",
+  "messages": [
+    {
+      "id": "b8c9d0e1-f2a3-4b4c-5d6e-7f8a9b0c1d2e",
+      "role": "USER",
+      "content": "Qual a diferença entre arrendamento e parceria rural?",
+      "createdAt": "2026-06-11T22:10:00.000000+00:00",
+      "agentId": "f6a7b8c9-d0e1-4f2a-3b4c-5d6e7f8a9b0c",
+      "promptTokens": null,
+      "completionTokens": null,
+      "totalTokens": null
+    },
+    {
+      "id": "c9d0e1f2-a3b4-4c5d-6e7f-8a9b0c1d2e3f",
+      "role": "ASSISTANT",
+      "content": "A diferença central está na distribuição do risco...",
+      "createdAt": "2026-06-11T22:10:08.000000+00:00",
+      "agentId": "f6a7b8c9-d0e1-4f2a-3b4c-5d6e7f8a9b0c",
+      "promptTokens": 3120,
+      "completionTokens": 410,
+      "totalTokens": 3530
+    }
+  ]
+}
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/lms/catalog/lessons/{lesson_id}/topics-progress">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/lms/catalog/lessons/c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f/topics-progress" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{
+  "lessonId": "c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f",
+  "userId": "clx3k9d2f0002mk08ab1c2d3e",
+  "checkedTopicKeys": ["00:00::Abertura", "05:12::Cláusulas essenciais"]
+}
+```
+
+</Accordion>
+
+<Accordion title="PATCH /api/v2/lms/catalog/lessons/{lesson_id}/topics-progress">
+
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/lms/catalog/lessons/c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f/topics-progress" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "checkedTopicKeys": ["00:00::Abertura", "05:12::Cláusulas essenciais", "18:40::Prazo e renovação"] }'
+```
+
+```json title="200 OK"
+{
+  "lessonId": "c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f",
+  "userId": "clx3k9d2f0002mk08ab1c2d3e",
+  "checkedTopicKeys": ["00:00::Abertura", "05:12::Cláusulas essenciais", "18:40::Prazo e renovação"]
+}
+```
+
+```json title="422 Unprocessable Entity"
+{ "detail": "checkedTopicKeys deve ser lista", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/lms/catalog/lessons/{lesson_id}/progress">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/lms/catalog/lessons/c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f/progress" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{
+  "lessonId": "c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f",
+  "userId": "clx3k9d2f0002mk08ab1c2d3e",
+  "watchedSeconds": 1320,
+  "lastPositionSeconds": 1320,
+  "completed": false,
+  "accessedAt": "2026-06-11T22:14:05.330000+00:00"
+}
+```
+
+</Accordion>
+
+<Accordion title="PATCH /api/v2/lms/catalog/lessons/{lesson_id}/progress">
+
+```bash title="Requisição"
+curl -X PATCH "https://api.escolapujante.com.br/api/v2/lms/catalog/lessons/c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f/progress" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "watchedSeconds": 2700, "lastPositionSeconds": 2700, "completed": true }'
+```
+
+```json title="200 OK"
+{
+  "lessonId": "c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f",
+  "userId": "clx3k9d2f0002mk08ab1c2d3e",
+  "watchedSeconds": 2700,
+  "lastPositionSeconds": 2700,
+  "completed": true,
+  "accessedAt": "2026-06-12T11:30:02.881000+00:00"
+}
+```
+
+</Accordion>
+
+</AccordionGroup>
 
 ### POST /lms/catalog/lessons/\{lesson_id\}/ai-chat
 
@@ -132,6 +1133,179 @@ Base: `/api/v2/lms` (certificados em `/api/v2/lessons` e `/api/v2/certificates`)
 | POST | `/lms/admin/comments/{comment_id}/reply` | Responder comentário | MANAGER |
 | DELETE | `/lms/admin/comments/{comment_id}` | Deletar comentário | MANAGER |
 
+### Exemplos
+
+<AccordionGroup>
+
+<Accordion title="GET /api/v2/lms/catalog/lessons/{lesson_id}/comments">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/lms/catalog/lessons/c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f/comments" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+Retorna só os comentários top-level, com `replies` aninhadas:
+
+```json title="200 OK"
+[
+  {
+    "id": "d0e1f2a3-b4c5-4d6e-7f8a-9b0c1d2e3f4a",
+    "lessonId": "c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f",
+    "userId": "clx3k9d2f0002mk08ab1c2d3e",
+    "content": "O contrato verbal de arrendamento vale juridicamente?",
+    "parentId": null,
+    "createdAt": "2026-06-10T19:02:11.000000+00:00",
+    "authorName": "Ana Carolina Souza",
+    "authorEmail": "ana.souza@exemplo.com.br",
+    "authorAvatar": null,
+    "authorRole": "OPERATOR",
+    "replies": [
+      {
+        "id": "e1f2a3b4-c5d6-4e7f-8a9b-0c1d2e3f4a5b",
+        "lessonId": "c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f",
+        "userId": "clx0a1b2c0003mk08cd4e5f6g",
+        "content": "Vale, mas a prova fica difícil — veja o tópico 2 da aula.",
+        "parentId": "d0e1f2a3-b4c5-4d6e-7f8a-9b0c1d2e3f4a",
+        "createdAt": "2026-06-10T20:15:00.000000+00:00",
+        "authorName": "Equipe Escola Pujante",
+        "authorEmail": "suporte@escolapujante.com.br",
+        "authorAvatar": null,
+        "authorRole": "ADMIN"
+      }
+    ],
+    "hasReply": true,
+    "answered": true
+  }
+]
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/lms/catalog/lessons/{lesson_id}/comments">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/lms/catalog/lessons/c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f/comments" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "content": "O contrato verbal de arrendamento vale juridicamente?" }'
+```
+
+```json title="201 Created"
+{
+  "id": "d0e1f2a3-b4c5-4d6e-7f8a-9b0c1d2e3f4a",
+  "lessonId": "c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f",
+  "userId": "clx3k9d2f0002mk08ab1c2d3e",
+  "content": "O contrato verbal de arrendamento vale juridicamente?",
+  "parentId": null,
+  "createdAt": "2026-06-12T11:30:02.881000+00:00"
+}
+```
+
+```json title="422 Unprocessable Entity"
+{ "detail": "content obrigatorio", "code": "http_error" }
+```
+
+Para responder outro comentário, inclua `"parentId": "<id do comentário pai>"`.
+
+</Accordion>
+
+<Accordion title="GET /api/v2/lms/admin/comments">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/lms/admin/comments?filter=unanswered&search=ana&page=1&limit=20" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{
+  "data": [
+    {
+      "id": "d0e1f2a3-b4c5-4d6e-7f8a-9b0c1d2e3f4a",
+      "lessonId": "c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f",
+      "content": "O contrato verbal de arrendamento vale juridicamente?",
+      "createdAt": "2026-06-10T19:02:11.000000+00:00",
+      "authorName": "Ana Carolina Souza",
+      "authorEmail": "ana.souza@exemplo.com.br",
+      "authorRole": "OPERATOR",
+      "lessonTitle": "Arrendamento rural na prática",
+      "courseTitle": "Contratos Agrários",
+      "trackId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+      "trackKind": "TRILHA",
+      "hasReply": false,
+      "replies": []
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "limit": 20
+}
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/lms/admin/comments/unanswered-count">
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/lms/admin/comments/unanswered-count" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{ "count": 7 }
+```
+
+</Accordion>
+
+<Accordion title="POST /api/v2/lms/admin/comments/{comment_id}/reply">
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/lms/admin/comments/d0e1f2a3-b4c5-4d6e-7f8a-9b0c1d2e3f4a/reply" \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{ "content": "Vale, mas a prova fica difícil — veja o tópico 2 da aula." }'
+```
+
+```json title="200 OK"
+{
+  "id": "e1f2a3b4-c5d6-4e7f-8a9b-0c1d2e3f4a5b",
+  "content": "Vale, mas a prova fica difícil — veja o tópico 2 da aula.",
+  "createdAt": "2026-06-12T11:30:02.881000+00:00",
+  "authorName": "Equipe Escola Pujante",
+  "authorRole": "ADMIN"
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Comentario nao encontrado", "code": "not_found" }
+```
+
+```json title="422 Unprocessable Entity"
+{ "detail": "content obrigatorio", "code": "http_error" }
+```
+
+</Accordion>
+
+<Accordion title="DELETE /api/v2/lms/admin/comments/{comment_id}">
+
+Apaga o comentário e também as replies (filhos via `parent_id`).
+
+```bash title="Requisição"
+curl -X DELETE "https://api.escolapujante.com.br/api/v2/lms/admin/comments/d0e1f2a3-b4c5-4d6e-7f8a-9b0c1d2e3f4a" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{ "id": "d0e1f2a3-b4c5-4d6e-7f8a-9b0c1d2e3f4a" }
+```
+
+```json title="404 Not Found"
+{ "detail": "Comentario nao encontrado", "code": "not_found" }
+```
+
+</Accordion>
+
+</AccordionGroup>
+
 ### POST /lms/catalog/lessons/\{lesson_id\}/comments
 
 <ParamField body="content" type="string" required>Texto do comentário.</ParamField>
@@ -143,3 +1317,71 @@ Base: `/api/v2/lms` (certificados em `/api/v2/lessons` e `/api/v2/certificates`)
 |---|---|---|---|
 | POST | `/lessons/{lesson_id}/certificate` | Emitir certificado | JWT |
 | GET | `/certificates/{codigo}` | Verificar autenticidade de certificado | Público |
+
+### Exemplos
+
+<AccordionGroup>
+
+<Accordion title="POST /api/v2/lessons/{lesson_id}/certificate">
+
+Emissão idempotente — exige ≥ 75% dos tópicos da aula concluídos.
+
+```bash title="Requisição"
+curl -X POST "https://api.escolapujante.com.br/api/v2/lessons/c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f/certificate" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+```json title="200 OK"
+{
+  "codigo": "EP-2026-A3F9C1",
+  "alunoNome": "Ana Carolina Souza",
+  "aulaNome": "Arrendamento rural na prática",
+  "data": "12 de junho de 2026",
+  "emitidoEm": "2026-06-12T11:30:02.881000+00:00"
+}
+```
+
+```json title="403 Forbidden (progresso insuficiente)"
+{ "detail": "Progresso insuficiente para emitir certificado (50% concluido, minimo 75%).", "code": "forbidden" }
+```
+
+```json title="403 Forbidden (aula sem tópicos)"
+{ "detail": "Esta aula nao possui topics cadastrados; nao e possivel emitir certificado.", "code": "forbidden" }
+```
+
+```json title="404 Not Found"
+{ "detail": "Aula nao encontrado", "code": "not_found" }
+```
+
+```json title="409 Conflict"
+{ "detail": "Nao foi possivel gerar codigo unico apos 5 tentativas.", "code": "conflict" }
+```
+
+</Accordion>
+
+<Accordion title="GET /api/v2/certificates/{codigo}">
+
+Endpoint público de verificação de autenticidade.
+
+```bash title="Requisição"
+curl "https://api.escolapujante.com.br/api/v2/certificates/EP-2026-A3F9C1"
+```
+
+```json title="200 OK (válido)"
+{
+  "valido": true,
+  "codigo": "EP-2026-A3F9C1",
+  "aluno": "Ana Carolina Souza",
+  "aula": "Arrendamento rural na prática",
+  "data": "12 de junho de 2026",
+  "emitidoEm": "2026-06-12T11:30:02.881000+00:00"
+}
+```
+
+```json title="200 OK (não encontrado)"
+{ "valido": false, "codigo": null, "aluno": null, "aula": null, "data": null, "emitidoEm": null }
+```
+
+</Accordion>
+
+</AccordionGroup>

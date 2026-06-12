@@ -7,7 +7,7 @@ description: "Asaas, Resend, OpenAI, YouTube, jurisprudencias.ai, Google OAuth, 
 
 Gateway de pagamento de assinaturas PRO e de apoiador.
 
-- **Checkout**: `POST /subscriptions/checkout` e `POST /supporter-checkout/checkout` criam cobranças PIX ou cartão de crédito. Cartões são tokenizados via `/card-tokens` (o PAN nunca toca o backend além da tokenização).
+- **Checkout**: `POST /subscriptions/checkout` e `POST /supporter-checkout/checkout` criam cobranças PIX ou cartão de crédito. Cartões são tokenizados via `POST /checkout/cards` (o PAN nunca toca o backend além da tokenização).
 - **Webhooks**: `POST /subscriptions/webhook` e `POST /webhooks/asaas` recebem eventos de pagamento. Cada request valida o header `asaas-access-token` contra `ASAAS_WEBHOOK_TOKEN`; eventos são logados em `asaas_webhooks_log` antes do processamento.
 - Variáveis: `ASAAS_API_KEY`, `ASAAS_BASE_URL`, `ASAAS_WEBHOOK_TOKEN`.
 

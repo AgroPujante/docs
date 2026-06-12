@@ -5,6 +5,39 @@ description: "Posts, autores, colunas, categorias, tags, podcasts, livros, anexo
 
 Base: `/api/v1`. `editor+`, `gestor+`, `admin+` = role mínimo via `admin_users`.
 
+## Erros comuns
+
+O handler global adiciona `code` ao body (`http_error` para `HTTPException`; `not_found`/`forbidden`/`conflict` para as exceptions de domínio de `core/exceptions.py`):
+
+```json title="401 Unauthorized — sem credencial"
+{ "detail": "Não autenticado", "code": "http_error" }
+```
+
+```json title="401 Unauthorized — token ruim"
+{ "detail": "Token inválido ou expirado", "code": "http_error" }
+```
+
+```json title="403 Forbidden — role insuficiente (editor+/gestor+/admin+)"
+{ "detail": "Acesso negado — permissão insuficiente", "code": "http_error" }
+```
+
+```json title="404 Not Found — recurso de domínio"
+{ "detail": "Post não encontrado", "code": "not_found" }
+```
+
+```json title="422 Unprocessable Entity — validação Pydantic (shape padrão FastAPI)"
+{
+  "detail": [
+    {
+      "type": "string_too_short",
+      "loc": ["body", "title"],
+      "msg": "String should have at least 1 character",
+      "input": ""
+    }
+  ]
+}
+```
+
 ## Posts (`/posts`)
 
 | Método | Path | Descrição | Auth |
@@ -22,6 +55,290 @@ Base: `/api/v1`. `editor+`, `gestor+`, `admin+` = role mínimo via `admin_users`
 | PUT | `/posts/{post_id}/authors` | Define autores (N:N) | editor+ |
 | PUT | `/posts/{post_id}/tags` | Define tags (N:N) | editor+ |
 
+<AccordionGroup>
+<Accordion title="GET /api/v1/posts/trending">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/posts/trending?limit=5"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
+    "title": "Marco temporal e a segurança jurídica no campo",
+    "slug": "marco-temporal-seguranca-juridica-no-campo",
+    "type": "artigo",
+    "cover_image_url": "https://cdn.agropujante.com.br/posts/marco-temporal.jpg",
+    "published_at": "2026-06-08T10:00:00+00:00"
+  }
+]
+```
+
+Sem contagem de views no payload (campo interno). Cache 15 min.
+</Accordion>
+
+<Accordion title="GET /api/v1/posts">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/posts?type=artigo&category_slug=direito-agrario&page=1&page_size=10"
+```
+
+```json title="200 OK"
+{
+  "items": [
+    {
+      "id": "c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
+      "title": "Marco temporal e a segurança jurídica no campo",
+      "slug": "marco-temporal-seguranca-juridica-no-campo",
+      "excerpt": "O que muda para o produtor rural após a decisão do STF...",
+      "cover_image_url": "https://cdn.agropujante.com.br/posts/marco-temporal.jpg",
+      "type": "artigo",
+      "is_featured": true,
+      "published_at": "2026-06-08T10:00:00+00:00",
+      "category": { "id": "d4e5f6a7-8b9c-4d0e-9f1a-2b3c4d5e6f7a", "name": "Direito Agrário", "slug": "direito-agrario", "type": "artigo" },
+      "column": null,
+      "authors": [
+        { "id": "1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e", "name": "Ana Beatriz Carvalho", "slug": "ana-beatriz-carvalho", "photo_url": null, "bio": null, "role": "Colunista" }
+      ],
+      "tags": [
+        { "id": "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f", "name": "Regularização Fundiária", "slug": "regularizacao-fundiaria" }
+      ]
+    }
+  ],
+  "total": 42,
+  "page": 1,
+  "page_size": 10
+}
+```
+
+`type`: `noticia` | `artigo` | `julgado` | `opiniao` | `coluna` | `exclusivo`.
+</Accordion>
+
+<Accordion title="GET /api/v1/posts/featured">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/posts/featured?limit=5"
+```
+
+```json title="200 OK"
+[
+  { "id": "c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f", "title": "Marco temporal e a segurança jurídica no campo", "slug": "marco-temporal-seguranca-juridica-no-campo", "type": "artigo", "is_featured": true, "published_at": "2026-06-08T10:00:00+00:00", "category": null, "column": null, "authors": [], "tags": [] }
+]
+```
+
+Itens seguem o shape `PostSummary` (ver `GET /posts`). Cache 60 s.
+</Accordion>
+
+<Accordion title="GET /api/v1/posts/search">
+`q` exige no mínimo 2 caracteres (422 abaixo disso).
+
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/posts/search?q=arrendamento&page=1&page_size=10"
+```
+
+```json title="200 OK"
+{
+  "items": [
+    { "id": "3d4e5f6a-7b8c-4d9e-0f1a-2b3c4d5e6f7a", "title": "Arrendamento rural: cláusulas essenciais do contrato", "slug": "arrendamento-rural-clausulas-essenciais", "type": "artigo", "is_featured": false, "published_at": "2026-05-20T09:00:00+00:00", "category": null, "column": null, "authors": [], "tags": [] }
+  ],
+  "total": 3,
+  "page": 1,
+  "page_size": 10
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/posts/{slug}">
+Bearer opcional; `visitor_id` identifica o anônimo para o paywall.
+
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/posts/marco-temporal-seguranca-juridica-no-campo?visitor_id=vis_8f2a91c7"
+```
+
+```json title="200 OK — acesso liberado"
+{
+  "id": "c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
+  "title": "Marco temporal e a segurança jurídica no campo",
+  "slug": "marco-temporal-seguranca-juridica-no-campo",
+  "excerpt": "O que muda para o produtor rural após a decisão do STF...",
+  "content": "<p>A decisão do STF sobre o marco temporal...</p>",
+  "type": "artigo",
+  "status": "published",
+  "published_at": "2026-06-08T10:00:00+00:00",
+  "is_early_access": false,
+  "early_access_ends_at": null,
+  "is_blurred": false,
+  "access_reason": "ok",
+  "reads_this_month": 2,
+  "reads_limit": 5
+}
+```
+
+Quando o paywall bloqueia, `content` volta **borrado** com `is_blurred: true` e `access_reason` = `limit_reached` | `login_required` | `profile_incomplete` (não é 403 — a resposta continua 200).
+
+```json title="404 Not Found"
+{ "detail": "Post não encontrado", "code": "not_found" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/posts/admin/list">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/posts/admin/list?status=draft&page=1&page_size=50" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "items": [
+    { "id": "4e5f6a7b-8c9d-4e0f-1a2b-3c4d5e6f7a8b", "title": "CPR verde: o que muda em 2026", "slug": "cpr-verde-o-que-muda-2026", "type": "artigo", "is_featured": false, "published_at": null, "category": null, "column": null, "authors": [], "tags": [] }
+  ],
+  "total": 7,
+  "page": 1,
+  "page_size": 50
+}
+```
+
+Aceita `?type`, `?status` (`draft`/`review`/`published`/`rejected`/`archived`) e `?search`. Erros genéricos (401, 403): ver [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="GET /api/v1/posts/admin/{post_id}">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/posts/admin/c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "id": "c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
+  "title": "Marco temporal e a segurança jurídica no campo",
+  "slug": "marco-temporal-seguranca-juridica-no-campo",
+  "excerpt": "O que muda para o produtor rural após a decisão do STF...",
+  "content": "<p>A decisão do STF sobre o marco temporal...</p>",
+  "cover_image_url": "https://cdn.agropujante.com.br/posts/marco-temporal.jpg",
+  "type": "artigo",
+  "is_featured": true,
+  "is_decision_highlight": false,
+  "status": "published",
+  "published_at": "2026-06-08T10:00:00+00:00",
+  "public_at": null,
+  "created_at": "2026-06-05T16:40:00+00:00",
+  "updated_at": "2026-06-08T10:00:00+00:00",
+  "meta_title": null,
+  "meta_description": null,
+  "og_image_url": null,
+  "focus_keyphrase": "marco temporal",
+  "category": { "id": "d4e5f6a7-8b9c-4d0e-9f1a-2b3c4d5e6f7a", "name": "Direito Agrário", "slug": "direito-agrario", "type": "artigo" },
+  "column": null,
+  "authors": [],
+  "tags": [],
+  "decision_supporter": null,
+  "attachments": [],
+  "is_early_access": false,
+  "early_access_ends_at": null
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Post não encontrado", "code": "not_found" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/posts">
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/posts" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "CPR verde: o que muda em 2026",
+    "slug": "cpr-verde-o-que-muda-2026",
+    "excerpt": "As novas regras da Cédula de Produto Rural verde.",
+    "content": "<p>A CPR verde ganhou novas regras...</p>",
+    "type": "artigo",
+    "category_id": "d4e5f6a7-8b9c-4d0e-9f1a-2b3c4d5e6f7a",
+    "status": "draft"
+  }'
+```
+
+```json title="201 Created"
+{
+  "id": "4e5f6a7b-8c9d-4e0f-1a2b-3c4d5e6f7a8b",
+  "title": "CPR verde: o que muda em 2026",
+  "slug": "cpr-verde-o-que-muda-2026",
+  "type": "artigo",
+  "status": "draft",
+  "is_featured": false,
+  "published_at": null,
+  "created_at": "2026-06-12T15:00:00+00:00"
+}
+```
+
+Campos aceitos: os de `PostCreate` (`title`, `slug`, `excerpt`, `content`, `cover_image_url`, `type`, `category_id`, `is_featured`, `is_decision_highlight`, `decision_supporter_id`, `status`, `published_at`, `public_at`, `meta_title`, `meta_description`, `og_image_url`, `focus_keyphrase`, `column_id`). Erros genéricos (401, 403, 422): ver [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="PATCH /api/v1/posts/{post_id}">
+```bash title="Requisição"
+curl -X PATCH "https://api.agropujante.com.br/api/v1/posts/4e5f6a7b-8c9d-4e0f-1a2b-3c4d5e6f7a8b" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"status": "published", "published_at": "2026-06-12T18:00:00+00:00"}'
+```
+
+```json title="200 OK"
+{
+  "id": "4e5f6a7b-8c9d-4e0f-1a2b-3c4d5e6f7a8b",
+  "title": "CPR verde: o que muda em 2026",
+  "slug": "cpr-verde-o-que-muda-2026",
+  "type": "artigo",
+  "status": "published",
+  "published_at": "2026-06-12T18:00:00+00:00"
+}
+```
+
+Mesmos campos de `PostCreate`, todos opcionais.
+</Accordion>
+
+<Accordion title="DELETE /api/v1/posts/{post_id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.agropujante.com.br/api/v1/posts/4e5f6a7b-8c9d-4e0f-1a2b-3c4d5e6f7a8b" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem body)
+```
+
+Requer gestor+. Erros genéricos (401, 403): ver [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="PUT /api/v1/posts/{post_id}/authors">
+Substitui o conjunto inteiro de autores do post (N:N).
+
+```bash title="Requisição"
+curl -X PUT "https://api.agropujante.com.br/api/v1/posts/c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f/authors" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"author_ids": ["1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e"]}'
+```
+
+```text title="204 No Content"
+(sem body)
+```
+</Accordion>
+
+<Accordion title="PUT /api/v1/posts/{post_id}/tags">
+Substitui o conjunto inteiro de tags do post (N:N).
+
+```bash title="Requisição"
+curl -X PUT "https://api.agropujante.com.br/api/v1/posts/c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f/tags" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"tag_ids": ["2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f"]}'
+```
+
+```text title="204 No Content"
+(sem body)
+```
+</Accordion>
+</AccordionGroup>
+
 ## Catálogos editoriais
 
 | Método | Path | Descrição | Auth |
@@ -31,10 +348,339 @@ Base: `/api/v1`. `editor+`, `gestor+`, `admin+` = role mínimo via `admin_users`
 | POST/PATCH/DELETE | `/authors`, `/authors/{author_id}` | CRUD de autores | admin+ |
 | GET | `/columns` / `/columns/{slug}` | Colunas editoriais | Público |
 | POST/PATCH/DELETE | `/columns`, `/columns/{column_id}` | CRUD de colunas | admin+ |
-| GET | `/categories` / `/categories/{id}` | Categorias | Público |
-| POST/PATCH/DELETE | `/categories`, `/categories/{id}` | CRUD de categorias | admin+ |
+| GET | `/categories` | Categorias (não há GET por id) | Público |
+| POST/PATCH/DELETE | `/categories`, `/categories/{category_id}` | CRUD de categorias | admin+ |
 | GET | `/tags` | Tags | Público |
 | POST/PATCH/DELETE | `/tags`, `/tags/{tag_id}` | CRUD de tags | admin+ |
+
+<AccordionGroup>
+<Accordion title="GET /api/v1/authors">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/authors?vip_only=false"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e",
+    "name": "Ana Beatriz Carvalho",
+    "slug": "ana-beatriz-carvalho",
+    "email": "ana.carvalho@exemplo.com.br",
+    "role": "Colunista",
+    "bio": "Advogada especialista em direito agrário.",
+    "curriculum": null,
+    "photo_url": "https://cdn.agropujante.com.br/authors/ana-carvalho.jpg",
+    "social_links": { "instagram": null, "linkedin": "https://linkedin.com/in/anacarvalho", "twitter": null, "website": null },
+    "is_vip": false,
+    "is_columnist": true,
+    "supporter_id": null,
+    "user_id": "9a1d4f22-3b5c-4e7d-8f90-1a2b3c4d5e6f",
+    "user_handle": "anacarvalho",
+    "created_at": "2025-11-03T12:00:00+00:00",
+    "total_views": 12840,
+    "posts_count": 14
+  }
+]
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/authors/{slug}">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/authors/ana-beatriz-carvalho"
+```
+
+```json title="200 OK"
+{
+  "id": "1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e",
+  "name": "Ana Beatriz Carvalho",
+  "slug": "ana-beatriz-carvalho",
+  "role": "Colunista",
+  "is_vip": false,
+  "is_columnist": true,
+  "total_views": 12840,
+  "posts_count": 14,
+  "posts": [
+    { "id": "c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f", "title": "Marco temporal e a segurança jurídica no campo", "slug": "marco-temporal-seguranca-juridica-no-campo", "type": "artigo", "is_featured": true, "published_at": "2026-06-08T10:00:00+00:00", "category": null, "column": null, "authors": [], "tags": [] }
+  ]
+}
+```
+
+Shape completo: `AuthorOut` (ver `GET /authors`) + `posts[]` (`PostSummary`).
+
+```json title="404 Not Found"
+{ "detail": "Autor não encontrado", "code": "not_found" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/authors">
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/authors" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Carlos Eduardo Menezes",
+    "email": "carlos.menezes@exemplo.com.br",
+    "role": "Procurador",
+    "bio": "Atua em regularização fundiária na Amazônia Legal.",
+    "is_columnist": false
+  }'
+```
+
+```json title="201 Created"
+{
+  "id": "5f6a7b8c-9d0e-4f1a-2b3c-4d5e6f7a8b9c",
+  "name": "Carlos Eduardo Menezes",
+  "slug": "carlos-eduardo-menezes",
+  "email": "carlos.menezes@exemplo.com.br",
+  "role": "Procurador",
+  "bio": "Atua em regularização fundiária na Amazônia Legal.",
+  "is_vip": false,
+  "is_columnist": false,
+  "total_views": 0,
+  "posts_count": 0
+}
+```
+
+`email` passa por validação com checagem de DNS/MX — domínio inexistente vira 422.
+</Accordion>
+
+<Accordion title="PATCH /api/v1/authors/{author_id}">
+```bash title="Requisição"
+curl -X PATCH "https://api.agropujante.com.br/api/v1/authors/5f6a7b8c-9d0e-4f1a-2b3c-4d5e6f7a8b9c" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"is_vip": true, "role": "Procurador Federal"}'
+```
+
+```json title="200 OK"
+{
+  "id": "5f6a7b8c-9d0e-4f1a-2b3c-4d5e6f7a8b9c",
+  "name": "Carlos Eduardo Menezes",
+  "slug": "carlos-eduardo-menezes",
+  "role": "Procurador Federal",
+  "is_vip": true,
+  "is_columnist": false,
+  "total_views": 0,
+  "posts_count": 0
+}
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v1/authors/{author_id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.agropujante.com.br/api/v1/authors/5f6a7b8c-9d0e-4f1a-2b3c-4d5e6f7a8b9c" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem body)
+```
+
+```json title="404 Not Found"
+{ "detail": "Autor não encontrado", "code": "not_found" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/columns">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/columns?active_only=true"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "6a7b8c9d-0e1f-4a2b-3c4d-5e6f7a8b9c0d",
+    "name": "Contratos em Pauta",
+    "slug": "contratos-em-pauta",
+    "description": "Coluna semanal sobre contratos agrários.",
+    "cover_image_url": "https://cdn.agropujante.com.br/columns/contratos-em-pauta.jpg",
+    "is_active": true,
+    "main_author_id": "1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e",
+    "created_at": "2025-12-01T12:00:00+00:00",
+    "updated_at": "2026-06-01T12:00:00+00:00"
+  }
+]
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/columns/{slug}">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/columns/contratos-em-pauta"
+```
+
+```json title="200 OK"
+{
+  "id": "6a7b8c9d-0e1f-4a2b-3c4d-5e6f7a8b9c0d",
+  "name": "Contratos em Pauta",
+  "slug": "contratos-em-pauta",
+  "description": "Coluna semanal sobre contratos agrários.",
+  "is_active": true,
+  "main_author_id": "1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e",
+  "main_author": { "id": "1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e", "name": "Ana Beatriz Carvalho", "slug": "ana-beatriz-carvalho", "bio": null, "role": "Colunista", "photo_url": null },
+  "posts": []
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Coluna não encontrada", "code": "not_found" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/columns">
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/columns" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Tributário Rural", "description": "ITR, Funrural e tributação do agronegócio.", "main_author_id": "5f6a7b8c-9d0e-4f1a-2b3c-4d5e6f7a8b9c"}'
+```
+
+```json title="201 Created"
+{
+  "id": "7b8c9d0e-1f2a-4b3c-4d5e-6f7a8b9c0d1e",
+  "name": "Tributário Rural",
+  "slug": "tributario-rural",
+  "description": "ITR, Funrural e tributação do agronegócio.",
+  "is_active": true,
+  "main_author_id": "5f6a7b8c-9d0e-4f1a-2b3c-4d5e6f7a8b9c"
+}
+```
+</Accordion>
+
+<Accordion title="PATCH /api/v1/columns/{column_id}">
+Usa `exclude_unset` — enviar `"main_author_id": null` desvincula o autor principal.
+
+```bash title="Requisição"
+curl -X PATCH "https://api.agropujante.com.br/api/v1/columns/7b8c9d0e-1f2a-4b3c-4d5e-6f7a8b9c0d1e" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"is_active": false}'
+```
+
+```json title="200 OK"
+{
+  "id": "7b8c9d0e-1f2a-4b3c-4d5e-6f7a8b9c0d1e",
+  "name": "Tributário Rural",
+  "slug": "tributario-rural",
+  "is_active": false,
+  "main_author_id": "5f6a7b8c-9d0e-4f1a-2b3c-4d5e6f7a8b9c"
+}
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v1/columns/{column_id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.agropujante.com.br/api/v1/columns/7b8c9d0e-1f2a-4b3c-4d5e-6f7a8b9c0d1e" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem body)
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/categories">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/categories?type=artigo&with_count=true"
+```
+
+```json title="200 OK (with_count=true)"
+[
+  { "id": "d4e5f6a7-8b9c-4d0e-9f1a-2b3c4d5e6f7a", "name": "Direito Agrário", "slug": "direito-agrario", "type": "artigo", "post_count": 42 }
+]
+```
+
+Sem `with_count`, o campo `post_count` não aparece. Cache 5 min.
+</Accordion>
+
+<Accordion title="POST /api/v1/categories">
+`type` aceita `noticia` | `artigo` | `julgado` | `podcast`.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/categories" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Crédito Rural", "slug": "credito-rural", "type": "artigo"}'
+```
+
+```json title="201 Created"
+{ "id": "8c9d0e1f-2a3b-4c4d-5e6f-7a8b9c0d1e2f", "name": "Crédito Rural", "slug": "credito-rural", "type": "artigo" }
+```
+</Accordion>
+
+<Accordion title="PATCH /api/v1/categories/{category_id}">
+```bash title="Requisição"
+curl -X PATCH "https://api.agropujante.com.br/api/v1/categories/8c9d0e1f-2a3b-4c4d-5e6f-7a8b9c0d1e2f" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Crédito e Financiamento Rural"}'
+```
+
+```json title="200 OK"
+{ "id": "8c9d0e1f-2a3b-4c4d-5e6f-7a8b9c0d1e2f", "name": "Crédito e Financiamento Rural", "slug": "credito-rural", "type": "artigo" }
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v1/categories/{category_id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.agropujante.com.br/api/v1/categories/8c9d0e1f-2a3b-4c4d-5e6f-7a8b9c0d1e2f" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem body)
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/tags">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/tags"
+```
+
+```json title="200 OK"
+[
+  { "id": "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f", "name": "Regularização Fundiária", "slug": "regularizacao-fundiaria" },
+  { "id": "9d0e1f2a-3b4c-4d5e-6f7a-8b9c0d1e2f3a", "name": "CPR", "slug": "cpr" }
+]
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/tags">
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/tags" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Seguro Rural", "slug": "seguro-rural"}'
+```
+
+```json title="201 Created"
+{ "id": "0e1f2a3b-4c5d-4e6f-7a8b-9c0d1e2f3a4b", "name": "Seguro Rural", "slug": "seguro-rural" }
+```
+</Accordion>
+
+<Accordion title="PATCH /api/v1/tags/{tag_id}">
+```bash title="Requisição"
+curl -X PATCH "https://api.agropujante.com.br/api/v1/tags/0e1f2a3b-4c5d-4e6f-7a8b-9c0d1e2f3a4b" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Seguro Agrícola"}'
+```
+
+```json title="200 OK"
+{ "id": "0e1f2a3b-4c5d-4e6f-7a8b-9c0d1e2f3a4b", "name": "Seguro Agrícola", "slug": "seguro-rural" }
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v1/tags/{tag_id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.agropujante.com.br/api/v1/tags/0e1f2a3b-4c5d-4e6f-7a8b-9c0d1e2f3a4b" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem body)
+```
+</Accordion>
+</AccordionGroup>
 
 ## Podcasts e livros
 
@@ -44,6 +690,190 @@ Base: `/api/v1`. `editor+`, `gestor+`, `admin+` = role mínimo via `admin_users`
 | POST/PATCH/DELETE | `/podcasts`, `/podcasts/{id}` | CRUD | admin+ |
 | GET | `/books` | Livros | Público |
 | POST/PATCH/DELETE | `/books`, `/books/{id}` | CRUD | admin+ |
+
+<AccordionGroup>
+<Accordion title="GET /api/v1/podcasts">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/podcasts?page=1&page_size=10"
+```
+
+```json title="200 OK"
+{
+  "items": [
+    {
+      "id": "1f2a3b4c-5d6e-4f7a-8b9c-0d1e2f3a4b5c",
+      "title": "Ep. 42 — Reforma tributária e o produtor rural",
+      "slug": "ep-42-reforma-tributaria-e-o-produtor-rural",
+      "description": "Conversa com especialistas sobre os impactos da reforma.",
+      "youtube_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "cover_image_url": "https://cdn.agropujante.com.br/podcasts/ep-42.jpg",
+      "published_at": "2026-06-05T08:00:00+00:00",
+      "is_active": true
+    }
+  ],
+  "total": 42,
+  "page": 1,
+  "page_size": 10
+}
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/podcasts/{slug}">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/podcasts/ep-42-reforma-tributaria-e-o-produtor-rural"
+```
+
+```json title="200 OK"
+{
+  "id": "1f2a3b4c-5d6e-4f7a-8b9c-0d1e2f3a4b5c",
+  "title": "Ep. 42 — Reforma tributária e o produtor rural",
+  "slug": "ep-42-reforma-tributaria-e-o-produtor-rural",
+  "description": "Conversa com especialistas sobre os impactos da reforma.",
+  "youtube_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  "cover_image_url": "https://cdn.agropujante.com.br/podcasts/ep-42.jpg",
+  "published_at": "2026-06-05T08:00:00+00:00",
+  "is_active": true
+}
+```
+
+```json title="404 Not Found"
+{ "detail": "Podcast não encontrado", "code": "not_found" }
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/podcasts">
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/podcasts" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Ep. 43 — Barter e travas cambiais",
+    "slug": "ep-43-barter-e-travas-cambiais",
+    "youtube_url": "https://www.youtube.com/watch?v=a1B2c3D4e5F",
+    "published_at": "2026-06-12T08:00:00+00:00"
+  }'
+```
+
+```json title="201 Created"
+{
+  "id": "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d",
+  "title": "Ep. 43 — Barter e travas cambiais",
+  "slug": "ep-43-barter-e-travas-cambiais",
+  "description": null,
+  "youtube_url": "https://www.youtube.com/watch?v=a1B2c3D4e5F",
+  "cover_image_url": null,
+  "published_at": "2026-06-12T08:00:00+00:00",
+  "is_active": true
+}
+```
+
+O `youtube_video_id` é extraído do `youtube_url` para o sync com o YouTube.
+</Accordion>
+
+<Accordion title="PATCH /api/v1/podcasts/{podcast_id}">
+```bash title="Requisição"
+curl -X PATCH "https://api.agropujante.com.br/api/v1/podcasts/2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"is_active": false}'
+```
+
+```json title="200 OK"
+{
+  "id": "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d",
+  "title": "Ep. 43 — Barter e travas cambiais",
+  "slug": "ep-43-barter-e-travas-cambiais",
+  "youtube_url": "https://www.youtube.com/watch?v=a1B2c3D4e5F",
+  "is_active": false
+}
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v1/podcasts/{podcast_id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.agropujante.com.br/api/v1/podcasts/2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem body)
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/books">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/books"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "3b4c5d6e-7f8a-4b9c-0d1e-2f3a4b5c6d7e",
+    "title": "Direito Agrário Contemporâneo",
+    "author_name": "Joaquim Ferreira Lima",
+    "category": "Doutrina",
+    "cover_image_url": "https://cdn.agropujante.com.br/books/direito-agrario-contemporaneo.jpg",
+    "purchase_url": "https://loja.exemplo.com.br/direito-agrario-contemporaneo",
+    "description": "Panorama atualizado da disciplina, da posse à função social.",
+    "display_order": 1
+  }
+]
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/books">
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/books" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Contratos Agrários na Prática", "author_name": "Mariana Souza Prado", "category": "Prática", "display_order": 2}'
+```
+
+```json title="201 Created"
+{
+  "id": "4c5d6e7f-8a9b-4c0d-1e2f-3a4b5c6d7e8f",
+  "title": "Contratos Agrários na Prática",
+  "author_name": "Mariana Souza Prado",
+  "category": "Prática",
+  "cover_image_url": null,
+  "purchase_url": null,
+  "description": null,
+  "display_order": 2
+}
+```
+</Accordion>
+
+<Accordion title="PATCH /api/v1/books/{book_id}">
+```bash title="Requisição"
+curl -X PATCH "https://api.agropujante.com.br/api/v1/books/4c5d6e7f-8a9b-4c0d-1e2f-3a4b5c6d7e8f" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"purchase_url": "https://loja.exemplo.com.br/contratos-agrarios"}'
+```
+
+```json title="200 OK"
+{
+  "id": "4c5d6e7f-8a9b-4c0d-1e2f-3a4b5c6d7e8f",
+  "title": "Contratos Agrários na Prática",
+  "author_name": "Mariana Souza Prado",
+  "category": "Prática",
+  "purchase_url": "https://loja.exemplo.com.br/contratos-agrarios",
+  "display_order": 2
+}
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v1/books/{book_id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.agropujante.com.br/api/v1/books/4c5d6e7f-8a9b-4c0d-1e2f-3a4b5c6d7e8f" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem body)
+```
+</Accordion>
+</AccordionGroup>
 
 ## Attachments (`/attachments`)
 
@@ -55,6 +885,115 @@ Base: `/api/v1`. `editor+`, `gestor+`, `admin+` = role mínimo via `admin_users`
 | DELETE | `/attachments/{attachment_id}` | Remove | editor+ |
 | GET | `/attachments/download/{attachment_id}` | Download | Público |
 
+<AccordionGroup>
+<Accordion title="GET /api/v1/attachments/{post_id}">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/attachments/c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "5d6e7f8a-9b0c-4d1e-2f3a-4b5c6d7e8f9a",
+    "post_id": "c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
+    "file_url": "https://xyz.supabase.co/storage/v1/object/public/content/attachments/2026/06/abc123.pdf",
+    "file_name": "acordao-stf-marco-temporal.pdf",
+    "file_type": "application/pdf",
+    "file_size": 482133,
+    "display_name": "Acórdão STF — Marco Temporal",
+    "created_at": "2026-06-08T10:05:00+00:00"
+  }
+]
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/attachments/{post_id}">
+Upload multipart (`-F`). O arquivo vai pro bucket `content`, pasta `attachments/YYYY/MM/`.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/attachments/c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -F "file=@acordao-stf-marco-temporal.pdf"
+```
+
+```json title="201 Created"
+{
+  "id": "5d6e7f8a-9b0c-4d1e-2f3a-4b5c6d7e8f9a",
+  "post_id": "c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
+  "file_url": "https://xyz.supabase.co/storage/v1/object/public/content/attachments/2026/06/abc123.pdf",
+  "file_name": "acordao-stf-marco-temporal.pdf",
+  "file_type": "application/pdf",
+  "file_size": 482133,
+  "display_name": null,
+  "created_at": "2026-06-12T15:10:00+00:00"
+}
+```
+
+Erros genéricos (401, 403, 422): ver [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="PATCH /api/v1/attachments/{attachment_id}">
+Atualiza apenas o `display_name`.
+
+```bash title="Requisição"
+curl -X PATCH "https://api.agropujante.com.br/api/v1/attachments/5d6e7f8a-9b0c-4d1e-2f3a-4b5c6d7e8f9a" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"display_name": "Acórdão STF — Marco Temporal (íntegra)"}'
+```
+
+```json title="200 OK"
+{
+  "id": "5d6e7f8a-9b0c-4d1e-2f3a-4b5c6d7e8f9a",
+  "post_id": "c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
+  "file_url": "https://xyz.supabase.co/storage/v1/object/public/content/attachments/2026/06/abc123.pdf",
+  "file_name": "acordao-stf-marco-temporal.pdf",
+  "file_type": "application/pdf",
+  "file_size": 482133,
+  "display_name": "Acórdão STF — Marco Temporal (íntegra)",
+  "created_at": "2026-06-08T10:05:00+00:00"
+}
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v1/attachments/{attachment_id}">
+```bash title="Requisição"
+curl -X DELETE "https://api.agropujante.com.br/api/v1/attachments/5d6e7f8a-9b0c-4d1e-2f3a-4b5c6d7e8f9a" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```text title="204 No Content"
+(sem body)
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/attachments/download/{attachment_id}">
+Apesar de listado como público, o download **exige login** — e anexos de julgado exigem perfil completo. Sucesso é um redirect 302 para a URL do arquivo.
+
+```bash title="Requisição"
+curl -L "https://api.agropujante.com.br/api/v1/attachments/download/5d6e7f8a-9b0c-4d1e-2f3a-4b5c6d7e8f9a" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -o acordao.pdf
+```
+
+```text title="302 Found"
+Location: https://xyz.supabase.co/storage/v1/object/public/content/attachments/2026/06/abc123.pdf
+```
+
+```json title="401 Unauthorized — anônimo"
+{ "detail": "Faça login para baixar anexos", "code": "http_error" }
+```
+
+```json title="403 Forbidden — julgado com perfil incompleto"
+{ "detail": "Complete seu perfil para baixar julgados", "code": "http_error" }
+```
+
+```json title="404 Not Found"
+{ "detail": "Anexo não encontrado", "code": "http_error" }
+```
+</Accordion>
+</AccordionGroup>
+
 ## Submissions (`/submissions`)
 
 Artigos submetidos por colaboradores para review editorial — ver o [fluxo de publicação](/agropujante/fluxos#publicacao-de-artigo-colaborador-externo).
@@ -65,6 +1004,170 @@ Artigos submetidos por colaboradores para review editorial — ver o [fluxo de p
 | GET | `/submissions` | Minhas submissions | JWT |
 | GET | `/submissions/{id}` | Detalhe | JWT/editor+ |
 | PATCH | `/submissions/{id}` | Atualiza status/conteúdo | JWT/editor+ |
+
+<AccordionGroup>
+<Accordion title="POST /api/v1/submissions">
+O email do usuário logado precisa estar vinculado a um registro em `authors`. O artigo nasce como post `status: review`.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/submissions" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Aspectos jurídicos do plantio direto em áreas arrendadas",
+    "content": "<p>O plantio direto em áreas arrendadas levanta questões sobre benfeitorias e indenização ao fim do contrato...</p>",
+    "excerpt": "Benfeitorias, indenização e boas práticas contratuais."
+  }'
+```
+
+```json title="201 Created"
+{
+  "id": "6e7f8a9b-0c1d-4e2f-3a4b-5c6d7e8f9a0b",
+  "title": "Aspectos jurídicos do plantio direto em áreas arrendadas",
+  "slug": "aspectos-juridicos-do-plantio-direto-em-areas-arrendadas",
+  "excerpt": "Benfeitorias, indenização e boas práticas contratuais.",
+  "status": "review",
+  "review_notes": null,
+  "created_at": "2026-06-12T15:20:00+00:00",
+  "published_at": null
+}
+```
+
+```json title="403 Forbidden — email não é autor"
+{ "detail": "Seu email não está cadastrado como autor. Entre em contato com a equipe para vincular seu perfil.", "code": "forbidden" }
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/submissions/mine">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/submissions/mine" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "6e7f8a9b-0c1d-4e2f-3a4b-5c6d7e8f9a0b",
+    "title": "Aspectos jurídicos do plantio direto em áreas arrendadas",
+    "slug": "aspectos-juridicos-do-plantio-direto-em-areas-arrendadas",
+    "excerpt": "Benfeitorias, indenização e boas práticas contratuais.",
+    "status": "review",
+    "review_notes": null,
+    "created_at": "2026-06-12T15:20:00+00:00",
+    "published_at": null
+  }
+]
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/submissions/mine/{post_id}">
+Retorna a submission com `content` para edição — só se pertencer ao usuário logado.
+
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/submissions/mine/6e7f8a9b-0c1d-4e2f-3a4b-5c6d7e8f9a0b" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "id": "6e7f8a9b-0c1d-4e2f-3a4b-5c6d7e8f9a0b",
+  "title": "Aspectos jurídicos do plantio direto em áreas arrendadas",
+  "slug": "aspectos-juridicos-do-plantio-direto-em-areas-arrendadas",
+  "content": "<p>O plantio direto em áreas arrendadas levanta questões...</p>",
+  "excerpt": "Benfeitorias, indenização e boas práticas contratuais.",
+  "status": "rejected",
+  "review_notes": "Faltou citar a jurisprudência do STJ sobre benfeitorias.",
+  "created_at": "2026-06-12T15:20:00+00:00"
+}
+```
+
+```json title="404 Not Found — não existe ou não é seu"
+{ "detail": "Artigo não encontrado", "code": "not_found" }
+```
+</Accordion>
+
+<Accordion title="PATCH /api/v1/submissions/{post_id}/resubmit">
+Só artigos com `status: rejected` podem ser reenviados — voltam para `review`.
+
+```bash title="Requisição"
+curl -X PATCH "https://api.agropujante.com.br/api/v1/submissions/6e7f8a9b-0c1d-4e2f-3a4b-5c6d7e8f9a0b/resubmit" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Aspectos jurídicos do plantio direto em áreas arrendadas",
+    "content": "<p>Versão revisada com a jurisprudência do STJ sobre benfeitorias...</p>",
+    "excerpt": "Benfeitorias, indenização e boas práticas contratuais."
+  }'
+```
+
+```json title="200 OK"
+{
+  "id": "6e7f8a9b-0c1d-4e2f-3a4b-5c6d7e8f9a0b",
+  "title": "Aspectos jurídicos do plantio direto em áreas arrendadas",
+  "slug": "aspectos-juridicos-do-plantio-direto-em-areas-arrendadas",
+  "excerpt": "Benfeitorias, indenização e boas práticas contratuais.",
+  "status": "review",
+  "review_notes": null,
+  "created_at": "2026-06-12T15:20:00+00:00",
+  "published_at": null
+}
+```
+
+```json title="403 Forbidden — status diferente de rejected"
+{ "detail": "Apenas artigos rejeitados podem ser reenviados.", "code": "forbidden" }
+```
+</Accordion>
+
+<Accordion title="PATCH /api/v1/submissions/{post_id}/approve">
+Admin (gestor+) aprova e publica; autor é notificado por email.
+
+```bash title="Requisição"
+curl -X PATCH "https://api.agropujante.com.br/api/v1/submissions/6e7f8a9b-0c1d-4e2f-3a4b-5c6d7e8f9a0b/approve" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{
+  "id": "6e7f8a9b-0c1d-4e2f-3a4b-5c6d7e8f9a0b",
+  "title": "Aspectos jurídicos do plantio direto em áreas arrendadas",
+  "slug": "aspectos-juridicos-do-plantio-direto-em-areas-arrendadas",
+  "excerpt": "Benfeitorias, indenização e boas práticas contratuais.",
+  "status": "published",
+  "review_notes": null,
+  "created_at": "2026-06-12T15:20:00+00:00",
+  "published_at": "2026-06-12T18:30:00+00:00"
+}
+```
+
+```json title="403 Forbidden — não está em revisão"
+{ "detail": "Este artigo não está em revisão.", "code": "forbidden" }
+```
+</Accordion>
+
+<Accordion title="PATCH /api/v1/submissions/{post_id}/reject">
+Admin (gestor+) rejeita com feedback; autor é notificado por email.
+
+```bash title="Requisição"
+curl -X PATCH "https://api.agropujante.com.br/api/v1/submissions/6e7f8a9b-0c1d-4e2f-3a4b-5c6d7e8f9a0b/reject" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"review_notes": "Faltou citar a jurisprudência do STJ sobre benfeitorias."}'
+```
+
+```json title="200 OK"
+{
+  "id": "6e7f8a9b-0c1d-4e2f-3a4b-5c6d7e8f9a0b",
+  "title": "Aspectos jurídicos do plantio direto em áreas arrendadas",
+  "slug": "aspectos-juridicos-do-plantio-direto-em-areas-arrendadas",
+  "excerpt": "Benfeitorias, indenização e boas práticas contratuais.",
+  "status": "rejected",
+  "review_notes": "Faltou citar a jurisprudência do STJ sobre benfeitorias.",
+  "created_at": "2026-06-12T15:20:00+00:00",
+  "published_at": null
+}
+```
+</Accordion>
+</AccordionGroup>
 
 ## Comments e likes
 
@@ -79,6 +1182,127 @@ Artigos submetidos por colaboradores para review editorial — ver o [fluxo de p
 | POST | `/likes/comments/{comment_id}` | Toggle like no comentário | JWT |
 | GET | `/likes/comments/{comment_id}` | Contagem + status | Público/JWT |
 
+<AccordionGroup>
+<Accordion title="GET /api/v1/comments/{post_id}">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/comments/c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f"
+```
+
+```json title="200 OK"
+[
+  {
+    "id": "7f8a9b0c-1d2e-4f3a-4b5c-6d7e8f9a0b1c",
+    "author_name": "Roberto Nogueira",
+    "content": "Excelente análise. A decisão muda completamente o cenário das ações possessórias.",
+    "created_at": "2026-06-09T11:30:00+00:00",
+    "is_subscriber": true,
+    "author_avatar_url": "https://cdn.agropujante.com.br/avatars/roberto.jpg",
+    "author_handle": "robertonogueira"
+  }
+]
+```
+
+`author_handle` só vem preenchido se o usuário tem handle e perfil público; `user_id` nunca é exposto.
+</Accordion>
+
+<Accordion title="POST /api/v1/comments">
+Bearer opcional — logado, o comentário fica vinculado ao usuário (e rende 5 coins, cap 1/dia). O `post_id` vai no body.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/comments" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "post_id": "c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
+    "author_name": "Roberto Nogueira",
+    "author_email": "roberto.nogueira@exemplo.com.br",
+    "content": "Excelente análise. A decisão muda completamente o cenário das ações possessórias."
+  }'
+```
+
+```json title="201 Created"
+{ "message": "Comentário publicado!" }
+```
+
+Erros genéricos (422): ver [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="PATCH /api/v1/comments/{comment_id}/approve">
+Moderação (gestor+).
+
+```bash title="Requisição"
+curl -X PATCH "https://api.agropujante.com.br/api/v1/comments/7f8a9b0c-1d2e-4f3a-4b5c-6d7e8f9a0b1c/approve" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "ok": true }
+```
+</Accordion>
+
+<Accordion title="DELETE /api/v1/comments/{comment_id}">
+Moderação (gestor+).
+
+```bash title="Requisição"
+curl -X DELETE "https://api.agropujante.com.br/api/v1/comments/7f8a9b0c-1d2e-4f3a-4b5c-6d7e8f9a0b1c" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "ok": true }
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/likes/posts/{post_id}">
+Toggle — a mesma chamada curte e descurte.
+
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/likes/posts/c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "liked": true, "like_count": 27 }
+```
+
+Erros genéricos (401): ver [Erros comuns](#erros-comuns).
+</Accordion>
+
+<Accordion title="GET /api/v1/likes/posts/{post_id}">
+Bearer opcional — anônimo recebe `liked: false`.
+
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/likes/posts/c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "liked": true, "like_count": 27 }
+```
+</Accordion>
+
+<Accordion title="POST /api/v1/likes/comments/{comment_id}">
+```bash title="Requisição"
+curl -X POST "https://api.agropujante.com.br/api/v1/likes/comments/7f8a9b0c-1d2e-4f3a-4b5c-6d7e8f9a0b1c" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+```json title="200 OK"
+{ "liked": true, "like_count": 4 }
+```
+</Accordion>
+
+<Accordion title="GET /api/v1/likes/comments/{comment_id}">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/likes/comments/7f8a9b0c-1d2e-4f3a-4b5c-6d7e8f9a0b1c"
+```
+
+```json title="200 OK"
+{ "liked": false, "like_count": 4 }
+```
+</Accordion>
+</AccordionGroup>
+
 ## Search (`/search`)
 
 | Método | Path | Descrição | Auth |
@@ -86,3 +1310,49 @@ Artigos submetidos por colaboradores para review editorial — ver o [fluxo de p
 | GET | `/search?q=&type=&category=&tags=&date_from=&date_to=&sort=&semantic=` | Busca avançada fuzzy + embeddings (cache 30 s) | Público |
 
 Com `semantic=true`, a busca combina full-text fuzzy com similaridade vetorial (pgvector, embeddings OpenAI `text-embedding-3-small`, índice HNSW).
+
+<AccordionGroup>
+<Accordion title="GET /api/v1/search">
+```bash title="Requisição"
+curl "https://api.agropujante.com.br/api/v1/search?q=arrendamento&type=artigo&category=direito-agrario&sort=relevance&page=1&page_size=10"
+```
+
+```json title="200 OK"
+{
+  "items": [
+    {
+      "id": "3d4e5f6a-7b8c-4d9e-0f1a-2b3c4d5e6f7a",
+      "title": "Arrendamento rural: cláusulas essenciais do contrato",
+      "slug": "arrendamento-rural-clausulas-essenciais",
+      "excerpt": "Prazo, preço e benfeitorias: o que não pode faltar...",
+      "cover_image_url": "https://cdn.agropujante.com.br/posts/arrendamento.jpg",
+      "type": "artigo",
+      "is_featured": false,
+      "published_at": "2026-05-20T09:00:00+00:00",
+      "category": { "id": "d4e5f6a7-8b9c-4d0e-9f1a-2b3c4d5e6f7a", "name": "Direito Agrário", "slug": "direito-agrario" },
+      "primary_author": { "id": "1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e", "name": "Ana Beatriz Carvalho", "slug": "ana-beatriz-carvalho" },
+      "tags": [{ "id": "9d0e1f2a-3b4c-4d5e-6f7a-8b9c0d1e2f3a", "name": "Arrendamento", "slug": "arrendamento" }],
+      "relevance_score": 85.0,
+      "highlights": {
+        "title": "<mark>Arrendamento</mark> rural: cláusulas essenciais do contrato",
+        "excerpt": "...o contrato de <mark>arrendamento</mark> deve prever..."
+      }
+    }
+  ],
+  "total": 6,
+  "page": 1,
+  "page_size": 10,
+  "query": "arrendamento",
+  "filters_applied": {
+    "type": "artigo",
+    "category": "direito-agrario",
+    "tags": null,
+    "date_from": null,
+    "date_to": null
+  }
+}
+```
+
+Com `semantic=true` (e embeddings configurados), a resposta traz `search_type: "hybrid"` e mescla resultados vetoriais + keyword. Cache 30 s.
+</Accordion>
+</AccordionGroup>
