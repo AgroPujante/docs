@@ -1,0 +1,100 @@
+---
+title: "Modelos de dados"
+description: "Entidades do schema pujante organizadas por domínio"
+icon: "database"
+---
+
+Todas as tabelas vivem no schema **`pujante`** do Supabase PostgreSQL (81+ tabelas). Por herança do sistema legado, as chaves primárias seguem o padrão `id` do tipo `text`.
+
+## Identidade
+
+| Tabela | Campos principais |
+|---|---|
+| `users` | `id`, `email`, `role`, `member_id`, `supabase_auth_id`, `last_login_at` |
+| `members` | `full_name`, `email`, `phone`, `cpf`, `gender`, `status` |
+| `offices` | `name`, `legal_name`, `document` (CNPJ), `email`, `phone`, `status` |
+| `office_members` | `office_id`, `member_id` — vínculo N:N |
+
+<Note>
+`users` é a conta de acesso (ligada ao Supabase Auth via `supabase_auth_id`); `members` é a pessoa física (cadastro comercial). Um `user` aponta para um `member` via `member_id`.
+</Note>
+
+## Comercial
+
+| Tabela | Campos principais |
+|---|---|
+| `products` | Tipos: `OFFICE_SUPPORTER`, `MEMBERS_CLUB`, `MENTORSHIP`, `CURSO_DO_MES` |
+| `subscriptions` | `product_id`, `member_id`/`office_id`, `price`, `status`, `start_date`/`end_date`, `is_late`, `billing_cycle`, `next_due_date`, `asaas_id`, `pagarme_subscription_id` |
+| `subscription_payments` | `value`, `normalized_status` (`PAID`/`PENDING`/`OVERDUE`/`FAILED`/`REFUNDED`), `gateway` (`asaas`/`pagarme`), `payment_date`, `due_date` |
+| `coupons` | Código, desconto percentual ou preço fixo, limites de uso, expiração |
+| `payment_links` | Links de pagamento |
+| `external_payments` | Pagamentos externos (Hotmart, PagarMe legacy) |
+
+## Mentoria
+
+| Tabela | Campos principais |
+|---|---|
+| `mentored_tracking` | Acompanhamento do mentorado (localização, especialidade, vínculo com office) |
+| `mentored_profiles` | Resultados de testes: DISC, socioemocional, procrastinação, digit span, stroop |
+| `mentored_documents` | `plano_acao_json` por `reference_month` |
+| `task_completions` | Tarefas mensais concluídas |
+| `agenda_items` | Itens de agenda da mentoria |
+
+## Carreira (Career Booster)
+
+| Tabela | Campos principais |
+|---|---|
+| `career_employee_profiles` | Perfil do funcionário no office (cargo, departamento, contratação) |
+| `career_tracks` | Trilhas de carreira |
+| `career_roles` | Cargos |
+| `career_pdis` | Planos de Desenvolvimento Individual |
+
+## LMS
+
+| Tabela | Campos principais |
+|---|---|
+| `lms_tracks` | `kind`: `track`, `imersion` ou `course_of_month` |
+| `lms_courses` | Cursos dentro de uma trilha |
+| `lms_lessons` | Aulas (vídeo via Bunny Stream) |
+| `lms_materials` | Materiais anexos de aula |
+| `lms_teachers` | Professores |
+| `lms_lesson_access_log` | Progresso de vídeo (segundos assistidos, posição, completed) |
+| `lms_lesson_topics_progress` | Checklist de tópicos por aula |
+| `lms_comments` | Comentários (com replies via `parent_id`) |
+| `lms_ai_agents` | Agentes de IA configuráveis por aula |
+| `lms_ai_agent_knowledge` | Base de conhecimento de cada agente |
+| `lms_ai_chat_history` | Histórico de chat IA por aluno/aula |
+
+## Editorial
+
+| Tabela | Campos principais |
+|---|---|
+| `noticias` | `status`: `NOVA`/`USADA`; favorito, notas |
+| `noticia_tags_catalog` / `noticia_tags` | Catálogo de tags e vínculos |
+| `noticia_alertas` | Alertas por palavra-chave |
+| `noticia_historico` | Trilha de ações sobre notícias |
+| `noticia_configuracoes` | Configurações chave/valor do módulo |
+| `artigos` | Artigos gerados/editados a partir de notícias |
+| `scraper_logs` | Logs das execuções do scraper |
+
+## Integrações
+
+| Tabela | Uso |
+|---|---|
+| `bling_invoices` | Notas fiscais NFSe emitidas via Bling |
+| `bling_product_configs` | Configuração fiscal por produto |
+| `bling_automation_config` / `bling_automation_logs` | Automação de emissão e seus logs |
+| `nfse_config` | Configuração NFSe (CNPJ, inscrição municipal, etc.) |
+| `asaas_webhook_events` / `pagarme_webhook_events` | Auditoria de webhooks dos gateways |
+| `email_campaign_logs` | Logs de envio de campanhas |
+
+## Diversos
+
+| Tabela | Uso |
+|---|---|
+| `doc_sections` | Wiki interna de documentação |
+| `menu_permissions` | Matriz de permissões de menu por tipo de usuário |
+| `knowledge_base` | Documentos com embeddings (busca semântica) |
+| `suggestions` | Sugestões enviadas pelos usuários |
+| `whatsapp_conversations` | Conversas WhatsApp (Z-API) |
+| `password_reset_codes` | Códigos OTP do fluxo de reset de senha |

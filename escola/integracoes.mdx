@@ -1,0 +1,42 @@
+---
+title: "Integrações externas"
+description: "Serviços de terceiros usados pela Escola Pujante e onde cada um se encaixa"
+icon: "plug"
+---
+
+A Escola Pujante integra com os serviços abaixo. A coluna "Backend" indica onde a integração roda hoje (FastAPI novo vs NestJS legado, durante o strangler).
+
+| Serviço | Uso | Backend |
+|---|---|---|
+| **Supabase** | Banco PostgreSQL (schema `pujante`), autenticação (JWT ES256) e storage | FastAPI + frontend (SDK) |
+| **Asaas** | Pagamentos PIX, boleto e cartão; import de assinaturas; webhook auditado | NestJS legado (billing) + FastAPI (import/webhook) |
+| **PagarMe** | Cartão recorrente (legacy); import e webhook | NestJS legado + FastAPI (import/webhook) |
+| **Bling** | Emissão de NFSe via OAuth; automação de notas | FastAPI |
+| **Centi** | NFSe da prefeitura de Pires do Rio/GO (leitura) | FastAPI |
+| **OpenAI** | Análises GDA (DISC, socioemocional, procrastinação, atenção/memória), Whisper (transcrição), editorial | FastAPI |
+| **Anthropic** | Chat de IA nas aulas do LMS (em configuração) | FastAPI |
+| **Resend** | Emails transacionais; webhook de eventos com assinatura Svix (HMAC) | FastAPI |
+| **Mailchimp** | Newsletter | FastAPI |
+| **Bunny CDN** | Storage de arquivos (covers, materiais) e streaming de vídeo (Bunny Stream) | FastAPI |
+| **Z-API** | WhatsApp por office (conversas e logs) | FastAPI |
+| **Google OAuth** | Google Sign-In no login | FastAPI + frontend |
+| **New Relic** | APM e monitoramento | FastAPI |
+
+## Pontos de atenção
+
+<AccordionGroup>
+  <Accordion title="Webhooks são auditados antes de processar">
+    Eventos de Asaas e PagarMe são persistidos em `asaas_webhook_events` e `pagarme_webhook_events` antes de qualquer processamento, permitindo replay e diagnóstico. O webhook do Resend valida assinatura **Svix HMAC** (`RESEND_WEBHOOK_SECRET`).
+  </Accordion>
+  <Accordion title="Billing ainda vive no NestJS legado">
+    A criação/gestão de cobranças recorrentes em PagarMe e Asaas continua no backend NestJS (`/api`). O FastAPI já cuida de **imports** (sync gateway → local), **webhooks** e **dashboards**. Não duplique a lógica de cobrança no v2 sem desligar a do legado.
+  </Accordion>
+  <Accordion title="Bling: OAuth ainda não migrado">
+    Os endpoints de autorização OAuth e emissão de NFe do módulo Bling no v2 ainda retornam 501; consulta de notas, KPIs e configuração fiscal já funcionam. Veja [API: Financeiro](/escola/api/financeiro).
+  </Accordion>
+  <Accordion title="Bunny separa storage de stream">
+    O upload de **vídeo de aula** vai para o Bunny Stream (`BUNNY_STREAM_*`); covers e materiais vão para o Bunny Storage (`BUNNY_STORAGE_*`) servidos pela CDN.
+  </Accordion>
+</AccordionGroup>
+
+As variáveis de ambiente de cada integração estão listadas em [Variáveis de ambiente](/escola/variaveis-ambiente).

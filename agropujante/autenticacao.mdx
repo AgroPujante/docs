@@ -1,0 +1,84 @@
+---
+title: "Autenticação e autorização"
+description: "Supabase Auth JWT, RBAC via admin_users, API keys read-only, RLS e o gotcha dos 2 pipelines de apoiador"
+---
+
+## Pipeline principal: Supabase Auth (JWT)
+
+O fluxo padrão de usuário usa o Supabase Auth:
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/api/v1/users/register` | Registro com email/senha | Público |
+| POST | `/api/v1/auth/login` | Login → `{access_token, refresh_token, user}` | Público |
+| POST | `/api/v1/users/google-login` | OAuth Google (valida `GOOGLE_CLIENT_ID`) | Público |
+| POST | `/api/v1/auth/refresh` | Renova o par de tokens | Público |
+| POST | `/api/v1/auth/logout` | Invalida a sessão | JWT |
+| GET | `/api/v1/auth/me` | Usuário atual | JWT |
+
+O backend valida o JWT com `SUPABASE_JWT_SECRET`. O mesmo token serve para o PostgREST direto (role `authenticated` nas RLS policies).
+
+### Reset de senha
+
+OTP de 6 dígitos por email (Resend), com persistência em `password_reset_codes`:
+
+<Steps>
+  <Step title="Solicitar">
+    `POST /password-reset/request` — gera o OTP e envia por email.
+  </Step>
+  <Step title="Verificar">
+    `POST /password-reset/verify` — valida o código (máximo de **3 tentativas**).
+  </Step>
+  <Step title="Confirmar">
+    `POST /password-reset/confirm` — define a nova senha.
+  </Step>
+</Steps>
+
+## RBAC via admin_users
+
+Os papéis não vivem no JWT — são resolvidos pela tabela `admin_users` (lookup por user id). Hierarquia:
+
+| Role | Quem é | O que pode |
+|---|---|---|
+| `anon` | Visitante | Ler conteúdo publicado, inserts públicos (newsletter, comentários, leads) |
+| `authenticated` | Usuário logado | Perfil, likes, posts salvos, pastas de jurisprudência, checkout |
+| `editor` | Equipe editorial | CRUD de posts, attachments, uploads de storage |
+| `gestor` | Gestão | Tudo de editor + analytics, métricas de receita, listagem de usuários, delete de posts |
+| `administrador` | Admin | Tudo + CRUD de admin_users, api_keys, campanhas, boletins, catálogos |
+
+Nas tabelas de endpoints desta doc, `editor+`, `gestor+` e `admin+` indicam o role mínimo.
+
+## API key read-only
+
+Para acesso externo (integrações, BI), administradores criam chaves em `/api/v1/admin/api-keys`. As chaves são **somente leitura** e ficam na tabela `api_keys`. Use o header da chave em vez de JWT para consumo de dados sem sessão de usuário.
+
+## RLS policies
+
+O PostgREST direto depende inteiramente de RLS (header `Accept-Profile: pujante`):
+
+- `anon`: SELECT em conteúdo publicado (`posts` published, `categories`, `tags`, `authors`...); INSERT em `newsletter_subscribers`, `comments` (entram pendentes de moderação) e `supporter_leads`.
+- `authenticated`: UPDATE apenas das próprias rows em `profiles`, `post_likes`, `comment_likes`.
+- Tudo que exige role editorial passa pelo FastAPI com service role — não há policy de escrita editorial via anon key.
+
+## Gotcha: os 2 pipelines de auth de apoiador
+
+<Warning>
+Contas de **apoiador** existem em **dois mundos de auth incompatíveis**. As senhas **não se cruzam** entre eles. Esse é um dos bugs de suporte mais recorrentes do portal.
+</Warning>
+
+| | Pipeline portal-nativo | Pipeline Supabase Auth |
+|---|---|---|
+| Hash de senha | bcrypt na própria tabela (`password_hash` começa com `$2b$`) | `password_hash = 'supabase_managed'` (sentinela, não é hash) |
+| Identidade | Apenas registro local em `users` | `supabase_auth_id` aponta para o usuário no Supabase Auth |
+| `user_type` | tipos de apoiador legados | `OFFICE_SUPPORTER` |
+| Login que funciona | Login por senha do portal (compara bcrypt) | Fluxo Supabase Auth (login/refresh JWT) |
+
+Consequências práticas:
+
+- **Login do portal por senha falha** para contas `supabase_managed` — não existe bcrypt para comparar. O usuário precisa entrar pelo fluxo Supabase Auth (ou Google).
+- Resetar a senha em um pipeline **não** afeta o outro.
+- Ao depurar "apoiador não consegue logar", a primeira verificação é o valor de `password_hash` na row do usuário: `$2b$...` → mundo portal-nativo; `supabase_managed` → mundo Supabase Auth.
+
+<Note>
+Apoiador ativo já inclui acesso PRO via `users.is_subscriber` — apoiador e PRO **não coexistem** (1 assinatura por usuário). Veja [Fluxos de negócio](/agropujante/fluxos).
+</Note>

@@ -1,0 +1,70 @@
+---
+title: "API: jurisprudência e boletins"
+description: "Consulta de jurisprudência (jurisprudencias.ai), boletins em PDF, pastas do usuário e decisões"
+---
+
+Base: `/api/v1`.
+
+<Warning>
+**Três conceitos distintos** — não os misture ao trabalhar nesses routers:
+
+1. **Consulta de jurisprudência** (`/jurisprudencia`) — busca de decisões em tribunais via **jurisprudencias.ai**. É uma ferramenta de pesquisa, não conteúdo do portal.
+2. **Julgados** — posts **editoriais** (tipo de post no router `/posts`) que comentam decisões. Não aparecem nesta página.
+3. **Boletins** (`/boletins`) — PDFs **curados** de julgados, com gating PRO. As rows da tabela `julgados` pertencem a boletins — não são os posts editoriais.
+</Warning>
+
+## Boletins — público (`/boletins`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/boletins` | Publicados, paginados — free recebe só o `sample_julgado` de cada um | Público |
+| GET | `/boletins/{slug}` | Detalhe — `julgados[]` completo apenas para PRO/apoiador | Público/PRO |
+| GET | `/boletins/{slug}/download` | Signed URL do PDF | PRO+ |
+
+## Boletins — admin (`/admin/boletins`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/admin/boletins` | Cria boletim | admin+ |
+| GET | `/admin/boletins` | Todos os status | admin+ |
+| GET | `/admin/boletins/{id}` | Detalhe | admin+ |
+| PATCH | `/admin/boletins/{id}` | Edita | admin+ |
+| POST | `/admin/boletins/{id}/upload-pdf` | Sobe o PDF | admin+ |
+| POST | `/admin/boletins/{id}/upload-cover` | Sobe a capa | admin+ |
+| POST | `/admin/boletins/{id}/publish` | Publica | admin+ |
+| POST | `/admin/boletins/{id}/archive` | Arquiva (tira do ar sem apagar) | admin+ |
+| DELETE | `/admin/boletins/{id}` | Remove | admin+ |
+
+Ciclo de vida completo no [fluxo de boletim](/agropujante/fluxos#boletim).
+
+## Consulta de jurisprudência (`/jurisprudencia`)
+
+Integração com **jurisprudencias.ai** (`JURISPRUDENCIAS_AI_API_KEY`).
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/jurisprudencia/tribunais` | Lista cortes (STF, STJ, TRF...) | Público |
+| GET | `/jurisprudencia/estados` | Estados + mapping de tribunais | Público |
+| GET | `/jurisprudencia/estados/{estado}/tribunais` | Tribunais do estado | Público |
+| POST | `/jurisprudencia/search` | Busca de decisões (rate-limited) | JWT |
+| GET | `/jurisprudencia/{tribunal_code}/{juris_id}` | Detalhe da decisão | JWT |
+
+<Note>
+A busca exige login e tem rate limit próprio (slowapi) — cada query consome a API externa.
+</Note>
+
+## Pastas do usuário (`/juris_folders`)
+
+O usuário organiza decisões encontradas na consulta em pastas pessoais (RLS: só as próprias).
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/juris_folders` | Pastas do usuário | JWT |
+| POST | `/juris_folders` | Cria pasta | JWT |
+| GET | `/juris_folders/{folder_id}` | Pasta + itens salvos | JWT |
+| PATCH | `/juris_folders/{folder_id}` | Renomeia/edita | JWT |
+| DELETE | `/juris_folders/{folder_id}` | Remove | JWT |
+
+## Decisões (`/decisoes`)
+
+Router sobre a tabela `decisoes` — decisões judiciais armazenadas localmente (distintas tanto dos julgados de boletim quanto da consulta externa).

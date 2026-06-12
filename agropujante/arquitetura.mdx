@@ -1,0 +1,98 @@
+---
+title: "Arquitetura"
+description: "Estrutura do backend FastAPI, frontend React, OG proxy, deploy Railway, cache, rate limiting e RLS"
+---
+
+## Visão de alto nível
+
+```
+Browser ──┬─> Express server.js (Railway) ──> assets do build Vite (SPA fallback)
+          │        └─ bots/crawlers ──> proxy /og/{type}/{slug} no FastAPI
+          ├─> FastAPI /api/v1 (Railway) ──> Supabase Postgres (schema pujante)
+          └─> PostgREST do Supabase (anon key + RLS, Accept-Profile: pujante)
+```
+
+## Backend (FastAPI)
+
+O backend segue a organização padrão de FastAPI em camadas:
+
+```
+backend/
+├── app/
+│   ├── routers/      # 49 routers — um por recurso (posts, boletins, subscriptions...)
+│   ├── services/     # lógica de negócio e integrações (Asaas, Resend, OpenAI...)
+│   ├── schemas/      # modelos Pydantic de request/response
+│   └── core/         # config, segurança, dependências, clientes (Supabase, etc.)
+├── migrations/       # NNN_description.sql — aplicadas à mão (ver Migrations)
+└── ...
+```
+
+- Cada router é montado sob `/api/v1` e cobre um recurso (ex.: `/api/v1/posts`, `/api/v1/admin/boletins`).
+- A escrita no banco passa pelo backend com a `SUPABASE_SERVICE_ROLE_KEY` quando precisa bypassar RLS; operações em nome do usuário validam o JWT do Supabase Auth.
+
+## Frontend (React 19 + Vite + Tailwind 4)
+
+SPA construída com Vite. Em produção, **não** é servida estaticamente pura: um `server.js` Express fica na frente.
+
+### server.js — OG proxy e SPA fallback
+
+O Express resolve dois problemas de SPA:
+
+1. **OG tags para bots** — crawlers (WhatsApp, Twitter/X, Google, LinkedIn...) não executam JS. O `server.js` detecta bots pelo user-agent e faz proxy para `GET /api/v1/og/{type}/{slug}` no FastAPI, que devolve HTML com as meta tags corretas (título, descrição, imagem) para `noticia`, `artigo` e `julgado`. Slugs antigos recebem 301.
+2. **SPA fallback** — qualquer rota não-asset devolve o `index.html` do build, deixando o React Router resolver no cliente.
+
+## Duas vias de acesso a dados
+
+O frontend usa **duas vias** para falar com o banco — escolha consciente, não acidente:
+
+<Tabs>
+  <Tab title="PostgREST direto (anon key + RLS)">
+    Para leituras públicas simples e algumas escritas controladas por RLS, o front fala direto com o PostgREST do Supabase usando a anon key e o header `Accept-Profile: pujante` (o schema não é o `public`).
+
+    - **SELECT**: `categories`, `tags`, `posts` publicados, `authors` e similares.
+    - **INSERT público**: `newsletter_subscribers`, `comments`, `supporter_leads`.
+    - **UPDATE** (apenas rows próprias): `profiles`, `post_likes`, `comment_likes`.
+
+    Vantagem: zero latência de hop pelo backend para dados que a RLS já protege.
+  </Tab>
+  <Tab title="API FastAPI">
+    Tudo que envolve lógica de negócio, agregação, gating de acesso (paywall, PRO), integrações externas (Asaas, Resend, OpenAI, jurisprudencias.ai), cache e operações admin passa pelo FastAPI em `/api/v1`.
+  </Tab>
+</Tabs>
+
+<Note>
+Ao consultar o PostgREST de fora do front (curl, scripts), lembre do header `Accept-Profile: pujante` — sem ele o PostgREST procura as tabelas no schema `public` e devolve 404.
+</Note>
+
+## Cache
+
+Endpoints públicos de leitura quente têm cache em memória com TTL por endpoint:
+
+| Endpoint | TTL |
+|---|---|
+| `GET /posts/trending` | 15 min |
+| `GET /posts` (lista) | 60 s |
+| `GET /posts/featured` | 60 s |
+| `GET /posts/{slug}` | 60 s |
+| `GET /search` | 30 s |
+| `GET /authors` | com cache (TTL curto) |
+
+Com ~3k visitas/dia, esse cache segura a maior parte do tráfego de leitura sem bater no banco a cada request.
+
+## Rate limiting
+
+O backend usa **slowapi** para rate limiting por IP. O limite global é configurado por `RATE_LIMIT_PER_MINUTE`; endpoints sensíveis (ex.: `POST /jurisprudencia/search`, password reset) têm limites próprios mais agressivos.
+
+## RLS no Supabase
+
+Todas as tabelas do schema `pujante` expostas via PostgREST têm Row Level Security:
+
+- **anon** — leitura de conteúdo publicado e inserts públicos pontuais (newsletter, comentários pendentes de moderação, leads).
+- **authenticated** — leitura/escrita das próprias rows (perfil, likes, pastas de jurisprudência, posts salvos).
+- Roles editoriais (`editor`, `gestor`, `administrador`) são resolvidas via tabela `admin_users` — detalhes em [Autenticação](/agropujante/autenticacao).
+
+## Deploy (Railway)
+
+- Frontend e backend são serviços Railway separados.
+- O build do front gera os assets do Vite; o `server.js` Express é o processo do serviço de front.
+- **Migrations não rodam no deploy** — são aplicadas manualmente no SQL Editor do Supabase **antes** do deploy. Veja [Migrations](/agropujante/migrations).

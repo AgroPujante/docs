@@ -1,0 +1,106 @@
+---
+title: "Editorial"
+description: "Notícias, tags, alertas, artigos e scraper de instituições"
+icon: "newspaper"
+---
+
+Base: `/api/v2/noticias`. Módulo usado pelo time editorial (role `EDITORIAL` tem acesso a notícias, artigos e calendário; ações de escrita aqui exigem MANAGER).
+
+## Notícias
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/noticias` | Listar (`?status`, `?sigla`, `?favorito`, `?busca`, `?page`, `?pageSize`, `?limit`) | JWT |
+| GET | `/noticias/estatisticas` | Estatísticas gerais | JWT |
+| GET | `/noticias/{noticia_id}` | Detalhe | JWT |
+| PATCH | `/noticias/{noticia_id}` | Atualizar status/favorito/notas | MANAGER |
+
+### PATCH /noticias/\{noticia_id\}
+
+<ParamField body="status" type="string">`NOVA` ou `USADA`.</ParamField>
+<ParamField body="favorito" type="boolean">Marcar como favorita.</ParamField>
+<ParamField body="notas" type="string">Notas internas.</ParamField>
+
+## Scraper
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/noticias/scraper/status` | Status do scraper | JWT |
+| GET | `/noticias/scraper/logs` | Logs (`?sigla`, `?limit`) | MANAGER |
+| POST | `/noticias/scraper/executar` | Executar scraper manualmente | MANAGER |
+
+<Warning>
+`POST /noticias/scraper/executar` retorna **501 — não implementado**.
+</Warning>
+
+## Instituições
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/noticias/instituicoes` | Listar instituições | JWT |
+| GET | `/noticias/instituicoes/counts` | Contagem por instituição | JWT |
+
+## Tags
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/noticias/tags` | Listar tags do catálogo | JWT |
+| POST | `/noticias/tags` | Criar tag | MANAGER |
+| POST | `/noticias/{noticia_id}/tags/{tag_id}` | Vincular tag à notícia | MANAGER |
+| DELETE | `/noticias/{noticia_id}/tags/{tag_id}` | Desvincular tag | MANAGER |
+| GET | `/noticias/{noticia_id}/tags` | Tags de uma notícia | JWT |
+
+### POST /noticias/tags
+
+<ParamField body="nome" type="string" required>Nome da tag.</ParamField>
+<ParamField body="cor" type="string">Cor de exibição (opcional).</ParamField>
+
+## Alertas
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/noticias/alertas` | Listar alertas | JWT |
+| POST | `/noticias/alertas` | Criar alerta por palavra-chave | MANAGER |
+| DELETE | `/noticias/alertas/{alerta_id}` | Remover alerta | MANAGER |
+
+### POST /noticias/alertas
+
+<ParamField body="palavraChave" type="string" required>Palavra-chave monitorada.</ParamField>
+<ParamField body="ativo" type="boolean">Alerta ativo (opcional).</ParamField>
+
+## Histórico e configurações
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/noticias/historico` | Histórico de ações (`?noticiaId`, `?limit`) | JWT |
+| POST | `/noticias/historico` | Registrar ação (`{noticiaId, acao, detalhes?}`) | JWT |
+| GET | `/noticias/configuracoes/{chave}` | Ler configuração | JWT |
+| POST | `/noticias/configuracoes` | Gravar configuração (`{chave, valor}`) | MANAGER |
+
+## Artigos
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/noticias/artigos` | Listar artigos (`?limit`) | JWT |
+| PATCH | `/noticias/artigos/{artigo_id}` | Atualizar artigo | MANAGER |
+| GET | `/noticias/{noticia_id}/artigo` | Artigo gerado da notícia | JWT |
+
+### PATCH /noticias/artigos/\{artigo_id\}
+
+<ParamField body="titulo" type="string">Título.</ParamField>
+<ParamField body="conteudo" type="string">Conteúdo.</ParamField>
+<ParamField body="publicado" type="boolean">Publicado.</ParamField>
+
+## Geração por IA (não migrada)
+
+<Warning>
+Todos os endpoints abaixo retornam **501 — não implementado** no v2:
+</Warning>
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/noticias/{noticia_id}/analise-ia` | Análise da notícia por IA | MANAGER |
+| POST | `/noticias/{noticia_id}/gerar-artigo` | Gerar artigo | MANAGER |
+| POST | `/noticias/{noticia_id}/gerar-artigo-stream` | Gerar artigo (streaming) | MANAGER |
+| POST | `/noticias/{noticia_id}/gerar-carrossel` | Gerar carrossel | MANAGER |
+| POST | `/noticias/{noticia_id}/enviar-email` | Enviar por email | MANAGER |

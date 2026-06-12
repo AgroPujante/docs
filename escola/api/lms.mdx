@@ -1,0 +1,145 @@
+---
+title: "LMS"
+description: "Catálogo, trilhas, cursos, aulas, professores, agentes de IA, progresso, comentários e certificados"
+icon: "book-open"
+---
+
+Base: `/api/v2/lms` (certificados em `/api/v2/lessons` e `/api/v2/certificates`). Rotas sob `/lms/catalog/*` são a visão do **aluno**; as demais são administração de conteúdo.
+
+## Catálogo (aluno)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/lms/catalog` | Catálogo de trilhas/cursos (`?kind`) | JWT |
+| GET | `/lms/catalog/{track_id}` | Detalhe de trilha | JWT |
+| GET | `/lms/catalog/progress/recent` | "Continue assistindo" (`?limit`) | JWT |
+
+## Tracks (admin)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/lms/tracks` | Listar tracks (`?kind`) | MANAGER |
+| POST | `/lms/tracks` | Criar track | MANAGER |
+| GET | `/lms/tracks/{track_id}` | Detalhe | MANAGER |
+| PATCH | `/lms/tracks/{track_id}` | Atualizar | MANAGER |
+| DELETE | `/lms/tracks/{track_id}` | Remover | MANAGER |
+| POST | `/lms/tracks/{track_id}/cover` | Upload de cover (multipart) | MANAGER |
+
+### POST /lms/tracks
+
+<ParamField body="name" type="string" required>Nome da trilha.</ParamField>
+<ParamField body="kind" type="string" required>`track`, `imersion` ou `course_of_month`.</ParamField>
+<ParamField body="description" type="string">Descrição.</ParamField>
+<ParamField body="coverImageUrl" type="string">URL da capa.</ParamField>
+<ParamField body="order" type="number">Ordem de exibição.</ParamField>
+<ParamField body="active" type="boolean">Ativa no catálogo.</ParamField>
+
+## Courses (admin)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/lms/courses` | Listar cursos (`?trackId`, `?status`) | MANAGER |
+| POST | `/lms/courses` | Criar curso | MANAGER |
+| PATCH | `/lms/courses/{course_id}` | Atualizar | MANAGER |
+| DELETE | `/lms/courses/{course_id}` | Remover | MANAGER |
+| POST | `/lms/courses/{course_id}/cover` | Upload de cover (multipart) | MANAGER |
+
+### POST /lms/courses
+
+<ParamField body="trackId" type="string" required>Trilha à qual o curso pertence.</ParamField>
+<ParamField body="title" type="string" required>Título.</ParamField>
+<ParamField body="description" type="string">Descrição.</ParamField>
+<ParamField body="status" type="string">Status de publicação.</ParamField>
+
+## Lessons (admin)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/lms/lessons` | Listar aulas (`?courseId`) | MANAGER |
+| POST | `/lms/lessons` | Criar aula (`{...dict, teacherIds?}`) | MANAGER |
+| PATCH | `/lms/lessons/{lesson_id}` | Atualizar | MANAGER |
+| DELETE | `/lms/lessons/{lesson_id}` | Remover | MANAGER |
+| POST | `/lms/lessons/{lesson_id}/cover` | Upload de cover (multipart) | MANAGER |
+| POST | `/lms/lessons/{lesson_id}/video` | Upload de vídeo → Bunny Stream (multipart) | MANAGER |
+| POST | `/lms/lessons/{lesson_id}/material` | Upload de material (multipart: `file`, `title`) | MANAGER |
+| DELETE | `/lms/lessons/{lesson_id}/materials/{material_id}` | Remover material | MANAGER |
+| POST | `/lms/lessons/{lesson_id}/transcript` | Upload de transcrição (multipart) | MANAGER |
+| GET | `/lms/lessons/{lesson_id}/materials` | Listar materiais | JWT |
+
+## Teachers
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/lms/teachers` | Listar professores (`?search`) | JWT |
+| POST | `/lms/teachers` | Criar | MANAGER |
+| PATCH | `/lms/teachers/{teacher_id}` | Atualizar | MANAGER |
+| DELETE | `/lms/teachers/{teacher_id}` | Remover | MANAGER |
+
+### POST /lms/teachers
+
+<ParamField body="name" type="string" required>Nome do professor.</ParamField>
+<ParamField body="bio" type="string">Biografia.</ParamField>
+<ParamField body="avatarUrl" type="string">URL do avatar.</ParamField>
+
+## AI agents
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/lms/ai-agents` | Listar agentes (`?search`, `?active`) | JWT |
+| GET | `/lms/ai-agents/usage-report` | Relatório de uso de IA (`?agentId`, `?days`) | MANAGER |
+| GET | `/lms/ai-agents/{agent_id}` | Detalhe | JWT |
+| POST | `/lms/ai-agents` | Criar (`{name, ...dict}`) | MANAGER |
+| PATCH | `/lms/ai-agents/{agent_id}` | Atualizar | MANAGER |
+| DELETE | `/lms/ai-agents/{agent_id}` | Remover | MANAGER |
+| GET | `/lms/ai-agents/{agent_id}/knowledge` | Listar knowledge | JWT |
+| POST | `/lms/ai-agents/{agent_id}/knowledge` | Adicionar knowledge (form-data: `title`, `content?`, `file?`, `order`, `active`) | MANAGER |
+| PATCH | `/lms/ai-agents/{agent_id}/knowledge/{knowledge_id}` | Atualizar knowledge | MANAGER |
+| DELETE | `/lms/ai-agents/{agent_id}/knowledge/{knowledge_id}` | Remover knowledge | MANAGER |
+
+## Progresso e chat de IA (aluno)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/lms/catalog/lessons/{lesson_id}/ai-chat` | Chat de IA na aula | JWT |
+| GET | `/lms/catalog/lessons/{lesson_id}/ai-chat/history` | Histórico do chat | JWT |
+| GET | `/lms/catalog/lessons/{lesson_id}/topics-progress` | Progresso de tópicos | JWT |
+| PATCH | `/lms/catalog/lessons/{lesson_id}/topics-progress` | Atualizar tópicos checados | JWT |
+| GET | `/lms/catalog/lessons/{lesson_id}/progress` | Progresso de vídeo | JWT |
+| PATCH | `/lms/catalog/lessons/{lesson_id}/progress` | Atualizar progresso de vídeo | JWT |
+
+### POST /lms/catalog/lessons/\{lesson_id\}/ai-chat
+
+<ParamField body="message" type="string" required>Mensagem do aluno para o agente de IA da aula.</ParamField>
+
+### PATCH /lms/catalog/lessons/\{lesson_id\}/progress
+
+<ParamField body="watchedSeconds" type="number">Segundos assistidos acumulados.</ParamField>
+<ParamField body="lastPositionSeconds" type="number">Posição atual do player.</ParamField>
+<ParamField body="completed" type="boolean">Aula concluída.</ParamField>
+
+### PATCH /lms/catalog/lessons/\{lesson_id\}/topics-progress
+
+<ParamField body="checkedTopicKeys" type="string[]" required>Chaves dos tópicos marcados como concluídos.</ParamField>
+
+## Comentários
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/lms/catalog/lessons/{lesson_id}/comments` | Listar comentários da aula | JWT |
+| POST | `/lms/catalog/lessons/{lesson_id}/comments` | Criar comentário | JWT |
+| GET | `/lms/admin/comments` | Listar todos (`?filter`, `?search`, `?page`, `?limit`) | MANAGER |
+| GET | `/lms/admin/comments/unanswered-count` | Contar não respondidos | MANAGER |
+| POST | `/lms/admin/comments/{comment_id}/reply` | Responder comentário | MANAGER |
+| DELETE | `/lms/admin/comments/{comment_id}` | Deletar comentário | MANAGER |
+
+### POST /lms/catalog/lessons/\{lesson_id\}/comments
+
+<ParamField body="content" type="string" required>Texto do comentário.</ParamField>
+<ParamField body="parentId" type="string">ID do comentário pai (para reply).</ParamField>
+
+## Certificados
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/lessons/{lesson_id}/certificate` | Emitir certificado | JWT |
+| GET | `/certificates/{codigo}` | Verificar autenticidade de certificado | Público |

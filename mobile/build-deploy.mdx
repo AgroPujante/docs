@@ -1,0 +1,74 @@
+---
+title: "Build e deploy"
+description: "Configuração do app.json, EAS Build, deep links, push notifications e pendências"
+---
+
+## app.json
+
+Configuração central do app Expo:
+
+| Chave | Valor |
+|---|---|
+| `scheme` | `agropujante://` |
+| Bundle ID (iOS) | `com.agropujante.mobile` |
+| Package (Android) | `com.agropujante.mobile` |
+| Plugins | `expo-router`, `expo-secure-store`, `expo-font`, `expo-notifications` |
+| `expo.extra.apiUrl` | Base do AgroPujante `/api/v1` |
+| `expo.extra.escolaApiUrl` | Base da Escola `/api/v2` |
+
+## EAS Build
+
+<Warning>
+  **EAS Build ainda não está configurado.** O `projectId` no `app.json` é um placeholder (`"TODO-RODAR-eas-init"`). Antes do primeiro build nativo, rode `eas init` pra vincular o app a um projeto EAS real e substituir o placeholder.
+</Warning>
+
+Enquanto o EAS não está configurado, o desenvolvimento roda via **Expo Go** (com a Escola apontando pro IP da rede local) e `npx expo start`.
+
+## Deep links
+
+O scheme `agropujante://` abre o app direto nas rotas suportadas:
+
+- `agropujante://post/[slug]` — leitor de post
+- `agropujante://autor/[slug]` — página do autor
+- `agropujante://coluna/[slug]` — página da coluna
+
+São usados em notificações push e compartilhamento.
+
+## Push notifications
+
+O app usa o serviço de push do **Expo** (`expo-notifications`):
+
+<Steps>
+  <Step title="Permissão">
+    O app solicita permissão de notificações ao usuário (estado controlado na store `notifications`).
+  </Step>
+  <Step title="Token Expo">
+    Com a permissão concedida, obtém o Expo push token do device.
+  </Step>
+  <Step title="Registro no backend">
+    Envia `POST /devices` com `{token, platform}` pro backend do Portal.
+  </Step>
+  <Step title="Limpeza no logout">
+    No logout, remove o registro com `DELETE /devices?token=` (best-effort).
+  </Step>
+</Steps>
+
+## Pendências
+
+Itens conhecidos antes de um release de produção:
+
+<AccordionGroup>
+  <Accordion title="eas init (bloqueante pra build)">
+    Rodar `eas init` pra criar o projeto EAS e substituir o `projectId` placeholder. Sem isso, não há build nativo nem submissão às lojas.
+  </Accordion>
+  <Accordion title=".env por ambiente">
+    As base URLs vivem hardcoded em `expo.extra` no `app.json`. Falta um esquema de variáveis por ambiente (dev/staging/prod) — por exemplo via `app.config.ts` + `.env`.
+  </Accordion>
+  <Accordion title="Refresh token">
+    Não há refresh automático da sessão do Portal: token expirado força novo login (logout silencioso no 401). Veja [Autenticação](/mobile/autenticacao).
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+  Nenhum valor de chave ou secret deve ser commitado no `app.json` ou em arquivos versionados — apenas URLs públicas e identificadores de bundle.
+</Note>

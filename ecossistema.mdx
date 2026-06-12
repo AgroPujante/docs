@@ -1,0 +1,80 @@
+---
+title: Arquitetura do ecossistema
+description: Como AgroPujante, Escola Pujante, Pujante Admin e Pujante Mobile se conectam
+---
+
+## Visão geral
+
+O ecossistema Pujante é composto por 4 produtos que compartilham infraestrutura central:
+
+```
+                        ┌──────────────────────────────┐
+                        │   Supabase (PostgreSQL)      │
+                        │   schema `pujante`           │
+                        │   Auth (JWT ES256 / JWKS)    │
+                        │   Storage                    │
+                        └──────────────┬───────────────┘
+                                       │
+        ┌──────────────┬───────────────┼───────────────┬──────────────┐
+        │              │               │               │              │
+┌───────▼──────┐ ┌─────▼────────┐ ┌────▼─────────┐ ┌───▼──────────────┐
+│ AgroPujante  │ │ Escola       │ │ Pujante      │ │ Pujante Mobile   │
+│ (Portal)     │ │ Pujante      │ │ Admin        │ │ (Expo + RN)      │
+│ FastAPI      │ │ FastAPI v2 + │ │ FastAPI      │ │ consome /api/v1  │
+│ /api/v1      │ │ Nest legado  │ │ agregador    │ │ e /api/v2        │
+└──────────────┘ └──────────────┘ └──────────────┘ └──────────────────┘
+```
+
+## Infraestrutura compartilhada
+
+| Componente | Detalhe |
+|------------|---------|
+| Banco de dados | Supabase PostgreSQL, schema `pujante` (todos os produtos leem/escrevem no mesmo schema) |
+| Autenticação | Supabase Auth emite JWT (ES256); cada backend valida via JWKS público (`/auth/v1/.well-known/jwks.json`) |
+| Deploy | Railway (backends e frontends) |
+| E-mail | Resend (transacionais) em Portal e Escola |
+| Pagamentos | Asaas (PIX, boleto, cartão) em Portal e Escola; PagarMe legado na Escola |
+
+## Conexões entre produtos
+
+### Portal ↔ Escola: handoff de autenticação
+
+Um usuário do Portal com acesso à Escola (`user.escola.has_access`) não precisa logar duas vezes:
+
+<Steps>
+  <Step title="Token de handoff">
+    O cliente autenticado chama `GET /api/v1/escola/handoff-token` no Portal.
+  </Step>
+  <Step title="Comunicação interna">
+    O backend do Portal chama a Escola via `INTERNAL_API_TOKEN` (`POST /api/v2/auth/handoff-link`) e resolve um token Supabase válido.
+  </Step>
+  <Step title="Sessão na Escola">
+    O cliente usa o token retornado como Bearer nas chamadas `/api/v2`.
+  </Step>
+</Steps>
+
+O Portal também concede trials da Escola via `POST /api/v2/trials/grant` (autenticado com o token interno), e a Escola concede trials do Portal no fluxo inverso.
+
+### Admin → Portal e Escola: agregação e delegação
+
+O Pujante Admin é **read-mostly**: lê direto do schema `pujante` (incluindo materialized views `admin_mv_*`) e **delega escrita** aos backends de origem:
+
+- `POST /admin/launches` roteia para o backend do Portal ou da Escola conforme o campo `origin`, repassando o Bearer token do admin.
+- Os proxies genéricos `/admin/escola/{path}` e `/admin/agropujante/{path}` repassam qualquer chamada autenticada ao upstream correspondente.
+
+### Mobile → Portal e Escola
+
+O app mobile consome as duas APIs com o mesmo padrão Bearer token:
+
+- **Portal** (`/api/v1`): feed, posts, boletins, gamificação, push notifications.
+- **Escola** (`/api/v2`): LMS, testes comportamentais, mentoria, Exordial — autenticado via handoff token do Portal ou login direto.
+
+## Padrões comuns
+
+- **Resposta de erro**: HTTP status + `{ "detail": "mensagem" }` (padrão FastAPI em todos os backends).
+- **Paginação**: `{ data: [], total, page, limit, totalPages }` na Escola; `limit`/`offset` no Admin; `page`/`page_size` no Portal.
+- **Roles**: cada produto tem seu próprio RBAC sobre o mesmo cadastro de usuários — veja a página de autenticação de cada produto.
+
+<Warning>
+As migrations do schema `pujante` são aplicadas manualmente no SQL Editor do Supabase antes do deploy — não há runner automático. Mudanças de schema afetam todos os produtos ao mesmo tempo.
+</Warning>

@@ -1,0 +1,250 @@
+---
+title: "API: operacional"
+description: "Endpoints de operação do painel: tickets, reuniões, acesso ao painel, anotações de cobrança, custos, API keys, system, launches e proxy."
+---
+
+Estes endpoints cobrem a operação interna do time. A maioria exige **JWT Bearer** (escrita nunca aceita API key). Veja [Autenticação](/admin/autenticacao).
+
+## Tickets
+
+Tickets internos de suporte/incidentes, gravados em `pujante.admin_tickets`.
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/tickets` | Lista tickets com filtros | JWT |
+| POST | `/admin/tickets` | Cria ticket | JWT |
+| PATCH | `/admin/tickets/{id}` | Atualização parcial; marcar resolvido grava `resolvido_em` | JWT |
+| DELETE | `/admin/tickets/{id}` | Remove ticket | JWT |
+
+### GET /admin/tickets
+
+<ParamField query="status" type="string">
+`aberto` ou `resolvido`.
+</ParamField>
+
+<ParamField query="sistema" type="string">
+`agropujante`, `escola` ou `geral`.
+</ParamField>
+
+<ParamField query="prioridade" type="string">
+`baixa`, `media` ou `alta`.
+</ParamField>
+
+### POST /admin/tickets
+
+<ParamField body="data" type="string" required>
+Data do ocorrido.
+</ParamField>
+
+<ParamField body="responsavel_nome" type="string" required>
+Nome de quem reportou. Também aceita `responsavel_email` e `responsavel_telefone`.
+</ParamField>
+
+<ParamField body="sistema" type="string" required>
+`agropujante`, `escola` ou `geral`.
+</ParamField>
+
+<ParamField body="prioridade" type="string" required>
+`baixa`, `media` ou `alta`.
+</ParamField>
+
+<ParamField body="problema" type="string" required>
+Descrição do problema.
+</ParamField>
+
+<ParamField body="observacao" type="string">
+Observações adicionais.
+</ParamField>
+
+<ParamField body="imagens" type="array">
+URLs de imagens anexadas.
+</ParamField>
+
+## Reuniões
+
+Registro de reuniões do time em `pujante.admin_reunioes`, com suporte a áudio e transcrição.
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/reunioes` | Lista reuniões | JWT |
+| POST | `/admin/reunioes` | Cria reunião | JWT |
+| PATCH | `/admin/reunioes/{id}` | Atualização parcial | JWT |
+| DELETE | `/admin/reunioes/{id}` | Remove reunião | JWT |
+
+### POST /admin/reunioes
+
+<ParamField body="data" type="string" required>
+Data da reunião.
+</ParamField>
+
+<ParamField body="assunto" type="string" required>
+Assunto/título.
+</ParamField>
+
+<ParamField body="participantes" type="string">
+Participantes da reunião.
+</ParamField>
+
+<ParamField body="descricao" type="string">
+Pauta ou resumo.
+</ParamField>
+
+<ParamField body="audio_url" type="string">
+URL da gravação de áudio.
+</ParamField>
+
+<ParamField body="transcricao_texto" type="string">
+Transcrição em texto.
+</ParamField>
+
+<ParamField body="transcricao_arquivo_url" type="string">
+URL do arquivo de transcrição.
+</ParamField>
+
+## Panel access
+
+Gestão de membros e cargos do painel (RBAC). Detalhes em [Autenticação](/admin/autenticacao#rbac-cargos-do-painel).
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/panel-access/me` | Cargo do logado; auto-provisiona no primeiro acesso | JWT |
+| GET | `/admin/panel-access/members` | Lista membros | JWT (administrador) |
+| POST | `/admin/panel-access/members` | Adiciona membro `{email, cargo}` | JWT |
+| DELETE | `/admin/panel-access/members/{member_id}` | Remove membro | JWT |
+| GET | `/admin/panel-access/logs` | Últimas 200 atividades | JWT (administrador ou auditoria) |
+| POST | `/admin/panel-access/log-login` | Registra acesso ao painel | JWT |
+
+## Cobrança notes
+
+Anotações de cobrança vinculadas a um assinante, em `pujante.cobranca_notes`.
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/cobranca-notes/{subscriber_id}` | Timeline de anotações do assinante | JWT |
+| POST | `/admin/cobranca-notes/{subscriber_id}` | Cria anotação | JWT |
+| DELETE | `/admin/cobranca-notes/note/{note_id}` | Remove anotação | JWT |
+
+<ParamField body="note" type="string" required>
+Texto da anotação, de 1 a 2000 caracteres.
+</ParamField>
+
+## Custos
+
+Controle de custos mensais da operação, em `pujante.custos`.
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/custos/taxonomias` | Listas fixas: categorias, frentes, formas, frequências, status | JWT |
+| GET | `/admin/custos/kpis` | Custo total do mês, variação, fixos, a pagar, maior frente | JWT |
+| GET | `/admin/custos` | Lista custos (`?mes, ?categoria, ?frente, ?status`) | JWT |
+| POST | `/admin/custos` | Cria custo | JWT |
+| PATCH | `/admin/custos/{id}` | Atualização parcial | JWT |
+| PATCH | `/admin/custos/{id}/pagar` | Marca o custo como pago | JWT |
+| DELETE | `/admin/custos/{id}` | Remove custo | JWT |
+
+### GET /admin/custos/kpis
+
+<ParamField query="mes" type="string" required>
+Mês de referência no formato `YYYY-MM`.
+</ParamField>
+
+### POST /admin/custos
+
+<ParamField body="mes" type="string" required>
+Mês de competência (`YYYY-MM`).
+</ParamField>
+
+<ParamField body="categoria" type="string" required>
+Categoria (use os valores de `/admin/custos/taxonomias`).
+</ParamField>
+
+<ParamField body="frente" type="string" required>
+Frente de negócio.
+</ParamField>
+
+<ParamField body="descricao" type="string" required>
+Descrição do custo.
+</ParamField>
+
+<ParamField body="valor" type="number" required>
+Valor em reais.
+</ParamField>
+
+<ParamField body="forma_pagamento" type="string">
+Forma de pagamento.
+</ParamField>
+
+<ParamField body="frequencia" type="string">
+Frequência (ex.: fixo mensal, pontual).
+</ParamField>
+
+<ParamField body="status" type="string">
+Status de pagamento.
+</ParamField>
+
+<ParamField body="observacao" type="string">
+Observações.
+</ParamField>
+
+## API keys
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/admin/api-keys` | Cria chave `{name, expires_at?}`; valor em claro só nessa resposta | JWT |
+| GET | `/admin/api-keys` | Lista chaves sem o segredo (prefixo + metadados) | JWT |
+| DELETE | `/admin/api-keys/{key_id}` | Revoga chave (`?reason`) | JWT |
+
+<Warning>
+A chave criada concede acesso read-only (somente `GET`) aos endpoints marcados JWT/Key. Detalhes em [Autenticação](/admin/autenticacao#api-key-read-only).
+</Warning>
+
+## System
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/system/health` | Estado consolidado: gateways, webhooks, jobs, latência | JWT/Key |
+| POST | `/admin/system/webhooks/{webhook_id}/retry` | Reenfileira um webhook que falhou | JWT |
+
+## Launches
+
+Lançamentos cross-product. A leitura é agregada; a **escrita é delegada** ao backend do produto de origem — veja [Arquitetura](/admin/arquitetura#delegacao-de-escrita-launches).
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/launches` | Lista lançamentos (`?origin, ?kind, ?status, ?limit, ?offset`) | JWT/Key |
+| POST | `/admin/launches` | Cria lançamento delegando ao backend de origem | JWT |
+
+### POST /admin/launches
+
+<ParamField body="origin" type="string" required>
+`site` (delega ao AgroPujante) ou `escola` (delega à Escola).
+</ParamField>
+
+<ParamField body="kind" type="string" required>
+Tipo do lançamento.
+</ParamField>
+
+<ParamField body="title" type="string" required>
+Título do lançamento.
+</ParamField>
+
+<ParamField body="description" type="string">
+Descrição. O `CreateLaunchRequest` aceita campos adicionais conforme o tipo.
+</ParamField>
+
+<Note>
+O Bearer token do usuário é repassado ao backend de destino. Falha no upstream resulta em **502** com o detalhe do erro.
+</Note>
+
+## Proxy genérico
+
+Repassa qualquer chamada para os backends dos produtos, preservando body, query e header `Authorization`.
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET, POST, PUT, PATCH, DELETE | `/admin/escola/{path}` | Proxy para a API da Escola | JWT |
+| GET, POST, PUT, PATCH, DELETE | `/admin/agropujante/{path}` | Proxy para a API do AgroPujante | JWT |
+
+<Note>
+Operações de escrita via proxy geram registro assíncrono de auditoria em `admin_activity_log`.
+</Note>

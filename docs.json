@@ -1,7 +1,7 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "Mintlify Starter Kit",
+  "name": "Pujante Docs",
   "colors": {
     "primary": "#16A34A",
     "light": "#07C983",
@@ -9,29 +9,104 @@
   },
   "favicon": "/favicon.svg",
   "navigation": {
-    "pages": [
+    "tabs": [
       {
-        "group": "Getting Started",
+        "tab": "Início",
+        "pages": ["index", "ecossistema"]
+      },
+      {
+        "tab": "AgroPujante",
+        "groups": [
+          {
+            "group": "Produto",
+            "pages": [
+              "agropujante/overview",
+              "agropujante/arquitetura",
+              "agropujante/autenticacao",
+              "agropujante/modelos",
+              "agropujante/fluxos",
+              "agropujante/integracoes",
+              "agropujante/migrations",
+              "agropujante/variaveis-ambiente"
+            ]
+          },
+          {
+            "group": "Referência da API (v1)",
+            "pages": [
+              "agropujante/api/auth-users",
+              "agropujante/api/conteudo",
+              "agropujante/api/jurisprudencia",
+              "agropujante/api/monetizacao",
+              "agropujante/api/marketing",
+              "agropujante/api/admin"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Escola Pujante",
+        "groups": [
+          {
+            "group": "Produto",
+            "pages": [
+              "escola/overview",
+              "escola/arquitetura",
+              "escola/autenticacao",
+              "escola/modelos",
+              "escola/integracoes",
+              "escola/variaveis-ambiente"
+            ]
+          },
+          {
+            "group": "Referência da API (v2)",
+            "pages": [
+              "escola/api/auth",
+              "escola/api/users-members-offices",
+              "escola/api/assinaturas",
+              "escola/api/lms",
+              "escola/api/mentoria",
+              "escola/api/editorial",
+              "escola/api/financeiro",
+              "escola/api/comunicacao",
+              "escola/api/sistema"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Pujante Admin",
+        "groups": [
+          {
+            "group": "Produto",
+            "pages": [
+              "admin/overview",
+              "admin/arquitetura",
+              "admin/autenticacao",
+              "admin/variaveis-ambiente"
+            ]
+          },
+          {
+            "group": "Referência da API",
+            "pages": [
+              "admin/api/dashboards",
+              "admin/api/operacional",
+              "admin/api/gantt"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Pujante Mobile",
         "pages": [
-          "index",
-          "quickstart"
+          "mobile/overview",
+          "mobile/arquitetura",
+          "mobile/autenticacao",
+          "mobile/api-consumida",
+          "mobile/telas",
+          "mobile/build-deploy"
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
+    ]
   },
   "logo": {
     "light": "/logo/light.svg",
@@ -40,33 +115,17 @@
   "navbar": {
     "links": [
       {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
+        "label": "Suporte",
+        "href": "mailto:editorial@agropujante.com.br"
       }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://app.mintlify.com"
-    }
+    ]
   },
   "contextual": {
-    "options": [
-      "copy",
-      "view",
-      "chatgpt",
-      "claude",
-      "perplexity",
-      "mcp",
-      "cursor",
-      "vscode"
-    ]
+    "options": ["copy", "view", "claude", "mcp", "cursor", "vscode"]
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
+      "github": "https://github.com/AgroPujante"
     }
   }
 }

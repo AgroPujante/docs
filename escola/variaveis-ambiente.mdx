@@ -1,0 +1,108 @@
+---
+title: "Variáveis de ambiente"
+description: "Nomes das variáveis de ambiente do backend FastAPI e do frontend, agrupadas por finalidade"
+icon: "gear"
+---
+
+<Warning>
+Esta página lista apenas os **nomes** das variáveis. Nunca documente valores, chaves ou segredos. Os valores vivem nos `.env` (gitignored) e no provedor de deploy.
+</Warning>
+
+## Backend (FastAPI)
+
+### Supabase
+
+| Variável | Uso |
+|---|---|
+| `SUPABASE_URL` | URL do projeto |
+| `SUPABASE_ANON_KEY` | Chave anônima (operações com RLS) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Chave service role (bypass RLS) |
+| `SUPABASE_JWT_SECRET` | Segredo JWT do projeto |
+| `SUPABASE_SCHEMA` | Schema de trabalho (`pujante`) |
+
+### Aplicação
+
+| Variável | Uso |
+|---|---|
+| `DEBUG` | Habilita Swagger/ReDoc/OpenAPI (desativado em produção) |
+| `PORT` | Porta do Uvicorn |
+| `ALLOWED_ORIGINS` | Origens permitidas no CORS |
+| `RATE_LIMIT_PER_MINUTE` | Limite de requisições por minuto (padrão 60) |
+| `FRONTEND_URL` | URL do frontend (links em emails, redirects) |
+| `INTERNAL_API_TOKEN` | Token para chamadas sistema-a-sistema |
+
+### Pagamentos
+
+| Variável | Uso |
+|---|---|
+| `PAGARME_SECRET_KEY` | API PagarMe (server) |
+| `PAGARME_PUBLIC_KEY` | API PagarMe (client) |
+| `PAGARME_WEBHOOK_TOKEN` | Validação do webhook PagarMe |
+| `ASAAS_API_KEY` | API Asaas |
+| `ASAAS_BASE_URL` | Base URL Asaas (sandbox/prod) |
+| `ASAAS_WEBHOOK_TOKEN` | Validação do webhook Asaas |
+
+### Email
+
+| Variável | Uso |
+|---|---|
+| `RESEND_API_KEY` | Envio transacional via Resend |
+| `RESEND_WEBHOOK_SECRET` | Assinatura Svix do webhook Resend |
+| `EMAIL_FROM_ADDRESS` | Remetente padrão |
+| `EMAIL_FROM_NAME` | Nome do remetente |
+| `MAILCHIMP_API_KEY` | Newsletter |
+| `MAILCHIMP_AUDIENCE_ID` | Audiência da newsletter |
+
+### NFSe (Bling e Centi)
+
+| Variável | Uso |
+|---|---|
+| `BLING_CLIENT_ID` | OAuth Bling |
+| `BLING_CLIENT_SECRET` | OAuth Bling |
+| `BLING_REDIRECT_URI` | Callback OAuth Bling |
+| `NFSE_CNPJ` | Dados fiscais do emissor |
+| `NFSE_INSCRICAO_MUNICIPAL` | Dados fiscais |
+| `NFSE_CNAE` | Dados fiscais |
+| `NFSE_CODIGO_SERVICO` | Dados fiscais |
+| `NFSE_ALIQUOTA_ISS` | Dados fiscais |
+| `NFSE_CODIGO_NBS` | Dados fiscais |
+| `CENTI_USER` | Credenciais Centi |
+| `CENTI_PASSWORD` | Credenciais Centi |
+| `CENTI_CERT_PASSWORD` | Senha do certificado digital |
+| `CENTI_CERT_BASE64` | Certificado em base64 |
+| `CENTI_CERT_PATH` | Caminho alternativo do certificado |
+| `CENTI_UF` | UF do município |
+| `CENTI_TENANT` | Tenant Centi |
+| `CENTI_CODIGO_MUNICIPIO` | Código do município |
+
+### IA
+
+| Variável | Uso |
+|---|---|
+| `OPENAI_API_KEY` | Análises GDA, Whisper, editorial |
+| `ANTHROPIC_API_KEY` | Chat IA das aulas do LMS |
+
+### Mídia (Bunny)
+
+| Variável | Uso |
+|---|---|
+| `BUNNY_STORAGE_ACCESS_KEY` | Storage de arquivos |
+| `BUNNY_STORAGE_ZONE` | Zona de storage |
+| `BUNNY_STORAGE_HOST` | Host do storage |
+| `BUNNY_CDN_BASE_URL` | URL base da CDN |
+| `BUNNY_STREAM_API_KEY` | Bunny Stream (vídeos) |
+| `BUNNY_STREAM_LIBRARY_ID` | Biblioteca de vídeos |
+| `BUNNY_STREAM_EMBED_BASE_URL` | URL base de embed |
+
+### Outras
+
+| Variável | Uso |
+|---|---|
+| `GOOGLE_CLIENT_ID` | Google Sign-In |
+| `NEWRELIC_LICENSE_KEY` | APM New Relic |
+
+## Frontend (Vite)
+
+| Variável | Uso |
+|---|---|
+| `VITE_API_BASE_URL` | Base da API v2 — dev: `http://localhost:8767/api/v2`, prod: `https://api.escolapujante.com.br/api/v2` |

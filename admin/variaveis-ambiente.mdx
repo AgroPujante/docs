@@ -1,0 +1,99 @@
+---
+title: "Variáveis de ambiente"
+description: "Configuração completa do backend do Pujante Admin, agrupada por função, incluindo o comportamento dos opt-ins."
+---
+
+Toda a configuração do backend vem de variáveis de ambiente (no Railway em produção, `.env` em dev).
+
+<Warning>
+Nunca commite valores de chaves ou secrets. Esta página documenta apenas os **nomes** das variáveis.
+</Warning>
+
+## Obrigatórias
+
+Sem estas o serviço não funciona:
+
+| Variável | Descrição |
+|---|---|
+| `SUPABASE_URL` | URL do projeto Supabase |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role key — acesso total ao schema `pujante` (leitura agregada e escrita própria) |
+| `SUPABASE_ANON_KEY` | Anon key, usada onde o contexto de usuário basta |
+| `JWT_JWKS_URL` | URL do JWKS do Supabase para validar JWTs (ES256/RS256) |
+| `JWT_AUDIENCE` | Audience esperada nos tokens — `authenticated` |
+
+## Admin e CORS
+
+| Variável | Descrição |
+|---|---|
+| `ALLOWED_ADMIN_EMAILS` | Lista de emails autorizados a usar o painel; JWT válido com email fora da lista recebe 403 |
+| `CORS_ORIGINS` | Origens permitidas no CORS (frontend do painel) |
+
+## Materialized views e scheduler
+
+| Variável | Default | Descrição |
+|---|---|---|
+| `MV_REFRESH_MINUTES` | `15` | Intervalo do refresh automático das `admin_mv_*` via APScheduler |
+| `MV_REFRESH_ON_STARTUP` | — | Refresca as MVs no boot do serviço |
+| `SCHEDULER_ENABLED` | — | Liga/desliga o APScheduler (refresh de MVs e sync do Meta) |
+
+## Delegação de escrita e proxy
+
+| Variável | Descrição |
+|---|---|
+| `AGROPUJANTE_API_URL` | Base URL do backend do AgroPujante (proxy + launches `origin=site`) |
+| `ESCOLA_API_URL` | Base URL do backend da Escola (proxy + launches `origin=escola`) |
+| `DELEGATION_TIMEOUT_SECONDS` | Timeout das chamadas delegadas; estouro ou erro upstream resulta em 502 |
+
+## Meta Ads (opt-in)
+
+<Note>
+**Comportamento quando vazio:** se as variáveis do Meta não estão configuradas, os endpoints `/admin/meta-ads/*` não quebram — retornam **vazio com um aviso** na resposta, e o sync automático fica desabilitado.
+</Note>
+
+| Variável | Default | Descrição |
+|---|---|---|
+| `META_APP_ID` | — | App ID do Meta for Developers |
+| `META_APP_SECRET` | — | App secret |
+| `META_ACCESS_TOKEN` | — | Token de acesso à Marketing API |
+| `META_AD_ACCOUNT_ID` | — | Conta de anúncios (formato `act_...`) |
+| `META_API_VERSION` | — | Versão da Graph API |
+| `META_SYNC_INTERVAL_MINUTES` | `60` | Intervalo do sync automático via APScheduler |
+| `META_SYNC_LOOKBACK_DAYS` | `30` | Janela de lookback de cada sync |
+| `META_PURCHASE_ACTION_TYPES` | — | Action types contados como compra |
+| `META_REVENUE_ACTION_TYPES` | — | Action types usados para receita |
+| `META_LANDING_PAGE_ACTION_TYPES` | — | Action types da etapa página de vendas do funil |
+| `META_CHECKOUT_ACTION_TYPES` | — | Action types da etapa checkout do funil |
+| `META_ATTRIBUTION_WINDOWS` | `7d_click` | Janelas de atribuição |
+| `META_CAMPAIGN_EFFECTIVE_STATUS` | `ACTIVE` | Status de campanha incluídos no sync |
+
+## New Relic (opt-in)
+
+<Note>
+**Comportamento quando vazio:** sem as variáveis do New Relic, os endpoints `/admin/observability/*` retornam **vazio com um aviso** — o restante do painel segue funcionando normalmente.
+</Note>
+
+| Variável | Descrição |
+|---|---|
+| `NEW_RELIC_USER_KEY` | **USER API key** (não confundir com license key) usada no NerdGraph |
+| `NEW_RELIC_ACCOUNT_ID` | ID da conta New Relic |
+| `NEW_RELIC_API_URL` | Endpoint GraphQL do NerdGraph |
+| `NEW_RELIC_APP_SITE` | Nome/ID do app do Site (AgroPujante) no New Relic |
+| `NEW_RELIC_APP_ESCOLA` | Nome/ID do app da Escola no New Relic |
+
+## Diversos
+
+| Variável | Descrição |
+|---|---|
+| `GANTT_SCHEMA` | Schema do banco onde vivem as tabelas `gantt_*` |
+| `ENV` | Ambiente de execução (ex.: `dev`, `production`); em dev/debug a validação relaxa e `/api/docs` fica aberto |
+
+## Checklist de deploy
+
+<Tabs>
+  <Tab title="Mínimo viável">
+    Configure as 5 obrigatórias + `ALLOWED_ADMIN_EMAILS` + `CORS_ORIGINS`. O painel sobe com dashboards de banco funcionando; Meta Ads e Observability aparecem vazios com aviso.
+  </Tab>
+  <Tab title="Completo">
+    Adicione `AGROPUJANTE_API_URL`/`ESCOLA_API_URL` (proxy e launches), o bloco `META_*` (anúncios) e o bloco `NEW_RELIC_*` (observabilidade). Confira `SCHEDULER_ENABLED` para os jobs automáticos.
+  </Tab>
+</Tabs>

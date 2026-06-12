@@ -1,0 +1,118 @@
+---
+title: "Telas"
+description: "Mapa completo de telas e rotas do app — auth, Portal, leitor de post e módulo Escola"
+---
+
+As rotas seguem o file-based routing do Expo Router 6 (pasta `app/`). Cada rota renderiza uma screen do feature module correspondente.
+
+## Fluxo de entrada
+
+| Tela | Descrição |
+|---|---|
+| Login | Email + senha do Portal |
+| Cadastro (signup) | Nome, email, senha, aceite de termos |
+| Esqueci a senha | Email → OTP → nova senha (fluxo em 3 passos) |
+| Welcome gateway | Tela de boas-vindas que direciona entre Portal e Escola |
+
+## Portal — 17 tabs
+
+A navegação principal do Portal expõe estas seções:
+
+| Tab | Conteúdo |
+|---|---|
+| Home | Feed com destaques, trending, créditos e streak |
+| Notícias | Posts do tipo notícia |
+| Artigos | Posts do tipo artigo |
+| Julgados | Posts editoriais de julgados |
+| Colunas | Lista de colunas ativas |
+| Autores | Lista de autores (com filtro VIP) |
+| Livros | Catálogo de livros |
+| Boletins | Boletins paginados (julgados + PDF, por `access_tier`) |
+| Parceiros | Parceiros do portal |
+| Apoiadores | Apoiadores do portal |
+| Eventos | Próximos eventos |
+| Newsletter | Inscrição na newsletter |
+| Busca | Busca full-text com `relevance_score` e highlights |
+| Biblioteca | Posts salvos do usuário |
+| Perfil | Dados do usuário, stats, atividades |
+| Quem somos | Institucional |
+| Calendário | Agenda de eventos |
+
+<Note>
+  A home exibe a gamificação do Portal: saldo de créditos e streak de leitura (com revive keys), vindos de `/credits/balance` e `/credits/streak`.
+</Note>
+
+## Leitor de post
+
+Rota: `/post/[slug]`
+
+A tela mais rica do Portal. Ao abrir:
+
+<Steps>
+  <Step title="Carrega o post">
+    `GET /posts/{slug}` retorna o `PostFull` (conteúdo, anexos, flags de early access e supporter).
+  </Step>
+  <Step title="Access check">
+    `POST /users/access/check` com `{post_type, post_id, visitor_id}` decide se o conteúdo libera ou mostra paywall (cota mensal de leituras).
+  </Step>
+  <Step title="Track read">
+    Leitura permitida é registrada via `POST /users/access/track-read`.
+  </Step>
+</Steps>
+
+Interações disponíveis na tela:
+
+- **Likes** — contagem + toggle.
+- **Comentários** — leitura pública, escrita autenticada.
+- **Salvar** — adiciona/remove da biblioteca.
+- **Anexos** — download de PDFs e arquivos do post.
+
+## Deep links
+
+| Rota | Destino |
+|---|---|
+| `/post/[slug]` | Leitor de post |
+| `/autor/[slug]` | Página do autor com seus posts |
+| `/coluna/[slug]` | Página da coluna com seus posts |
+
+O scheme `agropujante://` resolve essas rotas a partir de notificações push e links externos.
+
+## Módulo Escola
+
+| Tela | Descrição |
+|---|---|
+| Login Escola | Login manual (`check-email` + `login`) quando o handoff falha ou não se aplica |
+| Aluno home | Hub do aluno: catálogo, progresso recente, status de mentoria |
+| Aula — `/aula/[id]` | Player de vídeo com progresso (`watchedSeconds`), checklist de tópicos, materiais (PDFs/slides) e comentários hierárquicos |
+| Marketplace | Vitrine de trilhas/imersões/cursos |
+| Calendário | Aulas ao vivo, encontros e prazos (`GET /calendar`) |
+| Perfil | Dados do aluno com autocompletar de endereço via **ViaCEP** |
+| Painel mentoria (staff) | Visão de acompanhamento pra equipe de mentoria |
+| `[secao]` dinâmica | Rota dinâmica que renderiza seções da Escola por slug |
+
+### Testes comportamentais
+
+Parte do fluxo de mentoria — resultados enviados via `PUT /mentored-tracking/my-profile`:
+
+<AccordionGroup>
+  <Accordion title="DISC">
+    24 questões. Calcula perfil D/I/S/C com dimensão primária e secundária (`DiscResultPayload`).
+  </Accordion>
+  <Accordion title="Procrastinação">
+    Score de 0 a 30, classificado em `low` / `moderate` / `severe` (`ProcrastinationResultPayload`).
+  </Accordion>
+  <Accordion title="Socioemocional (TEIAS)">
+    Avaliação em 4 dimensões socioemocionais (`SocioemocionalResultPayload`).
+  </Accordion>
+  <Accordion title="Atenção e memória">
+    Combina Digit Span + Stroop (`AttentionMemoryResultPayload`).
+  </Accordion>
+</AccordionGroup>
+
+### Exordial — gerador de petições com IA
+
+Fluxo assíncrono:
+
+1. O aluno descreve a peça (`query`, com `stage` `auto`/`generate`/`plan` e campos opcionais como peça, assunto, parte representada e instruções pra IA).
+2. `POST /exordial/generate` devolve um `jobId`.
+3. O app faz polling em `GET /exordial/status/{jobId}` (`pending` → `processing` → `complete`/`error`) e exibe o resultado.

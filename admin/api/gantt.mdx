@@ -1,0 +1,181 @@
+---
+title: "API: Gantt"
+description: "Endpoints do Gantt de gestão do time: times, pessoas, macros, subs, membros e timeline de eventos."
+---
+
+O Gantt do Pujante Admin organiza o trabalho do time na hierarquia **Time &gt; Projeto (macro) &gt; Pessoa &gt; Task (sub)**. Os dados vivem no schema configurado por `GANTT_SCHEMA` (tabelas `gantt_teams`, `gantt_persons`, `gantt_macros`, `gantt_subs`, `gantt_macro_members`, `gantt_events`).
+
+Todos os endpoints exigem **JWT Bearer** — API keys não têm acesso ao Gantt.
+
+## Regras de negócio
+
+<Accordion title="Status e status_dates automáticos">
+Macros e subs têm status `backlog`, `progress` ou `done`. Ao mudar o status via `PATCH`, o backend aplica automaticamente as `status_dates` (data de início real ao entrar em `progress`, data de conclusão ao entrar em `done`). Você não gerencia essas datas manualmente.
+</Accordion>
+
+<Accordion title="Só o dono conclui">
+Apenas o **dono** da macro/sub (a pessoa atribuída em `person_id`) pode mover o item para `done`. Outros usuários recebem erro ao tentar concluir trabalho que não é deles.
+</Accordion>
+
+<Accordion title="Hierarquia Time > Projeto > Pessoa > Task">
+Times agrupam projetos (macros). Cada macro tem um líder (`person_id`) e pode ter membros adicionais. Subs (tasks) pertencem a uma macro e a uma pessoa. A árvore retornada por `/gantt/tree` reflete essa hierarquia, ordenada por `sort_order`.
+</Accordion>
+
+## Árvore
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/gantt/tree` | Pessoas com macros e subs aninhados, ordenados por `sort_order` | JWT |
+
+## Teams
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/gantt/teams` | Lista times | JWT |
+| POST | `/gantt/teams` | Cria time | JWT |
+| PATCH | `/gantt/teams/{id}` | Atualiza time | JWT |
+| DELETE | `/gantt/teams/{id}` | Remove time | JWT |
+
+### POST /gantt/teams
+
+<ParamField body="name" type="string" required>
+Nome do time.
+</ParamField>
+
+<ParamField body="sort_order" type="integer">
+Posição na ordenação.
+</ParamField>
+
+## Persons
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/gantt/persons` | Cria pessoa | JWT |
+| PATCH | `/gantt/persons/{id}` | Atualiza pessoa | JWT |
+| DELETE | `/gantt/persons/{id}` | Remove pessoa | JWT |
+
+### POST /gantt/persons
+
+<ParamField body="name" type="string" required>
+Nome da pessoa.
+</ParamField>
+
+<ParamField body="email" type="string">
+Email — usado para vincular ao usuário autenticado (regra "só dono conclui").
+</ParamField>
+
+<ParamField body="initials" type="string">
+Iniciais exibidas no avatar.
+</ParamField>
+
+<ParamField body="sort_order" type="integer">
+Posição na ordenação.
+</ParamField>
+
+## Macros (projetos)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/gantt/macros` | Cria macro | JWT |
+| PATCH | `/gantt/macros/{id}` | Atualiza; auto-aplica `status_dates`; só o dono conclui | JWT |
+| DELETE | `/gantt/macros/{id}` | Remove macro | JWT |
+| POST | `/gantt/macros/{id}/members` | Adiciona membro `{person_id}` à macro | JWT |
+| DELETE | `/gantt/macros/{id}/members/{person_id}` | Remove membro da macro | JWT |
+
+### POST /gantt/macros
+
+<ParamField body="title" type="string" required>
+Título do projeto.
+</ParamField>
+
+<ParamField body="description" type="string">
+Descrição.
+</ParamField>
+
+<ParamField body="start_date" type="string" required>
+Data de início planejada (`YYYY-MM-DD`).
+</ParamField>
+
+<ParamField body="end_date" type="string" required>
+Data de fim planejada (`YYYY-MM-DD`).
+</ParamField>
+
+<ParamField body="status" type="string" default="backlog">
+`backlog`, `progress` ou `done`.
+</ParamField>
+
+<ParamField body="team_id" type="string" required>
+Time dono do projeto.
+</ParamField>
+
+<ParamField body="person_id" type="string" required>
+Líder do projeto — única pessoa que pode movê-lo para `done`.
+</ParamField>
+
+<ParamField body="requested_by_id" type="string">
+Pessoa que solicitou o projeto.
+</ParamField>
+
+## Subs (tasks)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/gantt/subs` | Cria sub vinculada a uma macro | JWT |
+| PATCH | `/gantt/subs/{id}` | Atualiza; mesmas regras das macros (`status_dates` automáticas, só dono conclui) | JWT |
+| DELETE | `/gantt/subs/{id}` | Remove sub | JWT |
+
+### POST /gantt/subs
+
+<ParamField body="macro_id" type="string" required>
+Macro à qual a task pertence.
+</ParamField>
+
+<ParamField body="title" type="string" required>
+Título da task.
+</ParamField>
+
+<ParamField body="description" type="string">
+Descrição.
+</ParamField>
+
+<ParamField body="start_date" type="string" required>
+Data de início (`YYYY-MM-DD`).
+</ParamField>
+
+<ParamField body="end_date" type="string" required>
+Data de fim (`YYYY-MM-DD`).
+</ParamField>
+
+<ParamField body="status" type="string" default="backlog">
+`backlog`, `progress` ou `done`.
+</ParamField>
+
+<ParamField body="person_id" type="string" required>
+Dona da task.
+</ParamField>
+
+<ParamField body="requested_by_id" type="string">
+Pessoa que solicitou a task.
+</ParamField>
+
+## Events (timeline)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/gantt/events` | Timeline cronológica (mais recentes primeiro) de uma entidade | JWT |
+
+<ParamField query="entity_type" type="string" required>
+`team`, `project` ou `task`.
+</ParamField>
+
+<ParamField query="entity_id" type="string" required>
+ID da entidade.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="100">
+Máximo de eventos retornados.
+</ParamField>
+
+<Note>
+Os eventos são gravados em `gantt_events` a cada mudança relevante (criação, mudança de status, datas, atribuições), formando o histórico auditável do Gantt.
+</Note>

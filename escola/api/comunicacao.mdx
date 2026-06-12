@@ -1,0 +1,117 @@
+---
+title: "Comunicação"
+description: "Campanhas de email, notificações, calendário, WhatsApp, chat e sugestões"
+icon: "envelope"
+---
+
+## Email campaigns (`/email-campaigns`)
+
+Envios em massa via Resend, com logs em `email_campaign_logs`. Disparos são assíncronos (respondem `202 Accepted`).
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/email-campaigns` | Listar campanhas | MANAGER |
+| POST | `/email-campaigns` | Criar campanha | MANAGER |
+| GET | `/email-campaigns/{campaign_id}` | Detalhe | MANAGER |
+| GET | `/email-campaigns/{campaign_id}/analytics` | Analytics da campanha | MANAGER |
+| POST | `/email-campaigns/{campaign_id}/send` | Disparar (202) | MANAGER |
+| POST | `/email-campaigns/{campaign_id}/test` | Envio de teste | MANAGER |
+| POST | `/email-campaigns/{campaign_id}/retry-failed` | Retry de falhos (202) | MANAGER |
+| POST | `/email-campaigns/aula-hoje` | Campanha rápida "aula hoje" (202) | MANAGER |
+| POST | `/email-campaigns/recipient-count` | Contar destinatários de um filtro | MANAGER |
+| DELETE | `/email-campaigns/{campaign_id}` | Remover campanha | MANAGER |
+
+### POST /email-campaigns
+
+<ParamField body="subject" type="string" required>Assunto do email.</ParamField>
+<ParamField body="htmlContent" type="string" required>Corpo HTML.</ParamField>
+<ParamField body="recipientFilter" type="object" required>Filtro que define os destinatários.</ParamField>
+
+### POST /email-campaigns/aula-hoje
+
+<ParamField body="zoomLink" type="string" required>Link do Zoom da aula.</ParamField>
+<ParamField body="lessonTitle" type="string" required>Título da aula.</ParamField>
+<ParamField body="lessonTime" type="string" required>Horário da aula.</ParamField>
+<ParamField body="recipientEmails" type="string[]" required>Emails dos destinatários.</ParamField>
+
+### POST /email-campaigns/\{campaign_id\}/test
+
+<ParamField body="testEmails" type="string[]" required>Emails que recebem o envio de teste.</ParamField>
+
+## Notifications (`/notifications`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/notifications` | Listar (`?unreadOnly`) | JWT |
+| GET | `/notifications/unread-count` | Contar não lidas | JWT |
+| PATCH | `/notifications/read-all` | Marcar todas como lidas | JWT |
+| PATCH | `/notifications/{notification_id}/read` | Marcar como lida | JWT |
+
+## Calendar (`/calendar`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/calendar` | Listar eventos (`?fromDate`, `?toDate`) | JWT |
+| GET | `/calendar/{event_id}` | Detalhe de evento | JWT |
+| POST | `/calendar` | Criar evento | MANAGER |
+| PATCH | `/calendar/{event_id}` | Atualizar evento | MANAGER |
+| DELETE | `/calendar/{event_id}` | Remover evento | MANAGER |
+| POST | `/calendar/{event_id}/image` | Upload de imagem (multipart) | MANAGER |
+| DELETE | `/calendar/{event_id}/image` | Remover imagem | MANAGER |
+
+### POST /calendar
+
+<ParamField body="title" type="string" required>Título do evento.</ParamField>
+<ParamField body="description" type="string">Descrição.</ParamField>
+<ParamField body="startsAt" type="string" required>Início (ISO).</ParamField>
+<ParamField body="endsAt" type="string">Fim (ISO).</ParamField>
+<ParamField body="allDay" type="boolean">Evento de dia inteiro.</ParamField>
+<ParamField body="color" type="string">Cor de exibição.</ParamField>
+<ParamField body="location" type="string">Local.</ParamField>
+<ParamField body="linkUrl" type="string">Link externo.</ParamField>
+<ParamField body="imageUrl" type="string">URL da imagem.</ParamField>
+<ParamField body="featured" type="boolean">Evento em destaque.</ParamField>
+
+## WhatsApp (`/whatsapp`)
+
+Conversas via Z-API (uma instância por office).
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/whatsapp/conversations` | Listar conversas | MANAGER |
+| GET | `/whatsapp/conversations/{id}` | Detalhe da conversa | MANAGER |
+| POST | `/whatsapp/conversations/{id}/clear` | Limpar contexto | MANAGER |
+| DELETE | `/whatsapp/conversations/{id}` | Remover conversa | MANAGER |
+| GET | `/whatsapp/logs` | Listar logs | MANAGER |
+| DELETE | `/whatsapp/logs` | Limpar logs | MANAGER |
+
+## Chat (`/chat`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/chat/conversations` | Listar conversas | MANAGER |
+| POST | `/chat/conversations` | Criar conversa | MANAGER |
+| GET | `/chat/conversations/{conversation_id}` | Listar mensagens | MANAGER |
+| POST | `/chat/conversations/{conversation_id}/messages` | Enviar mensagem | MANAGER |
+| POST | `/chat/conversations/{conversation_id}/confirm` | Confirmar ação | MANAGER |
+| POST | `/chat/conversations/{conversation_id}/confirm-password` | Confirmar com senha | MANAGER |
+| DELETE | `/chat/conversations/{conversation_id}` | Arquivar conversa | MANAGER |
+
+<Warning>
+Retornam **501 — não implementado**: `POST .../messages`, `POST .../confirm` e `POST .../confirm-password`.
+</Warning>
+
+## Suggestions (`/suggestions`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/suggestions` | Criar sugestão | JWT |
+| GET | `/suggestions/mine` | Minhas sugestões | JWT |
+| GET | `/suggestions/new-count` | Contar novas | MANAGER |
+| GET | `/suggestions` | Listar todas (`?status`) | MANAGER |
+| PATCH | `/suggestions/{suggestion_id}/status` | Atualizar status | MANAGER |
+
+### POST /suggestions
+
+<ParamField body="category" type="string" required>Categoria da sugestão.</ParamField>
+<ParamField body="message" type="string" required>Texto da sugestão.</ParamField>

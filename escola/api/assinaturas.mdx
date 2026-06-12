@@ -1,0 +1,155 @@
+---
+title: "Assinaturas e pagamentos"
+description: "Produtos, subscriptions, cupons, checkout, trials, renovação e webhooks dos gateways"
+icon: "credit-card"
+---
+
+<Note>
+A **criação de cobranças recorrentes** nos gateways (Asaas/PagarMe) ainda vive no NestJS legado. O v2 cuida da gestão local de subscriptions, imports gateway → local, webhooks e checkout.
+</Note>
+
+## Products (`/products`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/products` | Listar produtos | JWT |
+| GET | `/products/revenue` | Receita por produto | JWT |
+
+## Subscriptions (`/subscriptions`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/subscriptions` | Listar (`?productType`, `?officeId`, `?memberId`, `?status`) | MANAGER |
+| POST | `/subscriptions` | Criar subscription | MANAGER |
+| GET | `/subscriptions/{subscription_id}` | Detalhe | MANAGER |
+| PATCH | `/subscriptions/{subscription_id}` | Atualizar | MANAGER |
+| DELETE | `/subscriptions/{subscription_id}` | Remover | MANAGER |
+| PATCH | `/subscriptions/{subscription_id}/activate` | Ativar | MANAGER |
+| PATCH | `/subscriptions/{subscription_id}/cancel` | Cancelar | MANAGER |
+| PATCH | `/subscriptions/{subscription_id}/pause` | Pausar | MANAGER |
+| PATCH | `/subscriptions/{subscription_id}/churn` | Marcar churn | MANAGER |
+| GET | `/subscriptions/{subscription_id}/payments` | Histórico de pagamentos | MANAGER |
+| GET | `/subscriptions/my` | Minhas subscriptions | JWT |
+| GET | `/subscriptions/my/payments/{subscription_id}` | Meus pagamentos | JWT |
+| GET | `/subscriptions/asaas` | Consulta direta no Asaas | MANAGER |
+| POST | `/subscriptions/webhook/asaas` | Webhook Asaas | Público (token) |
+| POST | `/subscriptions/webhook/pagarme` | Webhook PagarMe | Público (token) |
+| POST | `/subscriptions/asaas/import` | Sync Asaas → local (retorna 202) | MANAGER |
+| GET | `/subscriptions/asaas/import-status` | Status do import (`?productType`) | MANAGER |
+| POST | `/subscriptions/asaas/backfill-member-contacts` | Preencher phone/cpf (`?limit`) | MANAGER |
+| POST | `/subscriptions/pagarme/import` | Sync PagarMe → local (retorna 202) | MANAGER |
+| GET | `/subscriptions/pagarme/import-status` | Status do import | MANAGER |
+| POST | `/subscriptions/asaas/sync-payments` | Sync de pagamentos | MANAGER |
+| POST | `/subscriptions/process-expired` | Processar expiradas | MANAGER |
+
+<Warning>
+Retornam **501 — não implementado**: `GET /subscriptions/asaas`, `POST /subscriptions/asaas/sync-payments` e `POST /subscriptions/process-expired`.
+</Warning>
+
+### POST /subscriptions
+
+<ParamField body="productType" type="string" required>`OFFICE_SUPPORTER`, `MEMBERS_CLUB`, `MENTORSHIP` ou `CURSO_DO_MES`.</ParamField>
+<ParamField body="officeId" type="string">ID do office (assinaturas de escritório).</ParamField>
+<ParamField body="memberId" type="string">ID do member (assinaturas individuais).</ParamField>
+<ParamField body="startDate" type="string">Data de início (ISO).</ParamField>
+<ParamField body="endDate" type="string">Data de fim (ISO).</ParamField>
+<ParamField body="status" type="string">Status inicial.</ParamField>
+
+### PATCH /subscriptions/\{subscription_id\}
+
+<ParamField body="price" type="number">Preço.</ParamField>
+<ParamField body="status" type="string">Status.</ParamField>
+<ParamField body="startDate" type="string">Data de início.</ParamField>
+<ParamField body="endDate" type="string">Data de fim.</ParamField>
+<ParamField body="billingCycle" type="string">Ciclo de cobrança.</ParamField>
+<ParamField body="billingType" type="string">Tipo de cobrança.</ParamField>
+<ParamField body="nextDueDate" type="string">Próximo vencimento.</ParamField>
+
+### PATCH /subscriptions/\{subscription_id\}/churn
+
+<ParamField body="churnDate" type="string" required>Data do churn.</ParamField>
+<ParamField body="reason" type="string">Motivo.</ParamField>
+
+### POST /subscriptions/asaas/import
+
+Dispara sync assíncrono (responde `202 Accepted`); acompanhe via `GET /subscriptions/asaas/import-status`.
+
+<ParamField body="startDate" type="string">Filtro de início (opcional).</ParamField>
+<ParamField body="endDate" type="string">Filtro de fim (opcional).</ParamField>
+<ParamField body="productType" type="string">Restringir a um produto (opcional).</ParamField>
+
+## Coupons (`/coupons`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/coupons/validate/{code}` | Validar cupom | Público |
+| GET | `/coupons` | Listar (`?isActive`, `?productId`, `?dateFrom`, `?dateTo`) | ADMIN |
+| GET | `/coupons/impact` | Análise de impacto | ADMIN |
+| POST | `/coupons` | Criar | ADMIN |
+| PATCH | `/coupons/{coupon_id}` | Atualizar | ADMIN |
+| PATCH | `/coupons/{coupon_id}/toggle` | Alternar ativo | ADMIN |
+| DELETE | `/coupons/{coupon_id}` | Remover | ADMIN |
+
+### POST /coupons
+
+<ParamField body="code" type="string" required>Código do cupom.</ParamField>
+<ParamField body="description" type="string">Descrição.</ParamField>
+<ParamField body="discountPercent" type="number">Desconto percentual.</ParamField>
+<ParamField body="fixedPrice" type="number">Preço fixo (alternativa ao percentual).</ParamField>
+<ParamField body="isActive" type="boolean">Ativo.</ParamField>
+<ParamField body="expiresAt" type="string">Expiração (ISO).</ParamField>
+<ParamField body="maxUsage" type="number">Limite total de usos.</ParamField>
+<ParamField body="maxUsagePerCustomer" type="number">Limite por cliente.</ParamField>
+<ParamField body="productId" type="string">Restringir a um produto.</ParamField>
+
+## Checkout (`/checkout`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/checkout` | Processar checkout | Público |
+| GET | `/checkout/pix-status/{order_id}` | Status de pagamento PIX | Público |
+
+### POST /checkout
+
+<ParamField body="email" type="string" required>Email do comprador.</ParamField>
+<ParamField body="fullName" type="string" required>Nome completo.</ParamField>
+<ParamField body="phone" type="string" required>Telefone.</ParamField>
+<ParamField body="cpf" type="string" required>CPF.</ParamField>
+<ParamField body="productType" type="string" required>Produto comprado.</ParamField>
+<ParamField body="paymentMethod" type="string" required>Forma de pagamento (PIX, cartão, etc.).</ParamField>
+<ParamField body="card" type="object">Dados do cartão (quando aplicável).</ParamField>
+<ParamField body="utm" type="object">Parâmetros UTM (opcional).</ParamField>
+
+## Trials (`/trials`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/trials/grant` | Conceder trial originado no AgroPujante | Internal Token |
+
+### POST /trials/grant
+
+<ParamField body="email" type="string" required>Email do usuário.</ParamField>
+<ParamField body="durationDays" type="number">Duração do trial em dias (opcional).</ParamField>
+<ParamField body="source" type="string" required>Origem do trial.</ParamField>
+<ParamField body="sourceRef" type="string">Referência da origem (opcional).</ParamField>
+<ParamField body="metadata" type="object">Metadados livres (opcional).</ParamField>
+
+## Renewal (`/renewal`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/renewal/my-status` | Status de renovação do usuário logado | JWT |
+| GET | `/renewal/resolve-magic-link` | Resolver magic link de renovação | Público |
+| POST | `/renewal/magic-link` | Gerar magic link de renovação | MANAGER |
+
+<Warning>
+Retornam **501 — não implementado**: `GET /renewal/resolve-magic-link` e `POST /renewal/magic-link`.
+</Warning>
+
+## Webhooks externos
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/subscriptions/webhook/asaas` | Eventos Asaas (auditado em `asaas_webhook_events`) | Público (token `ASAAS_WEBHOOK_TOKEN`) |
+| POST | `/subscriptions/webhook/pagarme` | Eventos PagarMe (auditado em `pagarme_webhook_events`) | Público (token `PAGARME_WEBHOOK_TOKEN`) |
+| POST | `/webhooks/resend` | Eventos Resend (entregas, bounces) | Público (assinatura Svix HMAC) |

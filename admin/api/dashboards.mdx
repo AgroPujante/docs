@@ -1,0 +1,275 @@
+---
+title: "API: dashboards"
+description: "Endpoints de leitura agregada: overview, financeiro, assinantes, funil, usuários, newsletter, marketing, Meta Ads e observabilidade."
+---
+
+Estes endpoints alimentam os dashboards do painel. Quase todos aceitam **JWT Bearer ou API Key read-only** (coluna Auth = JWT/Key). Veja [Autenticação](/admin/autenticacao).
+
+<Note>
+O parâmetro `origin` aparece em vários endpoints e filtra por produto: `site` (AgroPujante), `escola` ou `all` (default na maioria).
+</Note>
+
+## Health
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/health` | Health check básico | Nenhuma |
+| GET | `/health/deep` | Health profundo: valida JWKS e estado das MVs | Nenhuma |
+
+## Me
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/me` | Dados do usuário autenticado (`sub`, `email`, `role`) | JWT/Key |
+
+## Materialized views
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/mvs` | Lista MVs `admin_mv_*` e status de refresh | JWT/Key |
+| POST | `/admin/mvs/refresh` | Força refresh (`?concurrent=true` para não travar leituras) | JWT/Key |
+
+## Overview
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/overview` | KPIs consolidados + sparklines + últimos lançamentos | JWT/Key |
+| GET | `/admin/overview/dau-mau` | DAU/MAU rolling + stickiness | JWT/Key |
+
+### GET /admin/overview/dau-mau
+
+<ParamField query="origin" type="string" default="all">
+Filtra por produto: `site`, `escola` ou `all`.
+</ParamField>
+
+<ParamField query="days" type="integer" default="30">
+Janela em dias, entre 7 e 30.
+</ParamField>
+
+## Financial
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/financial` | MRR/ARR + movimentos + cashflow + breakdown por plano | JWT/Key |
+| GET | `/admin/financial/by-gateway` | GMV PAID por gateway (Asaas, Pagar.me, Hotmart) | JWT/Key |
+| GET | `/admin/financial/consolidado` | Receita consolidada fiel ao painel (Apoiadores + Escola + PRO) | JWT/Key |
+
+### GET /admin/financial
+
+<ParamField query="origin" type="string" default="all">
+Produto: `site`, `escola` ou `all`.
+</ParamField>
+
+<ParamField query="period_days" type="integer">
+Janela de análise, entre 7 e 90 dias.
+</ParamField>
+
+### GET /admin/financial/by-gateway
+
+<ParamField query="month" type="string">
+Mês de referência no formato `YYYY-MM`.
+</ParamField>
+
+## Subscribers
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/subscribers` | Lista paginada de assinantes | JWT/Key |
+| GET | `/admin/subscribers/{subscriber_id}/timeline` | Timeline de eventos do assinante (pagamentos, acessos, emails) | JWT/Key |
+
+### GET /admin/subscribers
+
+<ParamField query="origin" type="string">
+Produto de origem do assinante.
+</ParamField>
+
+<ParamField query="plan" type="string">
+Filtra por plano.
+</ParamField>
+
+<ParamField query="status" type="string">
+Filtra por status da assinatura.
+</ParamField>
+
+<ParamField query="q" type="string">
+Busca textual (nome, email).
+</ParamField>
+
+<ParamField query="limit" type="integer" default="50">
+Itens por página, de 1 a 200.
+</ParamField>
+
+<ParamField query="offset" type="integer" default="0">
+Deslocamento da paginação.
+</ParamField>
+
+## Funnel
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/funnel` | Funil de 5 etapas por origem (`?origin`) | JWT/Key |
+| GET | `/admin/user-actions` | Top 5 + bottom 5 ações com % de adoção (`?origin`) | JWT/Key |
+
+## Users
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/users` | Lista paginada Site + Escola (`?origin, ?stage, ?q, ?limit, ?offset`) | JWT/Key |
+| GET | `/admin/users/{user_id}` | Detalhe do usuário + timeline | JWT/Key |
+
+## Newsletter
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/newsletter` | Visão consolidada Site + Escola (`?origin, ?limit`) | JWT/Key |
+| GET | `/admin/newsletter/site-dashboard` | Dashboard estilo Mailchimp com deltas (`?days` 1–365) | JWT/Key |
+
+## Marketing
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/marketing/summary` | Visits, signups, paid, MRR, CAC, LTV, ROAS + badge de cortesias | JWT/Key |
+| GET | `/admin/marketing/by-channel` | Uma linha por `utm_source` | JWT/Key |
+| GET | `/admin/marketing/by-product` | Uma linha por produto (`pro_mensal`/`semestral`/`anual`, `apoiador`, `escola_membro`) | JWT/Key |
+
+### GET /admin/marketing/summary
+
+<ParamField query="days" type="integer">
+Janela em dias, entre 7 e 365.
+</ParamField>
+
+<ParamField query="origin" type="string">
+Produto: `site`, `escola` ou `all`.
+</ParamField>
+
+## UTM analytics
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/conversions-by-utm` | Signups + paid + GMV por UTM (`?origin, ?days, ?group_by` default `campaign`) | JWT/Key |
+
+<Note>
+A convenção de UTMs usada pelos produtos está documentada no repositório em `docs/UTM_CONVENTION.md`.
+</Note>
+
+## Email clicks
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/email-clicks/cashback` | Cliques no botão de cashback do email `pro_welcome` (`?days`) | JWT/Key |
+
+## Meta Ads
+
+<Warning>
+Requer as variáveis `META_*` configuradas. Sem elas, os endpoints retornam vazio com um aviso — veja [Variáveis de ambiente](/admin/variaveis-ambiente).
+</Warning>
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/meta-ads/summary` | Spend, vendas, custo/compra, ROAS, CPM, CTR + série diária | JWT/Key |
+| GET | `/admin/meta-ads/by-creative` | Performance por criativo, com thumbnail | JWT/Key |
+| GET | `/admin/meta-ads/funnel` | Criativos → Pág. Vendas → Checkout → Vendas | JWT/Key |
+| GET | `/admin/meta-ads/daily-economics` | ROAS · CAC · RL diário (spend Meta + receita Asaas) | JWT/Key |
+| POST | `/admin/meta-ads/sync` | Sync manual, assíncrono (responde 202) | JWT |
+
+### GET /admin/meta-ads/summary
+
+<ParamField query="days" type="integer">
+Janela em dias, entre 1 e 365. Alternativa ao intervalo explícito.
+</ParamField>
+
+<ParamField query="start_date" type="string">
+Início do intervalo (`YYYY-MM-DD`). Usar junto com `end_date`.
+</ParamField>
+
+<ParamField query="end_date" type="string">
+Fim do intervalo (`YYYY-MM-DD`).
+</ParamField>
+
+### GET /admin/meta-ads/funnel
+
+<ParamField query="adset_id" type="string">
+Restringe o funil a um conjunto de anúncios.
+</ParamField>
+
+<ParamField query="plan" type="string" default="all">
+Plano: `all`, `monthly`, `semiannual` ou `annual`.
+</ParamField>
+
+### POST /admin/meta-ads/sync
+
+<ParamField query="days" type="integer">
+Lookback do sync manual, entre 1 e 90 dias.
+</ParamField>
+
+## Observability
+
+<Warning>
+Requer as variáveis `NEW_RELIC_*` configuradas. Sem elas, os endpoints retornam vazio com um aviso.
+</Warning>
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/observability/metrics` | KPIs, série de erros, top endpoints, distribuição de status | JWT/Key |
+| GET | `/admin/observability/error-occurrences` | Drill-down das ocorrências de um erro | JWT/Key |
+| GET | `/admin/observability/logs` | Logs via NerdGraph | JWT/Key |
+
+### GET /admin/observability/error-occurrences
+
+<ParamField query="uri" type="string" required>
+URI do endpoint com erro a detalhar.
+</ParamField>
+
+<ParamField query="origin" type="string">
+App de origem: `site` ou `escola`.
+</ParamField>
+
+<ParamField query="status" type="integer">
+Filtra por status HTTP.
+</ParamField>
+
+<ParamField query="method" type="string">
+Filtra por método HTTP.
+</ParamField>
+
+<ParamField query="minutes" type="integer">
+Janela em minutos, entre 1 e 1440.
+</ParamField>
+
+<ParamField query="limit" type="integer">
+Máximo de ocorrências, entre 1 e 200.
+</ParamField>
+
+### GET /admin/observability/logs
+
+<ParamField query="origin" type="string">
+App de origem: `site` ou `escola`.
+</ParamField>
+
+<ParamField query="level" type="string">
+Nível de log único (ex.: `error`).
+</ParamField>
+
+<ParamField query="levels" type="string">
+Múltiplos níveis, separados por vírgula.
+</ParamField>
+
+<ParamField query="minutes" type="integer">
+Janela em minutos.
+</ParamField>
+
+<ParamField query="query" type="string">
+Busca textual nos logs.
+</ParamField>
+
+<ParamField query="limit" type="integer">
+Máximo de linhas, entre 1 e 500.
+</ParamField>
+
+<ParamField query="since_ms" type="integer">
+Início da janela em epoch milliseconds (alternativa a `minutes`).
+</ParamField>
+
+<ParamField query="until_ms" type="integer">
+Fim da janela em epoch milliseconds.
+</ParamField>

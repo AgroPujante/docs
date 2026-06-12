@@ -1,0 +1,138 @@
+---
+title: "Financeiro"
+description: "Dashboards financeiros, billing unificado, relatórios e emissão de NFSe via Bling"
+icon: "chart-line"
+---
+
+Quatro grupos de rotas: `/dashboard/financial` (métricas de negócio), `/dashboard` (billing unificado dos gateways), `/financial` (relatórios) e `/bling` (NFSe).
+
+## Dashboard financial (`/dashboard/financial`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/dashboard/financial/kpis` | KPIs financeiros (`?dateFrom`, `?dateTo`) | MANAGER |
+| GET | `/dashboard/financial/health` | Saúde financeira (`?dateFrom`, `?dateTo`) | MANAGER |
+| GET | `/dashboard/financial/growth` | Crescimento (`?dateFrom`, `?dateTo`) | MANAGER |
+| GET | `/dashboard/financial/lifecycle` | Ciclo de vida (`?dateFrom`, `?dateTo`) | MANAGER |
+| GET | `/dashboard/financial/churn` | Churn (`?dateFrom`, `?dateTo`) | MANAGER |
+| GET | `/dashboard/financial/member-performance` | Overview de performance de members | MANAGER |
+| GET | `/dashboard/financial/member-performance/{member_id}` | Detalhe por member | MANAGER |
+| GET | `/dashboard/financial/newsletter-performance` | Performance de newsletters | MANAGER |
+| GET | `/dashboard/financial/newsletter-performance/{campaign_id}` | Detalhe por campanha | MANAGER |
+| GET | `/dashboard/financial/engagement-ranking` | Ranking de engajamento | MANAGER |
+| GET | `/dashboard/financial/offices-balance` | Balanço de offices (`?period`, `?month`) | MANAGER |
+| GET | `/dashboard/financial/offices-balance/pdf` | Exportar balanço em PDF | MANAGER |
+| GET | `/dashboard/financial/offices-balance/available-months` | Meses disponíveis | MANAGER |
+
+<Warning>
+`GET /dashboard/financial/offices-balance/pdf` retorna **501 — não implementado**.
+</Warning>
+
+## Dashboard billing (`/dashboard`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/dashboard/balance` | Saldo unificado dos gateways | MANAGER |
+| GET | `/dashboard/balance/extract` | Extrato (`?dateFrom`, `?dateTo`) | MANAGER |
+| GET | `/dashboard/balance/receivables` | Recebíveis (`?dateFrom`, `?dateTo`) | MANAGER |
+| GET | `/dashboard/balance/cash-flow` | Fluxo de caixa (`?dateFrom`, `?dateTo`) | MANAGER |
+| GET | `/dashboard/billing-rules` | Regras de cobrança | MANAGER |
+| PATCH | `/dashboard/billing-rules/{rule_id}` | Atualizar regra | MANAGER |
+| GET | `/dashboard/chargebacks` | Chargebacks (`?page`, `?limit`) | MANAGER |
+| POST | `/dashboard/chargebacks/{chargeback_id}/dispute` | Contestar chargeback | MANAGER |
+| GET | `/dashboard/history` | Histórico de pagamentos (`?dateFrom`, `?dateTo`, `?status`, `?gateway`, `?limit`) | MANAGER |
+| GET | `/dashboard/payments` | Alias de `/history` | MANAGER |
+| GET | `/dashboard/payments/failures` | Falhas de pagamento (`?dateFrom`, `?dateTo`) | MANAGER |
+| GET | `/dashboard/payments/refunds` | Reembolsos (`?dateFrom`, `?dateTo`) | MANAGER |
+| POST | `/dashboard/payments/refund` | Executar reembolso | MANAGER |
+| GET | `/dashboard/payment-links` | Links de pagamento (`?page`, `?limit`) | MANAGER |
+| POST | `/dashboard/payment-links` | Criar link de pagamento | MANAGER |
+| DELETE | `/dashboard/payment-links/{link_id}` | Remover link | MANAGER |
+| POST | `/dashboard/subscription-mgmt/{subscription_id}/sync` | Sync com gateway | MANAGER |
+| POST | `/dashboard/subscription-mgmt/{subscription_id}/update-card` | Atualizar cartão | MANAGER |
+| POST | `/dashboard/subscription-mgmt/{subscription_id}/retry-payment` | Reprocessar pagamento | MANAGER |
+| GET | `/dashboard/office-delinquency` | Inadimplência de apoiadores | MANAGER |
+
+<Warning>
+Retornam **501 — não implementado**: `GET/PATCH /billing-rules*`, `POST /chargebacks/{id}/dispute`, `POST /payments/refund`, `POST /payment-links`, `DELETE /payment-links/{link_id}` e os três `POST /subscription-mgmt/{id}/*` (essas operações ainda vivem no NestJS legado).
+</Warning>
+
+## Financial (`/financial`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/financial/clients` | Clientes | MANAGER |
+| GET | `/financial/products` | Produtos | MANAGER |
+| GET | `/financial/subscriptions` | Assinaturas | MANAGER |
+| GET | `/financial/charges` | Cobranças | MANAGER |
+| GET | `/financial/events` | Eventos | MANAGER |
+| GET | `/financial/month-detail` | Detalhe do mês (`month`, `metric`, `?filterMonth`) | MANAGER |
+| GET | `/financial/revenue-by-product-status` | Receita por produto/status (`?month`) | MANAGER |
+| GET | `/financial/payments-by-product-status` | Pagamentos por produto/status | MANAGER |
+| GET | `/financial/charges-kpis` | KPIs de cobranças | MANAGER |
+| GET | `/financial/revenue-kpis` | KPIs de receita (`?month`) | MANAGER |
+| GET | `/financial/subscribers-history` | Histórico de assinantes (`?months`, `?productType`) | MANAGER |
+| GET | `/financial/monthly-history` | Histórico mensal (`?months`, `?since`) | MANAGER |
+| GET | `/financial/monthly-history-supporters` | Histórico mensal de apoiadores (`?months`, `?since`) | MANAGER |
+| GET | `/financial/test-profiles` | Perfis de teste | MANAGER |
+| PATCH | `/financial/test-profiles/{member_id}/toggle` | Alternar perfil de teste | MANAGER |
+| GET | `/financial/product-mapping` | Mapeamento de produtos | MANAGER |
+| GET | `/financial/reconcile` | Reconciliação | MANAGER |
+| GET | `/financial/operational-alerts` | Alertas operacionais | MANAGER |
+| GET | `/financial/overview-kpis` | KPIs de overview (`?month`) | MANAGER |
+
+<Warning>
+Retornam **501 — não implementado**: `/clients`, `/products`, `/subscriptions`, `/charges`, `/events`, `/payments-by-product-status`, `/charges-kpis`, `/test-profiles` (GET e PATCH), `/product-mapping`, `/reconcile` e `/operational-alerts`.
+</Warning>
+
+### GET /financial/month-detail
+
+<ParamField query="month" type="string" required>Mês de referência (ex.: `2026-05`).</ParamField>
+<ParamField query="metric" type="string" required>Métrica detalhada.</ParamField>
+<ParamField query="filterMonth" type="string">Mês de filtro adicional (opcional).</ParamField>
+
+## Bling / NFSe (`/bling`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/bling/authorize` | Iniciar OAuth Bling | ADMIN |
+| GET | `/bling/callback` | Callback OAuth | Público |
+| GET | `/bling/status` | Status da conexão | ADMIN |
+| POST | `/bling/nfe` | Criar NFe | ADMIN |
+| POST | `/bling/nfe/{id}/enviar` | Enviar NFe | ADMIN |
+| POST | `/bling/nfe/{id}/cancelar` | Cancelar NFe | ADMIN |
+| GET | `/bling/nfe/{id}` | Detalhe NFe | ADMIN |
+| GET | `/bling/nfe` | Listar NFe | ADMIN |
+| GET | `/bling/invoices/kpis` | KPIs de notas | MANAGER |
+| GET | `/bling/invoices/monthly-stats` | Stats mensais | MANAGER |
+| GET | `/bling/invoices` | Listar notas (`?page`, `?limit`, `?status`, `?search`, `?dateFrom`, `?dateTo`) | MANAGER |
+| GET | `/bling/nfse-config` | Configuração NFSe | ADMIN |
+| PUT | `/bling/nfse-config` | Atualizar config NFSe | ADMIN |
+| GET | `/bling/product-configs` | Configs fiscais por produto | ADMIN |
+| PUT | `/bling/product-configs/{product_id}` | Upsert de config fiscal | ADMIN |
+| GET | `/bling/automation/config` | Config da automação | ADMIN |
+| PUT | `/bling/automation/config` | Atualizar automação | ADMIN |
+| GET | `/bling/automation/logs` | Logs da automação (`?page`, `?limit`) | ADMIN |
+| POST | `/bling/webhook` | Webhook Bling | Público |
+
+<Warning>
+Retornam **501 — não implementado**: `/authorize`, `/callback`, `/status`, todas as rotas `/nfe*` e `POST /webhook`.
+</Warning>
+
+### PUT /bling/nfse-config
+
+<ParamField body="cnpj" type="string">CNPJ do emissor.</ParamField>
+<ParamField body="razaoSocial" type="string">Razão social.</ParamField>
+<ParamField body="inscricaoMunicipal" type="string">Inscrição municipal — além de demais campos fiscais (CNAE, código de serviço, alíquota ISS, código NBS).</ParamField>
+
+### PUT /bling/product-configs/\{product_id\}
+
+<ParamField body="fiscalDescription" type="string">Descrição fiscal do serviço.</ParamField>
+<ParamField body="serviceCode" type="string">Código de serviço municipal.</ParamField>
+<ParamField body="codigoNbs" type="string">Código NBS.</ParamField>
+<ParamField body="active" type="boolean">Emissão ativa para o produto.</ParamField>
+
+### PUT /bling/automation/config
+
+<ParamField body="enabled" type="boolean">Automação de emissão ligada.</ParamField>
+<ParamField body="products" type="array">Produtos incluídos na automação.</ParamField>

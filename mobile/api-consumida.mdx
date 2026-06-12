@@ -1,0 +1,144 @@
+---
+title: "API consumida"
+description: "Todos os endpoints que o app consome — AgroPujante /api/v1, Escola /api/v2 e ViaCEP"
+---
+
+O app consome dois backends e um serviço externo. Auth **Sim** = exige Bearer token; **Não** = público; **Opcional** = o token enriquece a resposta quando presente.
+
+## AgroPujante `/api/v1`
+
+Base: `https://api.agropujante.com.br/api/v1`. Bearer token nativo do Portal, lido do Expo Secure Store.
+
+### Auth e conta
+
+| Método | Endpoint | Auth | Descrição |
+|---|---|---|---|
+| POST | `/users/login` | Não | Email + senha → `TokenResponse` (`access_token`, `user`) |
+| POST | `/users/register` | Não | `name`, `email`, `password`, `terms_accepted`, `referrer_id?`, `send_welcome_email?` |
+| POST | `/users/password-reset/request` | Não | Envia OTP por email (resposta genérica, não vaza existência) |
+| POST | `/users/password-reset/verify` | Não | OTP → `reset_token` (válido por 5 min) |
+| POST | `/users/password-reset/confirm` | Não | `reset_token` + `new_password` |
+| GET | `/users/me` | Sim | `UserPublic` (`id`, `email`, `name`, `avatar_url`, `profile_completed`, `escola?.has_access`) |
+| PATCH | `/users/me` | Sim | `cpf_cnpj`, `phone`, `birth_date`, `graduation`, `state`, `city`, `occupation` — pode disparar `trial_granted` |
+| GET | `/escola/handoff-token` | Sim | Token Supabase + refresh pra sessão da Escola |
+
+### Perfil, atividade e salvos
+
+| Método | Endpoint | Auth | Descrição |
+|---|---|---|---|
+| GET | `/users/me/activities` | Sim | Feed de atividades, paginado |
+| GET | `/users/me/stats` | Sim | `total_reads`, `total_downloads`, `reads_by_type`, `days_active` |
+| GET | `/users/me/saved-posts` | Sim | Posts salvos, paginado |
+| GET | `/users/me/saved-posts/{postId}/check` | Sim | Verifica se o post está salvo |
+| POST | `/users/me/saved-posts/{postId}` | Sim | Salva o post |
+| DELETE | `/users/me/saved-posts/{postId}` | Sim | Remove dos salvos |
+
+### Controle de acesso a conteúdo
+
+| Método | Endpoint | Auth | Descrição |
+|---|---|---|---|
+| POST | `/users/access/check` | Sim | `{post_type, post_id, visitor_id}` → `allowed`, `reads_this_month`, `reads_limit` |
+| POST | `/users/access/track-read` | Sim | Registra a leitura no contador mensal |
+
+<Note>
+  O `visitor_id` é um UUID gerado por device e persistido em AsyncStorage — entra no access check pra controle de cota por dispositivo.
+</Note>
+
+### Conteúdo editorial
+
+| Método | Endpoint | Auth | Descrição |
+|---|---|---|---|
+| GET | `/posts` | Não | Lista com `?type`, `?category_slug`, `?featured`, `?column_id`, `?page`, `?page_size` |
+| GET | `/posts/featured` | Não | Destaques (`?limit`) |
+| GET | `/posts/trending` | Não | Posts em alta |
+| GET | `/posts/{slug}` | Não | `PostFull` (`content`, `attachments`, `is_early_access`, `decision_supporter`) |
+| GET | `/categories/` | Não | `?type`, `?with_count=true` |
+| GET | `/authors/` | Não | `?vip_only` |
+| GET | `/authors/{slug}` | Não | `AuthorWithPosts` |
+| GET | `/columns/` | Não | `?active_only` |
+| GET | `/columns/{slug}` | Não | `ColumnWithPosts` |
+| GET | `/books/` | Não | Livros |
+| GET | `/boletins` | Não | Paginado — julgados, `access_tier`, link de PDF |
+| GET | `/search/` | Não | `?q`, `?type`, `?page`, `?page_size` → `relevance_score`, `highlights` |
+
+### Interações sociais
+
+| Método | Endpoint | Auth | Descrição |
+|---|---|---|---|
+| GET | `/likes/posts/{postId}` | Opcional | `like_count` (+ estado do usuário se autenticado) |
+| POST | `/likes/posts/{postId}` | Sim | Toggle de like |
+| GET | `/comments/{postId}` | Não | Comentários do post |
+| POST | `/comments/` | Sim | `{post_id, author_name, author_email, content}` |
+
+### Comunidade e institucional
+
+| Método | Endpoint | Auth | Descrição |
+|---|---|---|---|
+| GET | `/events/upcoming` | Não | Próximos eventos (`?limit`) |
+| GET | `/partners/` | Não | Parceiros |
+| GET | `/supporters/` | Não | Apoiadores |
+| POST | `/users/newsletter-signup` | Não | `{email, name?, profession?, terms_accepted}` |
+
+### Push e gamificação
+
+| Método | Endpoint | Auth | Descrição |
+|---|---|---|---|
+| POST | `/devices` | Sim | `{token (Expo push), platform}` — registra device pra push |
+| DELETE | `/devices?token=` | Sim | Remove o device (logout) |
+| GET | `/credits/balance` | Sim | `balance`, `total_earned`, `total_spent`, `welcome_gift_claimed` |
+| GET | `/credits/streak` | Sim | `current_streak`, `longest_streak`, `revive_keys_available` |
+
+## Escola `/api/v2`
+
+Base configurável via `expo.extra.escolaApiUrl` (em dev local, `http://192.168.0.10:8765/api/v2` pro Expo Go). Bearer **JWT Supabase**, obtido via handoff ou login manual.
+
+### Auth e perfil
+
+| Método | Endpoint | Auth | Descrição |
+|---|---|---|---|
+| POST | `/auth/check-email` | Não | `{email}` → `status`: `not_found` \| `has_password` \| `no_password` |
+| POST | `/auth/login` | Não | `{email, password}` → `EscolaSession` (`accessToken`, `refreshToken`, `user`) |
+| GET | `/users/profile/me` | Sim | `EscolaProfile` (role, status de mentoria, matrícula) |
+
+### LMS
+
+| Método | Endpoint | Auth | Descrição |
+|---|---|---|---|
+| GET | `/lms/catalog` | Sim | Trilhas, imersões e cursos |
+| GET | `/lms/catalog/{trackId}` | Sim | Detalhe da trilha com lessons |
+| GET | `/lms/catalog/progress/recent` | Sim | `?limit` — `watched_seconds`, `completed` |
+| GET | `/lms/catalog/lessons/{lessonId}/progress` | Sim | `watchedSeconds`, `completed`, `accessedAt` |
+| GET | `/lms/catalog/lessons/{lessonId}/topics-progress` | Sim | Tópicos marcados da aula |
+| PATCH | `/lms/catalog/lessons/{lessonId}/topics-progress` | Sim | `{checkedTopicKeys}` |
+| GET | `/lms/catalog/lessons/{lessonId}/materials` | Sim | PDFs, slides |
+| GET | `/lms/catalog/lessons/{lessonId}/comments` | Sim | Comentários hierárquicos |
+| POST | `/lms/catalog/lessons/{lessonId}/comments` | Sim | `{content, parentId?}` |
+
+### Mentoria (mentored-tracking)
+
+| Método | Endpoint | Auth | Descrição |
+|---|---|---|---|
+| GET | `/mentored-tracking/my-tests-status` | Sim | Booleano por teste (DISC, Procrastinação, Socioemocional, Atenção/Memória) |
+| GET | `/mentored-tracking/my-tasks-status` | Sim | `Record<string, boolean>` |
+| GET | `/mentored-tracking/my-action-plan` | Sim | Plano de ação ou `null` |
+| GET | `/mentored-tracking/my-profile` | Sim | Perfil do mentorado |
+| PUT | `/mentored-tracking/my-profile` | Sim | Perfil completo + payloads de resultados (`DiscResultPayload`, `ProcrastinationResultPayload`, `SocioemocionalResultPayload`, `AttentionMemoryResultPayload`) |
+
+### Assinaturas, Exordial e calendário
+
+| Método | Endpoint | Auth | Descrição |
+|---|---|---|---|
+| GET | `/subscriptions/my` | Sim | Planos ativos, expiração |
+| POST | `/exordial/generate` | Sim | `{query, stage (auto\|generate\|plan), peca?, assunto?, parteRepresentada?, instrucoesIa?, categoria?}` → `{jobId}` |
+| GET | `/exordial/status/{jobId}` | Sim | `pending` \| `processing` \| `complete` \| `error` + `result` |
+| GET | `/calendar` | Sim | `?from`, `?to` — aulas ao vivo, encontros, prazos |
+
+<Note>
+  O Exordial é assíncrono: o `POST /exordial/generate` devolve um `jobId` e o app faz polling em `/exordial/status/{jobId}` até `complete` ou `error`.
+</Note>
+
+## Serviço externo
+
+| Método | Endpoint | Auth | Descrição |
+|---|---|---|---|
+| GET | `https://viacep.com.br/ws/{cep}/json/` | Não | Consulta CEP — autocompleta endereço no formulário de perfil da Escola |

@@ -1,0 +1,89 @@
+---
+title: "Users, members e offices"
+description: "Cadastros de contas de acesso, pessoas, escritórios e endereços"
+icon: "address-book"
+---
+
+Lembre a distinção: **users** são contas de acesso (vinculadas ao Supabase Auth), **members** são pessoas físicas (cadastro comercial) e **offices** são escritórios (CNPJ). Veja [Modelos](/escola/modelos).
+
+## Users (`/users`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/users/profile/me` | Perfil do usuário logado | JWT |
+| GET | `/users` | Listar users (`?search`, `?role`) | JWT |
+| GET | `/users/{user_id}` | Detalhe de um user | JWT |
+| PATCH | `/users/{user_id}` | Atualizar user | JWT |
+| DELETE | `/users/{user_id}` | Remover user | JWT |
+
+### PATCH /users/\{user_id\}
+
+<ParamField body="name" type="string">Nome do usuário.</ParamField>
+<ParamField body="phone" type="string">Telefone.</ParamField>
+<ParamField body="role" type="string">Role: `ADMIN`, `COMMUNITY_MANAGER`, `OPERATOR`, `EDITORIAL` ou `MENTORED`.</ParamField>
+
+## Members (`/members`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/members` | Listar members (`?search`, `?status`) | MANAGER |
+| POST | `/members` | Criar member | MANAGER |
+| PATCH | `/members/{member_id}` | Atualizar member | MANAGER |
+| DELETE | `/members/{member_id}` | Remover member | MANAGER |
+| POST | `/members/send-email` | Envio de email em massa | MANAGER |
+| GET | `/members/email-logs` | Histórico de emails (`?emailType`, `?limit`, `?offset`) | MANAGER |
+| POST | `/members/bulk-assign-plan` | Atribuir plano em massa | MANAGER |
+| POST | `/members/bulk-create-users` | Criar users em massa | MANAGER |
+
+<Warning>
+`POST /members/bulk-create-users` retorna **501 — não implementado**.
+</Warning>
+
+### POST /members
+
+<ParamField body="fullName" type="string" required>Nome completo.</ParamField>
+<ParamField body="email" type="string" required>Email.</ParamField>
+<ParamField body="phone" type="string">Telefone.</ParamField>
+<ParamField body="cpf" type="string">CPF.</ParamField>
+<ParamField body="gender" type="string">Gênero.</ParamField>
+<ParamField body="status" type="string">Status do cadastro.</ParamField>
+
+### POST /members/send-email
+
+<ParamField body="memberIds" type="string[]" required>IDs dos members destinatários.</ParamField>
+<ParamField body="emailType" type="string" required>Tipo de email a disparar.</ParamField>
+
+### POST /members/bulk-assign-plan
+
+<ParamField body="memberIds" type="string[]" required>IDs dos members.</ParamField>
+<ParamField body="productType" type="string" required>Tipo de produto a atribuir (ex.: `MEMBERS_CLUB`).</ParamField>
+
+## Offices (`/offices`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/offices` | Listar offices (`?search`, `?status`) | MANAGER |
+| POST | `/offices` | Criar office | MANAGER |
+| PATCH | `/offices/{office_id}` | Atualizar office | MANAGER |
+| DELETE | `/offices/{office_id}` | Remover office | MANAGER |
+
+### POST /offices
+
+<ParamField body="name" type="string" required>Nome fantasia.</ParamField>
+<ParamField body="legalName" type="string">Razão social.</ParamField>
+<ParamField body="document" type="string">CNPJ.</ParamField>
+<ParamField body="email" type="string">Email de contato.</ParamField>
+<ParamField body="phone" type="string">Telefone.</ParamField>
+<ParamField body="status" type="string">Status do escritório.</ParamField>
+
+## Addresses (`/addresses`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/addresses` | Listar endereços (`?officeId`, `?memberId`, `?page`, `?pageSize`) | JWT |
+| GET | `/addresses/{address_id}` | Detalhe de endereço | JWT |
+| GET | `/addresses/cities/list` | Listar cidades | JWT |
+
+<Warning>
+`GET /addresses/cities/list` retorna **501 — não implementado**.
+</Warning>

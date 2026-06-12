@@ -1,0 +1,97 @@
+---
+title: "API: admin e operação"
+description: "Analytics, métricas de receita e email, gestão de admins e usuários, api-keys, storage, webhooks e integração com a Escola"
+---
+
+Base: `/api/v1`.
+
+## Analytics (`/analytics`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/analytics/pageview` | Registra pageview | Público |
+| POST | `/analytics/view/{post_id}` | Registra view de post | Público |
+| GET | `/analytics/summary` | Resumo geral | gestor+ |
+| GET | `/analytics/top-posts` | Posts mais lidos | gestor+ |
+| GET | `/analytics/post/{post_id}` | Métricas de um post | gestor+ |
+| GET | `/analytics/daily` | Série diária | gestor+ |
+| GET | `/analytics/monthly` | Série mensal | gestor+ |
+| GET | `/analytics/visitors/frequency` | Frequência de visitantes | gestor+ |
+| GET | `/analytics/peak-hours` | Horários de pico | gestor+ |
+| GET | `/analytics/users/summary` | Resumo de usuários | gestor+ |
+| GET | `/analytics/users/list` | Lista de usuários | gestor+ |
+| GET | `/analytics/users/{user_id}/details` | Detalhe por usuário | gestor+ |
+| GET | `/analytics/users/registrations` | Registros ao longo do tempo | gestor+ |
+
+## Admin metrics (`/admin`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/revenue/summary` | Resumo de receita | gestor+ |
+| GET | `/admin/revenue/mrr-history` | Histórico de MRR | gestor+ |
+| GET | `/admin/revenue/trial-funnel` | Funil de trial | gestor+ |
+| GET | `/admin/revenue/breakdown` | Quebra de receita | gestor+ |
+| GET | `/admin/revenue/subscribers` | Assinantes | gestor+ |
+| GET | `/admin/revenue/funnel` | Funil de conversão | gestor+ |
+| GET | `/admin/emails/today` | Emails enviados hoje | gestor+ |
+| GET | `/admin/emails/by-template` | Por template | gestor+ |
+| GET | `/admin/emails/job-runs` | Execuções de jobs de email | gestor+ |
+| GET | `/admin/emails/failures` | Falhas de envio | gestor+ |
+
+## Admin users (`/admin-users`) — RBAC
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin-users` | Lista admins | admin+ |
+| POST | `/admin-users` | Cria admin (Supabase Auth + row em `admin_users`) | admin+ |
+| PATCH | `/admin-users/{user_id}` | Altera role | admin+ |
+| DELETE | `/admin-users/{user_id}` | Remove acesso admin | admin+ |
+
+## Listagem de usuários (`/admin/users`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/users` | Todos os usuários, paginado com filtros | gestor+ |
+| POST | `/admin/users/export-token` | Gera token de export | gestor+ |
+| GET | `/admin/users/export.csv` | Download do CSV (via token) | gestor+ |
+| GET | `/admin/users/{user_id}` | Detalhes do usuário | gestor+ |
+
+<Note>
+O export usa token de uso único porque o download de CSV pelo browser não envia o header Authorization — o token vai na query string.
+</Note>
+
+## API keys (`/admin/api-keys`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/admin/api-keys` | Cria chave **read-only** para acesso externo | admin+ |
+| GET | `/admin/api-keys` | Lista chaves | admin+ |
+| DELETE | `/admin/api-keys/{key_id}` | Revoga | admin+ |
+
+## Storage (`/storage`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/storage/buckets` | Lista buckets (debug) | editor+ |
+| POST | `/storage/upload?bucket=` | Upload multipart | editor+ |
+| DELETE | `/storage?bucket=&path=` | Remove arquivo | editor+ |
+
+## Outros routers operacionais
+
+| Router | Descrição |
+|---|---|
+| `/ranking` | Top autores e posts mais lidos |
+| `/retrospective` | Dados da retrospectiva anual |
+| `/noticias_coletadas` | Notícias agregadas via scraping (Playwright); digest para `NOTICIAS_DIGEST_RECIPIENTS` |
+| `/nps` | `POST /nps` — feedback NPS do usuário (JWT) |
+
+## Webhooks (`/webhooks`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/webhooks/resend` | Status de entrega/abertura/clique de email → `email_analytics` | Assinatura Resend |
+| POST | `/webhooks/asaas` | Status de pagamento → `asaas_webhooks_log` + processamento | Header `asaas-access-token` |
+
+## Integração Escola (`/escola`)
+
+Endpoints inter-service de **trial sync** com a Escola Pujante. Autenticação por token interno (`ESCOLA_INTERNAL_API_TOKEN`), não por JWT de usuário — detalhes em [Integrações](/agropujante/integracoes#escola-pujante-trial-sync-e-handoff).

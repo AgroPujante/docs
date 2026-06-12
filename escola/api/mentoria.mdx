@@ -1,0 +1,119 @@
+---
+title: "Mentoria"
+description: "Tracking de mentorados (GDA), análises por IA, performance e Career Booster"
+icon: "users"
+---
+
+## Mentored tracking (`/mentored-tracking`)
+
+Rotas `my-*` são a visão do **mentorado** (aluno); as demais são da equipe (MANAGER).
+
+### Visão do mentorado
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/mentored-tracking/my-profile` | Meu perfil de mentorado | JWT |
+| PUT | `/mentored-tracking/my-profile` | Atualizar perfil (flat: `gender`, `whatsapp`, `birthDate`, `cep`, `address`, `discAnswers`, ...) | JWT |
+| GET | `/mentored-tracking/my-tests-status` | Status dos testes (DISC, socioemocional, etc.) | JWT |
+| GET | `/mentored-tracking/my-tasks-status` | Status das tarefas (`?month`) | JWT |
+| PUT | `/mentored-tracking/my-tasks/{task_number}` | Marcar/desmarcar tarefa | JWT |
+| GET | `/mentored-tracking/my-available-months` | Meses disponíveis | JWT |
+| GET | `/mentored-tracking/my-action-plan` | Plano de ação (`?referenceMonth`) | JWT |
+| POST | `/mentored-tracking/my-action-plan/save-pdf` | Exportar plano em PDF | JWT |
+
+<Warning>
+`POST /mentored-tracking/my-action-plan/save-pdf` retorna **501 — não implementado**.
+</Warning>
+
+### PUT /mentored-tracking/my-tasks/\{task_number\}
+
+<ParamField body="completed" type="boolean" required>Tarefa concluída ou não.</ParamField>
+<ParamField body="month" type="string">Mês de referência (opcional; padrão: mês atual).</ParamField>
+
+### Análises por IA
+
+Analisam respostas de testes com OpenAI e persistem o resultado em `mentored_profiles`.
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/mentored-tracking/analyze-disc` | Análise DISC | JWT |
+| POST | `/mentored-tracking/analyze-socioemocional` | Análise socioemocional | JWT |
+| POST | `/mentored-tracking/analyze-procrastination` | Análise de procrastinação | JWT |
+| POST | `/mentored-tracking/analyze-attention-memory` | Análise atenção/memória | JWT |
+
+#### POST /mentored-tracking/analyze-disc
+
+<ParamField body="answers" type="object" required>Respostas do questionário DISC.</ParamField>
+
+#### POST /mentored-tracking/analyze-attention-memory
+
+<ParamField body="digitSpanResults" type="object" required>Resultados do teste digit span.</ParamField>
+<ParamField body="stroopResults" type="object" required>Resultados do teste de Stroop.</ParamField>
+
+### Visão da equipe
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/mentored-tracking/{member_id}` | Tracking de um member | MANAGER |
+| POST | `/mentored-tracking` | Criar tracking | MANAGER |
+| POST | `/mentored-tracking/extract-transcription` | Extrair transcrição | MANAGER |
+| POST | `/mentored-tracking/{tracking_id}/save-pdf` | Exportar PDF | MANAGER |
+| GET | `/mentored-tracking/{tracking_id}/available-months` | Meses disponíveis | MANAGER |
+| GET | `/mentored-tracking/{tracking_id}/document-status` | Status dos documentos | MANAGER |
+| GET | `/mentored-tracking/{tracking_id}/action-plan` | Plano de ação | MANAGER |
+| POST | `/mentored-tracking/{tracking_id}/generate-action-plan` | Gerar plano de ação | MANAGER |
+
+<Warning>
+Retornam **501 — não implementado**: `POST /extract-transcription`, `POST /{tracking_id}/save-pdf`, `GET /{tracking_id}/action-plan` e `POST /{tracking_id}/generate-action-plan`.
+</Warning>
+
+#### POST /mentored-tracking
+
+<ParamField body="memberId" type="string" required>Member acompanhado.</ParamField>
+<ParamField body="officeId" type="string">Office vinculado (opcional).</ParamField>
+<ParamField body="location" type="string">Localização (opcional).</ParamField>
+<ParamField body="specialty" type="string">Especialidade (opcional).</ParamField>
+
+## Mentored performance (`/mentored-performance`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/mentored-performance/dashboard` | Dashboard geral | MANAGER |
+| GET | `/mentored-performance/mentoreds` | Listar mentorados (`?search`, `?page`, `?limit`) | MANAGER |
+| GET | `/mentored-performance/mentored/{tracking_id}` | Detalhe de mentorado | MANAGER |
+| GET | `/mentored-performance/mentored/{tracking_id}/tasks` | Tarefas do mentorado | MANAGER |
+| PUT | `/mentored-performance/task/{task_id}` | Atualizar tarefa | MANAGER |
+| POST | `/mentored-performance/mentored/{document_id}/initialize-tasks` | Inicializar tarefas | MANAGER |
+
+<Warning>
+Retornam **501 — não implementado**: `GET /mentored/{tracking_id}`, `PUT /task/{task_id}` e `POST /mentored/{document_id}/initialize-tasks`.
+</Warning>
+
+## Career Booster (`/career-booster`)
+
+Gestão de carreira dos funcionários de offices apoiadores (perfis, trilhas de carreira e PDIs).
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/career-booster/offices/my` | Meus offices | JWT |
+| GET | `/career-booster/offices/{office_id}/employees` | Funcionários do office | JWT |
+| PATCH | `/career-booster/offices/{office_id}/employees/{member_id}/profile` | Atualizar perfil do funcionário | JWT |
+| GET | `/career-booster/offices/{office_id}/employees/{member_id}/pdis` | Listar PDIs | JWT |
+| POST | `/career-booster/offices/{office_id}/employees/{member_id}/pdis` | Criar PDI | JWT |
+| PATCH | `/career-booster/pdis/{pdi_id}` | Atualizar PDI | JWT |
+
+### PATCH .../employees/\{member_id\}/profile
+
+<ParamField body="jobTitle" type="string">Cargo.</ParamField>
+<ParamField body="department" type="string">Departamento.</ParamField>
+<ParamField body="hiredAt" type="string">Data de contratação.</ParamField>
+<ParamField body="trackId" type="string">Trilha de carreira (`career_tracks`).</ParamField>
+<ParamField body="roleId" type="string">Cargo na trilha (`career_roles`).</ParamField>
+
+### POST .../employees/\{member_id\}/pdis
+
+<ParamField body="title" type="string" required>Título do PDI.</ParamField>
+<ParamField body="status" type="string">Status (opcional).</ParamField>
+<ParamField body="endDate" type="string">Prazo (opcional).</ParamField>
+<ParamField body="items" type="array">Itens do plano (opcional).</ParamField>
+<ParamField body="notes" type="string">Observações (opcional).</ParamField>

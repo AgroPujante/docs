@@ -1,0 +1,97 @@
+---
+title: "Modelos de dados"
+description: "Entidades do schema pujante agrupadas por domínio, extensões Postgres e busca vetorial"
+---
+
+Todas as tabelas vivem no schema **`pujante`** do Supabase Postgres (não no `public`). Em qualquer acesso via PostgREST, envie `Accept-Profile: pujante`.
+
+## Conteúdo editorial
+
+| Tabela | Papel |
+|---|---|
+| `posts` | Conteúdo central — notícia, artigo e julgado (campo de tipo), com status draft/published, slug, embedding vetorial |
+| `post_authors` | N:N posts ↔ autores (coautoria) |
+| `post_tags` | N:N posts ↔ tags |
+| `attachments` | Anexos de posts (arquivos para download) |
+| `categories` | Categorias editoriais (slug, usado em filtros) |
+| `tags` | Tags livres |
+| `columns` | Colunas editoriais (coluna fixa de um autor) |
+| `authors` | Autores editoriais (perfil público com slug e posts) |
+| `podcasts` | Episódios — sincronizados do YouTube via `youtube_video_id` (índice único) |
+| `books` | Livros recomendados/curados |
+
+<Note>
+Posts do tipo **julgado** são conteúdo editorial. Não confunda com a tabela `julgados` (itens de boletim) nem com a consulta de jurisprudência (jurisprudencias.ai) — veja a seção de jurisprudência abaixo.
+</Note>
+
+## Negócio (monetização e parceiros)
+
+| Tabela | Papel |
+|---|---|
+| `supporters` | Apoiadores/escritórios ativos (logo, bio) exibidos em `/apoiadores` |
+| `partners` | Parceiros institucionais |
+| `banners` | Banners por posição (`hero`, `top`, `bottom`, `sidebar`) |
+| `supporter_leads` | Leads do formulário de apoiador (name, email, office, phone, message) |
+| `site_subscriptions` | Assinaturas PRO/apoiador (status, billing_type — inclusive `MANUAL`) |
+| `site_subscription_events` | Trilha de eventos de assinatura (webhooks Asaas, mudanças de status) |
+| `credit_cards` | Tokens de cartão salvos via Asaas (nunca o PAN) |
+
+## Jurisprudência e boletins
+
+| Tabela | Papel |
+|---|---|
+| `boletins` | Boletins (PDF curado de julgados) — draft/published/archived, capa, PDF |
+| `julgados` | Julgados que compõem um boletim (um deles marcado como `sample_julgado` para usuários free) |
+| `juris_folders` | Pastas pessoais do usuário para organizar decisões encontradas na consulta |
+| `juris_folder_items` | Itens salvos dentro das pastas (referências a decisões dos tribunais) |
+
+## Newsletter e marketing
+
+| Tabela | Papel |
+|---|---|
+| `newsletter_subscribers` | Inscritos (insert público via PostgREST) |
+| `campaigns` | Campanhas de email (draft → test → send) |
+| `ads` | Anúncios de newsletter (newsletter-ads) |
+| `ratings` | Avaliações/NPS de campanhas |
+| `email_analytics` | Eventos de entrega/abertura/clique vindos do webhook Resend |
+
+## Administração
+
+| Tabela | Papel |
+|---|---|
+| `admin_users` | Mapeamento user → role (editor, gestor, administrador) — base do RBAC |
+| `api_keys` | Chaves read-only para acesso externo |
+| `password_reset_codes` | OTPs de reset de senha (6 dígitos, máx. 3 tentativas) |
+| `reserved_handles` | Handles reservados (não registráveis em `profiles`) |
+
+## Perfis e social
+
+| Tabela | Papel |
+|---|---|
+| `profiles` | Perfil público do usuário (handle, headline, bio, specialties, view_mode) |
+| `user_follows` | Relação de seguir entre usuários |
+
+## Analytics
+
+| Tabela | Papel |
+|---|---|
+| `post_views` | Visualizações de posts (base do trending e dos relatórios) |
+| `user_activities` | Atividades do usuário (leituras registradas, eventos de engajamento) |
+
+## Integrações
+
+| Tabela | Papel |
+|---|---|
+| `asaas_webhooks_log` | Log bruto dos webhooks Asaas (idempotência e auditoria) |
+| `noticias_coletadas` | Notícias agregadas por scraping (Playwright) para o digest |
+
+## Extensões Postgres
+
+<CardGroup cols={2}>
+  <Card title="uuid-ossp" icon="fingerprint">
+    Geração de UUIDs como chave primária padrão.
+  </Card>
+  <Card title="pgvector" icon="magnifying-glass-chart">
+    Coluna `embedding` (1536 dimensões) em posts, gerada com OpenAI `text-embedding-3-small`. Índice **HNSW** para busca semântica em `GET /search?semantic=true`.
+  </Card>
+</CardGroup>

@@ -1,0 +1,71 @@
+---
+title: "Visão geral"
+description: "O que é o AgroPujante, stack de produção e tipos de conteúdo do portal editorial"
+---
+
+O **AgroPujante** é o portal jurídico do agronegócio: um veículo de conteúdo editorial em produção com cerca de **3 mil visitas por dia**. Você está documentando um produto vivo — toda decisão técnica aqui assume tráfego real.
+
+<Warning>
+O AgroPujante **não é** uma landing page e **não é** a Escola Pujante. São projetos separados. O portal publica conteúdo editorial e vende assinatura PRO; a Escola é um LMS com mentoria, documentada em outra seção.
+</Warning>
+
+## Stack
+
+| Camada | Tecnologia |
+|---|---|
+| Frontend | React 19 + Vite + Tailwind 4 |
+| Backend | FastAPI (Python), base `/api/v1` |
+| Banco | Supabase Postgres, schema `pujante` |
+| Hospedagem | Railway (front e back) |
+| Servidor de borda do front | Express (`server.js`) — injeção de OG tags para bots + fallback de SPA |
+
+O frontend conversa com o backend FastAPI **e também** diretamente com o PostgREST do Supabase (anon key + RLS, header `Accept-Profile: pujante`) para leituras públicas simples. Os detalhes estão em [Arquitetura](/agropujante/arquitetura).
+
+## Tipos de conteúdo
+
+<CardGroup cols={2}>
+  <Card title="Notícia" icon="newspaper">
+    Conteúdo factual de acesso ilimitado. Não conta no paywall.
+  </Card>
+  <Card title="Artigo" icon="file-lines">
+    Conteúdo analítico assinado. Sujeito a access control — usuários free veem o início com blur.
+  </Card>
+  <Card title="Julgado" icon="gavel">
+    Post editorial que comenta uma decisão judicial. É conteúdo do blog, **não** é a consulta de jurisprudência.
+  </Card>
+  <Card title="Podcast" icon="podcast">
+    Episódios sincronizados a partir do YouTube (`youtube_video_id`).
+  </Card>
+  <Card title="Boletim" icon="file-pdf">
+    PDF curado de julgados, publicado periodicamente. Free vê um julgado de amostra; PRO vê tudo e baixa o PDF.
+  </Card>
+</CardGroup>
+
+## Jurisprudência ≠ julgados ≠ boletins
+
+Essa distinção causa confusão recorrente. São **três coisas distintas**:
+
+| Conceito | O que é | Onde vive |
+|---|---|---|
+| **Consulta de jurisprudência** | Busca de decisões em tribunais (STF, STJ, TRFs...) via integração com **jurisprudencias.ai** | `/jurisprudencia` no site, router `/jurisprudencia` na API |
+| **Julgados** | Posts **editoriais** (tipo de post) que comentam decisões | Tabela `posts` com `type=julgado` |
+| **Boletins** | PDFs **curados** de julgados, com gating PRO | Tabelas `boletins` + `julgados` |
+
+Quando alguém pedir algo sobre "jurisprudência", confirme qual dos três é o alvo antes de mexer.
+
+## Mapa da documentação
+
+<CardGroup cols={2}>
+  <Card title="Arquitetura" icon="sitemap" href="/agropujante/arquitetura">
+    Backend, frontend, OG proxy, cache, rate limiting e RLS.
+  </Card>
+  <Card title="Autenticação" icon="lock" href="/agropujante/autenticacao">
+    Supabase Auth, RBAC, API keys e o gotcha dos 2 pipelines de apoiador.
+  </Card>
+  <Card title="Modelos de dados" icon="database" href="/agropujante/modelos">
+    Entidades do schema `pujante` por domínio.
+  </Card>
+  <Card title="Fluxos de negócio" icon="diagram-project" href="/agropujante/fluxos">
+    Trial → PRO, apoiador, publicação, boletim e campanhas de email.
+  </Card>
+</CardGroup>

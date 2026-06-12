@@ -1,0 +1,88 @@
+---
+title: "Sistema"
+description: "Wiki de docs, knowledge base, permissões de menu, reconciliação e stubs da Onda 4"
+icon: "wrench"
+---
+
+## Docs wiki (`/docs`)
+
+Wiki interna armazenada em `doc_sections`.
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/docs` | Listar docs publicados | Público |
+| GET | `/docs/admin` | Listar todos (incl. rascunhos) | MANAGER |
+| GET | `/docs/{slug}` | Detalhe por slug | Público |
+| POST | `/docs` | Criar doc | MANAGER |
+| PATCH | `/docs/{doc_id}` | Atualizar doc | MANAGER |
+| DELETE | `/docs/{doc_id}` | Remover doc | MANAGER |
+| POST | `/docs/seed` | Seed da estrutura padrão | MANAGER |
+
+### POST /docs
+
+<ParamField body="slug" type="string" required>Slug único do documento.</ParamField>
+<ParamField body="title" type="string" required>Título.</ParamField>
+<ParamField body="parentSlug" type="string">Slug do documento pai (hierarquia).</ParamField>
+<ParamField body="content" type="string">Conteúdo.</ParamField>
+<ParamField body="published" type="boolean">Publicado.</ParamField>
+<ParamField body="sortOrder" type="number">Ordem de exibição.</ParamField>
+
+## Knowledge base (`/knowledge-base`)
+
+Base de conhecimento com embeddings (tabela `knowledge_base`).
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/knowledge-base/index` | Indexar documentos | MANAGER |
+| GET | `/knowledge-base/search` | Busca semântica | MANAGER |
+| GET | `/knowledge-base/stats` | Estatísticas de documentos | MANAGER |
+
+<Warning>
+Retornam **501 — não implementado**: `POST /knowledge-base/index` e `GET /knowledge-base/search`.
+</Warning>
+
+## Menu permissions (`/menu-permissions`)
+
+Matriz de itens de menu visíveis por tipo de usuário (tabela `menu_permissions`).
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/menu-permissions` | Matriz completa | ADMIN |
+| GET | `/menu-permissions/{user_type}` | Permissões de um tipo de usuário | JWT |
+| PUT | `/menu-permissions/{user_type}` | Substituir permissões do tipo | ADMIN |
+
+### PUT /menu-permissions/\{user_type\}
+
+<ParamField body="menuItemIds" type="string[]" required>Lista completa de IDs de itens de menu visíveis para o tipo — substitui a configuração anterior.</ParamField>
+
+## Reconciliation (`/admin/reconciliation`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/admin/reconciliation/run` | Disparar reconciliação manual | ADMIN |
+
+## Stubs da Onda 4
+
+<Warning>
+Os módulos abaixo existem apenas como **stubs** — todos os seus endpoints retornam **501 — não implementado**. Eles reservam o namespace para a Onda 4 da migração strangler.
+</Warning>
+
+| Prefixo | Domínio previsto |
+|---|---|
+| `/demands` | Demandas |
+| `/contacts` | Contatos |
+| `/negotiations` | Negociações |
+| `/opportunities` | Oportunidades |
+| `/companies` | Empresas |
+| `/centi` | NFSe Centi (Pires do Rio/GO) |
+| `/maps` | Mapas |
+| `/exordial` | Peças exordiais |
+| `/backups` | Backups |
+| `/entities` | Entidades |
+| `/contracts` | Contratos |
+| `/assessments` | Avaliações |
+| `/offers` | Ofertas |
+
+<Note>
+Enquanto os stubs não são implementados, as funcionalidades correspondentes (quando existem) continuam servidas pelo NestJS legado em `/api`.
+</Note>

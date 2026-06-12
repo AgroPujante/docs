@@ -1,0 +1,135 @@
+---
+title: "Variáveis de ambiente"
+description: "Nomes das variáveis de ambiente do frontend e do backend — valores ficam no Railway/Supabase, nunca na doc"
+---
+
+<Warning>
+Esta página documenta apenas os **nomes** das variáveis. Os valores vivem nos serviços do Railway e no painel do Supabase — nunca commite valores em repositório nem em documentação.
+</Warning>
+
+## Frontend (Vite)
+
+Variáveis `VITE_*` são embutidas no bundle — **nunca** coloque secrets aqui (a anon key é pública por design, protegida por RLS).
+
+<ParamField path="VITE_SUPABASE_URL" type="string" required>
+  URL do projeto Supabase (PostgREST direto do front).
+</ParamField>
+<ParamField path="VITE_SUPABASE_ANON_KEY" type="string" required>
+  Anon key do Supabase — pública, escopada por RLS no schema `pujante`.
+</ParamField>
+<ParamField path="VITE_SUPABASE_CDN_HOST" type="string">
+  Host Cloudflare opcional para image transforms; sem ele, imagens vêm direto do Supabase.
+</ParamField>
+<ParamField path="VITE_API_URL" type="string" required>
+  Base da API FastAPI (`/api/v1`).
+</ParamField>
+<ParamField path="VITE_SITE_URL" type="string" required>
+  URL canônica do site (links absolutos, OG).
+</ParamField>
+<ParamField path="VITE_POSTHOG_KEY" type="string">
+  Chave do PostHog no front.
+</ParamField>
+<ParamField path="VITE_POSTHOG_HOST" type="string">
+  Host do PostHog no front.
+</ParamField>
+
+## Backend (FastAPI)
+
+### Supabase
+
+<ParamField path="SUPABASE_URL" type="string" required>
+  URL do projeto Supabase.
+</ParamField>
+<ParamField path="SUPABASE_ANON_KEY" type="string" required>
+  Anon key (operações com escopo de visitante).
+</ParamField>
+<ParamField path="SUPABASE_SERVICE_ROLE_KEY" type="string" required>
+  Service role — bypassa RLS. Só no backend, nunca no front.
+</ParamField>
+<ParamField path="SUPABASE_JWT_SECRET" type="string" required>
+  Secret para validar JWTs do Supabase Auth.
+</ParamField>
+<ParamField path="SUPABASE_DB_SCHEMA" type="string" default="pujante">
+  Schema alvo das queries.
+</ParamField>
+
+### Integrações
+
+<ParamField path="OPENAI_API_KEY" type="string">
+  Embeddings (`text-embedding-3-small`) para busca semântica.
+</ParamField>
+<ParamField path="RESEND_API_KEY" type="string">
+  Envio de emails transacionais e campanhas.
+</ParamField>
+<ParamField path="ASAAS_API_KEY" type="string">
+  API de cobranças do Asaas.
+</ParamField>
+<ParamField path="ASAAS_BASE_URL" type="string">
+  Base da API Asaas (sandbox vs produção).
+</ParamField>
+<ParamField path="ASAAS_WEBHOOK_TOKEN" type="string">
+  Valor esperado no header `asaas-access-token` dos webhooks.
+</ParamField>
+<ParamField path="JURISPRUDENCIAS_AI_API_KEY" type="string">
+  Consulta de jurisprudência (tribunais/decisões).
+</ParamField>
+<ParamField path="GOOGLE_CLIENT_ID" type="string">
+  Validação do ID token no login Google.
+</ParamField>
+
+### PostHog
+
+<ParamField path="POSTHOG_API_KEY" type="string">
+  Captura server-side.
+</ParamField>
+<ParamField path="POSTHOG_HOST" type="string">
+  Host do PostHog.
+</ParamField>
+<ParamField path="POSTHOG_ENABLED" type="boolean">
+  Kill switch — desliga a captura no backend sem deploy.
+</ParamField>
+
+### Comportamento da API
+
+<ParamField path="ALLOWED_ORIGINS" type="string">
+  Origens permitidas no CORS.
+</ParamField>
+<ParamField path="DEBUG" type="boolean">
+  Modo debug (nunca `true` em produção).
+</ParamField>
+<ParamField path="RATE_LIMIT_PER_MINUTE" type="number">
+  Limite global do slowapi por IP.
+</ParamField>
+<ParamField path="FRONTEND_URL" type="string">
+  URL do front (links em emails, redirects).
+</ParamField>
+<ParamField path="API_URL" type="string">
+  URL pública da própria API.
+</ParamField>
+
+### Integração com a Escola Pujante
+
+<ParamField path="ESCOLA_API_URL" type="string">
+  Base da API da Escola.
+</ParamField>
+<ParamField path="ESCOLA_FRONTEND_URL" type="string">
+  Front da Escola (handoff).
+</ParamField>
+<ParamField path="ESCOLA_INTERNAL_API_TOKEN" type="string">
+  Token inter-service para trial sync — secret de máquina.
+</ParamField>
+<ParamField path="ESCOLA_TRIAL_DURATION_DAYS" type="number">
+  Duração do trial sincronizado.
+</ParamField>
+
+### Notificações operacionais
+
+<ParamField path="REVIEW_NOTIFICATION_EMAIL" type="string">
+  Destino das notificações de submission para review.
+</ParamField>
+<ParamField path="LEAD_NOTIFICATION_EMAIL" type="string">
+  Destino das notificações de lead de apoiador.
+</ParamField>
+<ParamField path="NOTICIAS_DIGEST_RECIPIENTS" type="string">
+  Destinatários do digest de notícias coletadas.
+</ParamField>

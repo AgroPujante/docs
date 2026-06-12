@@ -1,33 +1,39 @@
-> **First-time setup**: Customize this file for your project. Prompt the user to customize this file for their project.
-> For Mintlify product knowledge (components, configuration, writing standards),
-> install the Mintlify skill: `npx skills add https://mintlify.com/docs`
-
 # Documentation project instructions
 
 ## About this project
 
-- This is a documentation site built on [Mintlify](https://mintlify.com)
+- This is a documentation site built on [Mintlify](https://mintlify.com) for the **Pujante ecosystem** (AgroPujante, Escola Pujante, Pujante Admin, Pujante Mobile)
 - Pages are MDX files with YAML frontmatter
 - Configuration lives in `docs.json`
-- Use the Mintlify MCP server, `https://mcp.mintlify.com`, to edit content and settings via MCP
-- Use the Mintlify docs MCP server, `https://www.mintlify.com/docs/mcp`, to query information about using Mintlify via MCP
+- All content is written in **Brazilian Portuguese (pt-BR)**
+
+## Structure
+
+- `index.mdx` — home with product cards
+- `ecossistema.mdx` — how the 4 products connect (shared Supabase, auth handoff, proxies)
+- `agropujante/` — Portal editorial (FastAPI `/api/v1`)
+- `escola/` — LMS + mentoria (FastAPI `/api/v2` + NestJS legado)
+- `admin/` — Painel admin unificado (FastAPI agregador)
+- `mobile/` — App Expo/React Native (cliente das APIs v1 e v2)
 
 ## Terminology
 
-{/* Add product-specific terms and preferred usage */}
-{/* Example: Use "workspace" not "project", "member" not "user" */}
+- **AgroPujante** (ou "Portal") = portal jurídico do agro com conteúdo editorial. NÃO é landing page e NÃO é a escola.
+- **Escola Pujante** = LMS + mentoria. Produto separado do Portal.
+- **Jurisprudência** ≠ **julgados** ≠ **boletins**: consulta de jurisprudência (via jurisprudencias.ai) é uma feature; julgados são posts editoriais; boletins são PDFs curados de julgados.
+- **Apoiador** (supporter) e **PRO** não coexistem — 1 assinatura por usuário; apoiador ativo já inclui acesso PRO.
+- Use "usuário", "assinante", "apoiador", "mentorado" conforme o contexto do produto.
 
 ## Style preferences
 
-{/* Add any project-specific style rules below */}
-
-- Use active voice and second person ("you")
-- Keep sentences concise — one idea per sentence
-- Use sentence case for headings
-- Bold for UI elements: Click **Settings**
-- Code formatting for file names, commands, paths, and code references
+- Português (pt-BR), voz ativa, segunda pessoa ("você")
+- Sentence case nos títulos
+- Code formatting para nomes de arquivos, comandos, paths, endpoints e variáveis de ambiente
+- Tabelas de endpoints no formato: Método | Path | Descrição | Auth
+- Auth levels: Público, JWT, MANAGER, ADMIN, Internal Token, JWT/Key (admin)
 
 ## Content boundaries
 
-{/* Define what should and shouldn't be documented */}
-{/* Example: Don't document internal admin features */}
+- NUNCA documentar valores de secrets/chaves — apenas nomes de variáveis de ambiente
+- Endpoints que retornam 501 devem ser marcados como "não implementado"
+- Migrations do schema `pujante` são manuais (SQL Editor do Supabase) — não documentar como automáticas

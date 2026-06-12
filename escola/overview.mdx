@@ -1,0 +1,60 @@
+---
+title: "Visão geral"
+description: "O que é a Escola Pujante: LMS, mentoria e operação financeira em uma única plataforma"
+icon: "graduation-cap"
+---
+
+A **Escola Pujante** é o aplicativo web que concentra três frentes do ecossistema Pujante:
+
+<CardGroup cols={3}>
+  <Card title="LMS" icon="book-open">
+    Trilhas, cursos, aulas em vídeo, materiais, professores, agentes de IA por aula, progresso e certificados.
+  </Card>
+  <Card title="Mentoria" icon="users">
+    Acompanhamento de mentorados (GDA): testes DISC e socioemocionais, planos de ação, tarefas mensais e Career Booster para escritórios.
+  </Card>
+  <Card title="Financeiro" icon="chart-line">
+    Assinaturas (Asaas/PagarMe), checkout, cupons, dashboards de receita, inadimplência e emissão de NFSe via Bling.
+  </Card>
+</CardGroup>
+
+Além disso, a plataforma inclui módulos editoriais (notícias com scraper e geração de artigos), comunicação (campanhas de email, notificações, calendário, WhatsApp) e ferramentas de sistema (wiki de docs, base de conhecimento, permissões de menu).
+
+## Stack
+
+| Camada | Tecnologias |
+|---|---|
+| Frontend | React 19.1.1, React Router 7.8.0, Vite 7.1.2, TypeScript ~5.9.2 (strict), TailwindCSS 4.1.12, Headless UI 2.2.7, Axios, Supabase JS SDK 2.105.3 |
+| Backend novo | FastAPI 0.115.6 + Uvicorn, Pydantic 2.10.4, Supabase Python client (PostgREST, sem ORM), PyJWT 2.10.1 + Cryptography (JWKS ES256), APScheduler 3.11.0, httpx |
+| Backend legado | NestJS em `/api/*` (billing PagarMe/Asaas, alguns webhooks e operações pesadas) |
+| Banco | Supabase PostgreSQL, schema `pujante`, 81+ tabelas (padrão legado: `id` text) |
+
+<Note>
+O backend está em migração via padrão **strangler**: o FastAPI serve a API nova em `/api/v2` enquanto o NestJS legado continua respondendo em `/api`. Veja os detalhes em [Arquitetura](/escola/arquitetura).
+</Note>
+
+## Domínios e ambientes
+
+| Ambiente | API | Observação |
+|---|---|---|
+| Produção | `https://api.escolapujante.com.br/api/v2` | Swagger/ReDoc desativados (`DEBUG=false`) |
+| Desenvolvimento | `http://localhost:8767/api/v2` | OpenAPI em `/api/openapi.json`, Swagger em `/api/docs`, ReDoc em `/api/redoc` (apenas com `DEBUG=true`) |
+
+O frontend aponta para a API através da variável `VITE_API_BASE_URL`.
+
+## Para onde ir
+
+<CardGroup cols={2}>
+  <Card title="Arquitetura" icon="sitemap" href="/escola/arquitetura">
+    Padrão strangler, estrutura de pastas, padrão de resposta e scheduler.
+  </Card>
+  <Card title="Autenticação" icon="lock" href="/escola/autenticacao">
+    Supabase Auth, JWKS ES256, roles e impersonação.
+  </Card>
+  <Card title="Modelos" icon="database" href="/escola/modelos">
+    Entidades do schema `pujante` por domínio.
+  </Card>
+  <Card title="API v2" icon="code" href="/escola/api/auth">
+    Referência completa de endpoints por módulo.
+  </Card>
+</CardGroup>

@@ -1,0 +1,56 @@
+---
+title: "API: monetização"
+description: "Assinaturas PRO, checkout de apoiador, tokens de cartão, créditos e leads de apoiador"
+---
+
+Base: `/api/v1`. Pagamentos via **Asaas** — ver [Integrações](/agropujante/integracoes#asaas-pagamentos).
+
+## Subscriptions (`/subscriptions`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/subscriptions/plans` | Planos PRO — mensal, trimestral, anual (com desconto) | Público |
+| POST | `/subscriptions/checkout` | Cria checkout no Asaas (PIX/cartão) | JWT |
+| POST | `/subscriptions/webhook` | Webhook Asaas — valida header `asaas-access-token` | Público (token) |
+| POST | `/subscriptions/cancel` | Cancela a assinatura | JWT |
+
+Pagamento confirmado → `site_subscriptions.status = active` + `users.is_subscriber = true` + evento em `site_subscription_events`. Fluxo completo em [Trial → PRO](/agropujante/fluxos#trial-pro).
+
+## Supporter checkout (`/supporter-checkout`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/supporter-checkout/plans` | Planos de apoiador/escritório | Público |
+| POST | `/supporter-checkout/checkout` | Checkout PIX ou CREDIT_CARD | JWT |
+| GET | `/supporter-checkout/status` | O usuário é apoiador? | JWT |
+| GET | `/supporter-checkout/upgrade-preview` | Opções de upgrade para PRO | JWT |
+
+<Warning>
+Apoiador e PRO **não coexistem** (1 assinatura por usuário). Supporter ativo já carrega acesso PRO via `users.is_subscriber` — não crie uma segunda assinatura.
+</Warning>
+
+## Card tokens (`/card-tokens`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/card-tokens` | Tokeniza cartão no Asaas (PAN nunca é persistido) | JWT |
+| GET | `/card-tokens` | Cartões salvos do usuário | JWT |
+
+## Credits (`/credits`)
+
+Saldo de gamificação do usuário.
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/credits/balance` | Saldo atual | JWT |
+| POST | `/credits/log` | Registra evento de crédito | JWT |
+
+## Supporter leads (`/supporter-leads`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/supporter-leads` | Formulário de lead (name, email, office, phone, message) | Público |
+| GET | `/supporter-leads` | Lista leads | admin+ |
+| DELETE | `/supporter-leads/{lead_id}` | Remove lead | admin+ |
+
+Cada lead novo notifica a equipe via `LEAD_NOTIFICATION_EMAIL`.

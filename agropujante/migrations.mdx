@@ -1,0 +1,48 @@
+---
+title: "Migrations"
+description: "Convenção NNN_description.sql, aplicação manual no SQL Editor do Supabase e arquivos dryrun"
+---
+
+<Warning>
+O AgroPujante **não tem runner automático de migrations**. Nada roda no deploy. Toda migration é aplicada **à mão** no SQL Editor do Supabase, **antes** do deploy do código que depende dela. Se você esquecer, o backend novo sobe contra um schema antigo.
+</Warning>
+
+## Convenção
+
+- Arquivos em `backend/migrations/`, nomeados `NNN_description.sql` (numeração sequencial com zero à esquerda): `017_add_youtube_video_id.sql`.
+- O número define a ordem de aplicação; a descrição diz o que muda.
+- Schema alvo: `pujante` (qualifique as tabelas ou ajuste o `search_path` no script).
+
+## Fluxo de aplicação
+
+<Steps>
+  <Step title="Escreva a migration">
+    Crie `backend/migrations/NNN_description.sql`. Prefira DDL idempotente (`IF NOT EXISTS`, `IF EXISTS`) — como a aplicação é manual, reexecução acidental acontece.
+  </Step>
+  <Step title="Teste com dryrun">
+    Crie um `NNN_description.dryrun.sql` correspondente: o mesmo DDL envolto em `BEGIN; ... ROLLBACK;`, com SELECTs de verificação no meio. Rode o dryrun primeiro no SQL Editor para validar contra os dados reais sem efeito permanente.
+  </Step>
+  <Step title="Aplique em produção">
+    Rode a migration real no SQL Editor do Supabase. Confira o resultado (constraints, índices, contagens).
+  </Step>
+  <Step title="Só então faça o deploy">
+    Com o schema atualizado, suba o código no Railway.
+  </Step>
+</Steps>
+
+## Caso real: migration 017 (youtube_video_id)
+
+A 017 adicionou `youtube_video_id` em `podcasts` com **índice único**. A criação do índice falhou na primeira tentativa porque existiam **podcasts duplicados** em produção — foi preciso limpar os duplicados antes de criar a constraint.
+
+Lição: migrations que criam unicidade sobre dados existentes precisam de uma etapa prévia de saneamento, e é exatamente isso que o `.dryrun.sql` pega antes de você quebrar produção.
+
+<Note>
+A 017 foi aplicada em produção em 2026-06-02, seguindo esse fluxo (limpeza de duplicados → índice único → deploy).
+</Note>
+
+## Boas práticas para este projeto
+
+- **Nunca** confie que "o deploy aplica" — não aplica.
+- Dados grandes: faça backfill em batches dentro da migration ou em script separado; o SQL Editor tem timeout.
+- Mudanças destrutivas: rode primeiro em transação com `ROLLBACK` e confira os SELECTs de verificação.
+- Mantenha o número sequencial mesmo para hotfixes — a ordem dos arquivos é a única fonte de verdade do histórico do schema.

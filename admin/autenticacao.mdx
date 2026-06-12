@@ -1,0 +1,95 @@
+---
+title: "Autenticação e autorização"
+description: "JWT Supabase, API Keys read-only, RBAC por cargo e trilha de auditoria do Pujante Admin."
+---
+
+A API aceita dois mecanismos de autenticação. Na documentação dos endpoints, a coluna **Auth** indica qual vale:
+
+- **JWT/Key** — aceita JWT Bearer **ou** API Key read-only (somente `GET`).
+- **JWT** — exige JWT Bearer (toda escrita e endpoints sensíveis).
+
+## JWT Bearer (Supabase)
+
+O fluxo principal é o login via Supabase Auth no frontend. O backend valida o token assim:
+
+1. Busca as chaves públicas no JWKS do Supabase (`JWT_JWKS_URL`), aceitando algoritmos **ES256** e **RS256**.
+2. Valida a audience `authenticated` (`JWT_AUDIENCE`).
+3. Confere se o email do token está em `ALLOWED_ADMIN_EMAILS` — quem não está na lista recebe 403, mesmo com token válido.
+
+```http
+GET /admin/overview HTTP/1.1
+Authorization: Bearer <jwt-do-supabase>
+```
+
+<Note>
+Em desenvolvimento existe um **debug mode** que relaxa a validação para facilitar testes locais. Ele nunca deve estar ativo em produção.
+</Note>
+
+## API Key read-only
+
+Para integrações externas e dashboards de terceiros, você pode emitir API keys que dão acesso **somente leitura**:
+
+- Enviadas via header `X-API-Key` ou query string `?api_key=`.
+- Valem apenas para requisições `GET`. Qualquer `POST`, `PUT`, `PATCH` ou `DELETE` com API key responde **403**.
+- São armazenadas (com hash) na tabela `pujante.admin_api_keys`.
+
+### Ciclo de vida das chaves
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/admin/api-keys` | Cria chave; o valor em claro aparece **só nessa resposta** | JWT |
+| GET | `/admin/api-keys` | Lista chaves sem o segredo (prefixo + metadados) | JWT |
+| DELETE | `/admin/api-keys/{key_id}` | Revoga a chave (`?reason` opcional) | JWT |
+
+<ParamField body="name" type="string" required>
+Nome descritivo da chave (ex.: `dashboard-financeiro-externo`).
+</ParamField>
+
+<ParamField body="expires_at" type="string">
+Data de expiração (ISO 8601). Omitida = sem expiração.
+</ParamField>
+
+<Warning>
+Guarde a chave no momento da criação — ela não pode ser recuperada depois. Nunca commit a chave em repositório nem a inclua em documentação.
+</Warning>
+
+## RBAC: cargos do painel
+
+A autorização fina vem da tabela `pujante.admin_panel_members` (email como PK, cargo, criado_por). Cargos disponíveis:
+
+| Cargo | Acesso típico |
+|---|---|
+| `administrador` | Tudo, incluindo gestão de membros e logs |
+| `editorial` | Áreas de conteúdo e operação |
+| `financeiro` | Dashboards e operação financeira |
+| `auditoria` | Leitura dos logs de atividade |
+
+### Auto-provisionamento
+
+Na primeira chamada a `GET /admin/panel-access/me`, se o email do JWT (que já passou pelo gate de `ALLOWED_ADMIN_EMAILS`) ainda não tem registro, o backend provisiona o usuário de forma assíncrona: cria a linha em `admin_panel_members`, em `admin_users` e vincula `users.supabase_auth_id`.
+
+### Endpoints de panel access
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/admin/panel-access/me` | Cargo do usuário logado (auto-provisiona no primeiro acesso) | JWT |
+| GET | `/admin/panel-access/members` | Lista membros do painel | JWT (administrador) |
+| POST | `/admin/panel-access/members` | Adiciona membro `{email, cargo}` | JWT |
+| DELETE | `/admin/panel-access/members/{member_id}` | Remove membro | JWT |
+| GET | `/admin/panel-access/logs` | Últimas 200 atividades | JWT (administrador ou auditoria) |
+| POST | `/admin/panel-access/log-login` | Registra um acesso ao painel | JWT |
+
+## Auditoria
+
+Toda ação relevante (escritas via proxy, logins, operações administrativas) é registrada em `pujante.admin_activity_log` com: `actor_email`, `action`, `detail`, `entity_type`, `entity_id`, `payload` (jsonb) e `at`. O registro é assíncrono — não adiciona latência à requisição.
+
+## Resumo rápido
+
+<Tabs>
+  <Tab title="Usuário do painel">
+    Login Supabase no frontend → JWT Bearer em toda chamada → email precisa estar em `ALLOWED_ADMIN_EMAILS` → cargo em `admin_panel_members` define o que pode fazer.
+  </Tab>
+  <Tab title="Integração externa">
+    Peça a um administrador para criar uma API key → use `X-API-Key` (ou `?api_key=`) → somente `GET` nos endpoints marcados JWT/Key → escrita responde 403.
+  </Tab>
+</Tabs>

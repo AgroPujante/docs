@@ -1,0 +1,88 @@
+---
+title: "API: marketing e site"
+description: "Newsletter, campanhas admin, ads, banners, apoiadores, parceiros, eventos, ticker, redirects e OG/SEO"
+---
+
+Base: `/api/v1`.
+
+## Newsletter pública (`/newsletter`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/newsletter/subscribe` | Inscreve email | Público |
+| POST | `/newsletter/unsubscribe` | Remove inscrição | Público |
+| GET | `/newsletter` | Status de inscrição do usuário | JWT |
+
+## Admin newsletters (`/admin/newsletters`)
+
+Gestão completa de campanhas — ciclo draft → test → send → tracking (ver [fluxo de campanha](/agropujante/fluxos#campanha-de-email)). Tudo admin+.
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/admin/newsletters` | Cria campanha | admin+ |
+| GET | `/admin/newsletters` | Lista paginada | admin+ |
+| GET | `/admin/newsletters/{id}` | Detalhe | admin+ |
+| PATCH | `/admin/newsletters/{id}` | Edita | admin+ |
+| DELETE | `/admin/newsletters/{id}` | Remove | admin+ |
+| POST | `/admin/newsletters/{id}/test` | Envia email de teste | admin+ |
+| POST | `/admin/newsletters/{id}/send-custom` | Envia para lista custom | admin+ |
+| POST | `/admin/newsletters/{id}/send` | Enfileira para a lista | admin+ |
+| POST | `/admin/newsletters/{id}/cancel` | Cancela envio em andamento | admin+ |
+| GET | `/admin/newsletters/{id}/pdf` | Preview em PDF | admin+ |
+| POST | `/admin/newsletters/{id}/generate-boletim-pdf` | Gera PDF de boletim para a campanha | admin+ |
+| GET | `/admin/newsletters/{id}/analytics` | Open/click da campanha | admin+ |
+| GET | `/admin/newsletters/{id}/ratings` | NPS da campanha | admin+ |
+| GET | `/admin/newsletters/{id}/top-links` | Links mais clicados | admin+ |
+| GET | `/admin/newsletters/recipients/preview` | Preview dos destinatários | admin+ |
+| GET | `/admin/newsletters/analytics/overview` | Visão geral de analytics | admin+ |
+| GET | `/admin/newsletters/analytics/summary` | Resumo agregado | admin+ |
+
+## Newsletter ads (`/admin/newsletter-ads`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/admin/newsletter-ads` | Cria anúncio | admin+ |
+| GET | `/admin/newsletter-ads` | Lista | admin+ |
+| GET | `/admin/newsletter-ads/stats` | Estatísticas | admin+ |
+| GET | `/admin/newsletter-ads/{ad_id}` | Detalhe | admin+ |
+| PATCH | `/admin/newsletter-ads/{ad_id}` | Edita | admin+ |
+| DELETE | `/admin/newsletter-ads/{ad_id}` | Remove | admin+ |
+
+## Vitrine do site
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/banners` | Banners ativos por posição (`hero`/`top`/`bottom`/`sidebar`) | Público |
+| POST/PATCH/DELETE | `/banners`, `/banners/{id}` | CRUD | admin+ |
+| GET | `/supporters` | Apoiadores ativos (logo + bio, página `/apoiadores`) | Público |
+| POST/PATCH/DELETE | `/supporters`, `/supporters/{id}` | CRUD | admin+ |
+| GET | `/partners` | Parceiros | Público |
+| POST/PATCH/DELETE | `/partners`, `/partners/{id}` | CRUD | admin+ |
+
+## Events (`/events`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/events` | Eventos publicados | Público |
+| POST | `/events` | Cria | admin+ |
+| GET | `/events/{event_id}` | Detalhe | Público |
+| PATCH | `/events/{event_id}` | Edita | admin+ |
+| DELETE | `/events/{event_id}` | Remove | admin+ |
+
+## Ticker (`/ticker`)
+
+Snapshots de cotações/mercado exibidos no ticker do site.
+
+## Redirects (`/r/{tracking_code}`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/r/{tracking_code}` | Redirect público com tracking UTM (links de campanha) | Público |
+
+## OG/SEO (`/og`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/og/{type}/{slug}` | HTML com OG tags para bots (`noticia`/`artigo`/`julgado`); 301 para slugs antigos | Público |
+
+Consumido pelo `server.js` Express quando detecta crawler — ver [Arquitetura](/agropujante/arquitetura#serverjs-og-proxy-e-spa-fallback).

@@ -1,0 +1,53 @@
+---
+title: "API: auth e usuários"
+description: "Endpoints de autenticação, usuários, perfis públicos e reset de senha"
+---
+
+Base: `/api/v1`. Roles: ver [Autenticação](/agropujante/autenticacao).
+
+## Auth (`/auth`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/auth/login` | Email/senha → `{access_token, refresh_token, user}` | Público |
+| POST | `/auth/refresh` | Renova o par de tokens | Público |
+| POST | `/auth/logout` | Invalida a sessão | JWT |
+| GET | `/auth/me` | Usuário atual | JWT |
+
+## Users (`/users`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/users/register` | Registro de conta | Público |
+| POST | `/users/login` | Login alternativo | Público |
+| POST | `/users/google-login` | OAuth Google | Público |
+| GET | `/users/profile` | Perfil do usuário logado | JWT |
+| PATCH | `/users/profile` | Atualiza headline, bio, specialties... | JWT |
+| GET | `/users/access-check` | Checa acesso a conteúdo gated (paywall) | JWT |
+| POST | `/users/track-read` | Registra leitura de post | JWT |
+| GET | `/users/saved-posts` | Posts salvos | JWT |
+| POST | `/users/saved-posts/{post_id}` | Salva um post | JWT |
+| DELETE | `/users/saved-posts/{post_id}` | Remove dos salvos | JWT |
+
+<Warning>
+Antes de depurar falha de login de **apoiador**, leia o [gotcha dos 2 pipelines](/agropujante/autenticacao#gotcha-os-2-pipelines-de-auth-de-apoiador): contas com `password_hash = 'supabase_managed'` não logam por senha do portal.
+</Warning>
+
+## Profiles (`/profiles`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/profiles/handle-available?handle=` | Verifica unicidade do handle (considera `reserved_handles`) | Público |
+| GET | `/profiles/by-handle/{handle}` | Perfil público — `view_mode` controla o que aparece (`owner`/`full`/`reduced`/`private`) | Público |
+
+## Password reset (`/password-reset`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/password-reset/request` | Envia OTP de 6 dígitos por email | Público |
+| POST | `/password-reset/verify` | Valida o OTP (máx. 3 tentativas) | Público |
+| POST | `/password-reset/confirm` | Define a nova senha | Público |
+
+<Note>
+O reset cobre apenas o pipeline Supabase Auth ou o portal-nativo correspondente à conta — resetar em um mundo não destrava o outro.
+</Note>

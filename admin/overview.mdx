@@ -1,0 +1,63 @@
+---
+title: "Visão geral"
+description: "O que é o Pujante Admin: painel administrativo unificado do AgroPujante e da Escola Pujante."
+---
+
+O **Pujante Admin** é o painel administrativo unificado dos produtos Pujante. Ele consolida em um único lugar os dados do **AgroPujante** (portal) e da **Escola Pujante** (LMS): receita, assinantes, funil, marketing, observabilidade e operação do time.
+
+A filosofia do projeto é ser um **agregador read-mostly**:
+
+- **Leitura agregada** — o backend lê direto do Supabase (schema `pujante`), de materialized views otimizadas e de APIs externas (Meta Marketing API, New Relic), consolidando tudo em endpoints prontos para os dashboards.
+- **Escrita delegada** — operações de escrita que pertencem aos produtos (como criar lançamentos) são **delegadas via HTTP** aos backends de origem (AgroPujante ou Escola). O Admin só escreve diretamente nas suas próprias tabelas operacionais (`admin_*`, `gantt_*`, `custos`, `cobranca_notes`).
+
+<Note>
+O Admin também é a casa do **Gantt** de gestão do time, com a hierarquia Time &gt; Projeto &gt; Pessoa &gt; Task. Veja [API do Gantt](/admin/api/gantt).
+</Note>
+
+## Stack
+
+<CardGroup cols={2}>
+  <Card title="Backend" icon="server">
+    **FastAPI** (Python) com APScheduler para jobs de refresh de materialized views e sync do Meta Ads.
+  </Card>
+  <Card title="Frontend" icon="browser">
+    **React 19** + **Vite**, dados com **TanStack Query** e estilo com **Tailwind 4**.
+  </Card>
+  <Card title="Dados" icon="database">
+    **Supabase (PostgreSQL)**, schema `pujante`: materialized views `admin_mv_*`, tabelas `admin_*` e `gantt_*`, além das tabelas do Site e da Escola.
+  </Card>
+  <Card title="Integrações" icon="plug">
+    **Meta Marketing API** (anúncios) e **New Relic NerdGraph** (observabilidade) — ambas opt-in por variável de ambiente.
+  </Card>
+</CardGroup>
+
+## Deploy
+
+O deploy roda no **Railway**. Backend e frontend sobem como serviços do projeto, configurados inteiramente por variáveis de ambiente — veja [Variáveis de ambiente](/admin/variaveis-ambiente).
+
+## Como navegar nesta seção
+
+<CardGroup cols={2}>
+  <Card title="Arquitetura" icon="diagram-project" href="/admin/arquitetura">
+    Agregação de dados, proxy HTTP, delegação de escrita e refresh de MVs.
+  </Card>
+  <Card title="Autenticação" icon="lock" href="/admin/autenticacao">
+    JWT Supabase, API Keys read-only, RBAC por cargo e auditoria.
+  </Card>
+  <Card title="API: dashboards" icon="chart-line" href="/admin/api/dashboards">
+    Overview, financeiro, assinantes, funil, marketing, Meta Ads, observabilidade.
+  </Card>
+  <Card title="API: operacional" icon="clipboard-list" href="/admin/api/operacional">
+    Tickets, reuniões, acessos do painel, custos, API keys, launches e proxy.
+  </Card>
+  <Card title="API: Gantt" icon="bars-staggered" href="/admin/api/gantt">
+    Times, pessoas, macros, subs, membros e timeline de eventos.
+  </Card>
+  <Card title="Variáveis de ambiente" icon="gear" href="/admin/variaveis-ambiente">
+    Configuração completa, incluindo comportamento dos opt-ins vazios.
+  </Card>
+</CardGroup>
+
+<Note>
+A API não tem rate limiting implementado hoje. Se você expõe uma API key para integrações externas, trate o consumo com responsabilidade no cliente.
+</Note>

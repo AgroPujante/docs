@@ -1,0 +1,73 @@
+---
+title: "Auth"
+description: "Registro, login, Google Sign-In, reset de senha por OTP, impersonação e handoff"
+icon: "key"
+---
+
+Base: `/api/v2/auth`. Entenda o fluxo completo em [Autenticação](/escola/autenticacao).
+
+## Endpoints de auth
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/auth/register` | Criar conta + Supabase Auth | Público |
+| POST | `/auth/login` | Login com senha | Público |
+| POST | `/auth/google` | Google Sign-In | Público |
+| POST | `/auth/forgot-password` | Enviar código de reset | Público |
+| POST | `/auth/change-password` | Trocar senha (logado) | JWT |
+| POST | `/auth/check-email` | Pré-login: email existe? | Público |
+| POST | `/auth/set-password` | Definir senha sem a anterior | Público |
+| POST | `/auth/impersonate` | Admin impersona usuário | ADMIN |
+| POST | `/auth/handoff-link` | Magic link via AgroPujante | Internal Token |
+| POST | `/auth/sync-password` | Sincronizar senha entre sistemas | JWT |
+
+## Password reset (OTP)
+
+Fluxo em três passos sob `/auth/password-reset`:
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/auth/password-reset/request` | Gerar e enviar OTP por email | Público |
+| POST | `/auth/password-reset/verify` | Validar OTP → reset token | Público |
+| POST | `/auth/password-reset/confirm` | Consumir reset token + trocar senha | Público |
+
+## Detalhes dos principais endpoints
+
+### POST /auth/register
+
+<ParamField body="email" type="string" required>Email do novo usuário.</ParamField>
+<ParamField body="password" type="string" required>Senha inicial.</ParamField>
+<ParamField body="name" type="string" required>Nome completo.</ParamField>
+<ParamField body="utm" type="object">Parâmetros UTM de origem (opcional).</ParamField>
+
+### POST /auth/login
+
+<ParamField body="email" type="string" required>Email cadastrado.</ParamField>
+<ParamField body="password" type="string" required>Senha.</ParamField>
+
+### POST /auth/google
+
+<ParamField body="credential" type="string" required>Credential JWT retornado pelo Google Sign-In.</ParamField>
+<ParamField body="utm" type="object">Parâmetros UTM de origem (opcional).</ParamField>
+
+### POST /auth/impersonate
+
+<ParamField body="memberId" type="string" required>ID do member a impersonar. Retorna um JWT emitido pelo backend, que o frontend guarda em `sessionStorage` com precedência sobre o token Supabase.</ParamField>
+
+### POST /auth/handoff-link
+
+<ParamField body="email" type="string" required>Email do usuário para o qual gerar o magic link de transição AgroPujante → Escola.</ParamField>
+
+<Note>
+Exige header com o `INTERNAL_API_TOKEN` — não use a partir do frontend.
+</Note>
+
+### POST /auth/password-reset/verify
+
+<ParamField body="email" type="string" required>Email que recebeu o OTP.</ParamField>
+<ParamField body="code" type="string" required>Código OTP de 6 dígitos. Em caso de sucesso, retorna um `resetToken` de uso único.</ParamField>
+
+### POST /auth/password-reset/confirm
+
+<ParamField body="resetToken" type="string" required>Token obtido no passo `verify`.</ParamField>
+<ParamField body="newPassword" type="string" required>Nova senha.</ParamField>

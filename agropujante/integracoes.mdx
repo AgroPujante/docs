@@ -1,0 +1,69 @@
+---
+title: "Integrações"
+description: "Asaas, Resend, OpenAI, YouTube, jurisprudencias.ai, Google OAuth, PostHog, Cloudflare e Escola Pujante"
+---
+
+## Asaas — pagamentos
+
+Gateway de pagamento de assinaturas PRO e de apoiador.
+
+- **Checkout**: `POST /subscriptions/checkout` e `POST /supporter-checkout/checkout` criam cobranças PIX ou cartão de crédito. Cartões são tokenizados via `/card-tokens` (o PAN nunca toca o backend além da tokenização).
+- **Webhooks**: `POST /subscriptions/webhook` e `POST /webhooks/asaas` recebem eventos de pagamento. Cada request valida o header `asaas-access-token` contra `ASAAS_WEBHOOK_TOKEN`; eventos são logados em `asaas_webhooks_log` antes do processamento.
+- Variáveis: `ASAAS_API_KEY`, `ASAAS_BASE_URL`, `ASAAS_WEBHOOK_TOKEN`.
+
+## Resend — emails
+
+Todo email transacional e de campanha sai pelo Resend.
+
+- Transacionais: OTP de reset de senha, notificações de review (`REVIEW_NOTIFICATION_EMAIL`), notificações de lead (`LEAD_NOTIFICATION_EMAIL`), digest de notícias (`NOTICIAS_DIGEST_RECIPIENTS`).
+- Campanhas: enfileiradas via `/admin/newsletters` (teste, lista custom ou lista completa).
+- **Webhook**: `POST /webhooks/resend` recebe eventos de entrega/abertura/clique e alimenta `email_analytics` (base do dashboard de analytics de campanha).
+- Variável: `RESEND_API_KEY`.
+
+## OpenAI — embeddings e busca semântica
+
+- Posts recebem embedding de 1536 dimensões com `text-embedding-3-small`, armazenado em coluna pgvector com índice HNSW.
+- `GET /search?semantic=true` combina busca fuzzy full-text com similaridade vetorial.
+- Variável: `OPENAI_API_KEY`.
+
+## YouTube — sync de podcasts
+
+Episódios de podcast são sincronizados a partir do canal no YouTube. Cada episódio carrega `youtube_video_id` com **índice único** (a migration 017 que criou esse índice exigiu limpar duplicados antes — veja [Migrations](/agropujante/migrations)).
+
+## jurisprudencias.ai — consulta de jurisprudência
+
+Provedor externo da **consulta de jurisprudência** (`/jurisprudencia` no site): lista de tribunais (STF, STJ, TRFs, TJs por estado), busca de decisões e detalhe de cada decisão.
+
+<Note>
+Essa integração alimenta a **consulta** de jurisprudência — não tem relação com posts do tipo julgado nem com boletins.
+</Note>
+
+- Busca autenticada e rate-limited (`POST /jurisprudencia/search`).
+- Variável: `JURISPRUDENCIAS_AI_API_KEY`.
+
+## Google OAuth
+
+Login social via `POST /users/google-login`. O backend valida o ID token contra `GOOGLE_CLIENT_ID` e cria/vincula o usuário no Supabase Auth.
+
+## PostHog — produto analytics
+
+Instrumentado **no front e no back**:
+
+- Front: `VITE_POSTHOG_KEY` + `VITE_POSTHOG_HOST`.
+- Back: `POSTHOG_API_KEY` + `POSTHOG_HOST`.
+- **Kill switch**: `POSTHOG_ENABLED` desliga a captura no backend sem deploy de código novo — útil se o PostHog degradar ou estourar cota.
+
+## Cloudflare — CDN de imagens (opcional)
+
+Quando `VITE_SUPABASE_CDN_HOST` está definido, o front serve imagens do storage via Cloudflare com **image transforms** (resize/format on the fly) em vez do host direto do Supabase. Sem a variável, o comportamento é o padrão do Supabase.
+
+## Escola Pujante — trial sync e handoff
+
+O portal e a Escola são projetos separados, mas integrados:
+
+- **Trial sync**: endpoints inter-service no router `escola` sincronizam trials entre os sistemas. A autenticação é por token interno compartilhado (`ESCOLA_INTERNAL_API_TOKEN`) — não é JWT de usuário. Duração do trial controlada por `ESCOLA_TRIAL_DURATION_DAYS`.
+- **Handoff**: redirecionamentos entre os produtos usam `ESCOLA_API_URL` e `ESCOLA_FRONTEND_URL`.
+
+<Warning>
+O token interno da Escola dá acesso a operações de provisioning — trate-o como secret de máquina, nunca o exponha no front.
+</Warning>

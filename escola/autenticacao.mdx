@@ -1,0 +1,80 @@
+---
+title: "Autenticação"
+description: "Fluxo Supabase Auth com JWKS ES256, roles, impersonação e internal token"
+icon: "lock"
+---
+
+## Fluxo de autenticação
+
+A autenticação é delegada ao **Supabase Auth**, que emite JWTs assinados com **ES256**. O backend valida os tokens de forma stateless via JWKS pública.
+
+<Steps>
+  <Step title="Supabase Auth emite o JWT">
+    O Supabase gerencia credenciais e sessões; o token é assinado com ES256.
+  </Step>
+  <Step title="Frontend faz login via SDK">
+    O Supabase JS SDK autentica e devolve o JWT da sessão.
+  </Step>
+  <Step title="Axios injeta o token">
+    Um interceptor adiciona `Authorization: Bearer <jwt>` em toda requisição à API.
+  </Step>
+  <Step title="Backend valida via JWKS">
+    O FastAPI busca a chave pública em `/auth/v1/.well-known/jwks.json` do projeto Supabase e valida assinatura e expiração.
+  </Step>
+  <Step title="Decode do token">
+    O claim `sub` contém o `supabase_auth_id` do usuário.
+  </Step>
+  <Step title="Lookup em pujante.users">
+    O backend busca o registro em `pujante.users` por `supabase_auth_id`.
+  </Step>
+  <Step title="User injetado na request">
+    A dependência de auth injeta `{id, email, role, member_id, supabase_auth_id}` nos handlers.
+  </Step>
+</Steps>
+
+## Roles
+
+| Role | Acesso |
+|---|---|
+| `ADMIN` | Acesso total + impersonação de usuários |
+| `COMMUNITY_MANAGER` | Operação completa + leitura financeira |
+| `OPERATOR` | Leitura de cadastros |
+| `EDITORIAL` | Notícias, artigos e calendário |
+| `MENTORED` | Aluno final — sem acesso ao painel admin |
+
+## Níveis de auth usados nesta documentação
+
+Cada endpoint da [referência da API](/escola/api/auth) indica um destes níveis:
+
+| Nível | Significado |
+|---|---|
+| **Público** | Sem token (alguns exigem token próprio no payload/query, como webhooks) |
+| **JWT** | Qualquer usuário autenticado |
+| **MANAGER** | `ADMIN` ou `COMMUNITY_MANAGER` |
+| **ADMIN** | Apenas `ADMIN` |
+| **Internal Token** | Header com `INTERNAL_API_TOKEN` — uso sistema-a-sistema (ex.: AgroPujante → Escola) |
+
+## Impersonação
+
+Um `ADMIN` pode assumir a sessão de qualquer usuário:
+
+1. `POST /api/v2/auth/impersonate` com `{memberId}` gera um JWT próprio (emitido pelo backend, não pelo Supabase).
+2. O frontend guarda esse token em `sessionStorage`.
+3. O interceptor do Axios dá **precedência** ao token de impersonação sobre o token Supabase da sessão.
+
+<Warning>
+O token de impersonação fica em `sessionStorage` — encerrar a aba encerra a impersonação. Nunca persista esse token em `localStorage`.
+</Warning>
+
+## Internal token
+
+Integrações sistema-a-sistema (ex.: o portal AgroPujante solicitando um magic link de handoff ou concedendo trial) usam o `INTERNAL_API_TOKEN`, validado pelo backend sem passar pelo Supabase Auth. Endpoints que exigem esse nível:
+
+| Endpoint | Uso |
+|---|---|
+| `POST /api/v2/auth/handoff-link` | Magic link de transição via AgroPujante |
+| `POST /api/v2/trials/grant` | Conceder trial originado no AgroPujante |
+
+## Reset de senha
+
+O fluxo de reset usa OTP próprio (tabela `password_reset_codes`), em três passos públicos: `request` (gera e envia o código por email), `verify` (troca o código por um reset token) e `confirm` (consome o token e define a nova senha). Detalhes em [API: Auth](/escola/api/auth).

@@ -1,0 +1,88 @@
+---
+title: "API: conteúdo"
+description: "Posts, autores, colunas, categorias, tags, podcasts, livros, anexos, submissions, comentários, likes e busca"
+---
+
+Base: `/api/v1`. `editor+`, `gestor+`, `admin+` = role mínimo via `admin_users`.
+
+## Posts (`/posts`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/posts/trending` | Top dos últimos 7 dias (cache 15 min) | Público |
+| GET | `/posts` | Lista paginada — `?type`, `?category_slug`, `?featured`, `?column_id` (cache 60 s) | Público |
+| GET | `/posts/featured` | Destaques (cache 60 s) | Público |
+| GET | `/posts/search?q=` | Busca full-text simples | Público |
+| GET | `/posts/{slug}` | Detalhe por slug + access control (artigo com blur para free; notícia ilimitada; cache 60 s) | Público |
+| GET | `/posts/admin/list` | Todos os posts, inclusive drafts | editor+ |
+| GET | `/posts/admin/{post_id}` | Por ID, qualquer status | editor+ |
+| POST | `/posts` | Cria post | editor+ |
+| PATCH | `/posts/{post_id}` | Edita | editor+ |
+| DELETE | `/posts/{post_id}` | Remove | gestor+ |
+| PUT | `/posts/{post_id}/authors` | Define autores (N:N) | editor+ |
+| PUT | `/posts/{post_id}/tags` | Define tags (N:N) | editor+ |
+
+## Catálogos editoriais
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/authors` | Lista autores (cache) | Público |
+| GET | `/authors/{slug}` | Autor + posts | Público |
+| POST/PATCH/DELETE | `/authors`, `/authors/{author_id}` | CRUD de autores | admin+ |
+| GET | `/columns` / `/columns/{slug}` | Colunas editoriais | Público |
+| POST/PATCH/DELETE | `/columns`, `/columns/{column_id}` | CRUD de colunas | admin+ |
+| GET | `/categories` / `/categories/{id}` | Categorias | Público |
+| POST/PATCH/DELETE | `/categories`, `/categories/{id}` | CRUD de categorias | admin+ |
+| GET | `/tags` | Tags | Público |
+| POST/PATCH/DELETE | `/tags`, `/tags/{tag_id}` | CRUD de tags | admin+ |
+
+## Podcasts e livros
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/podcasts` / `/podcasts/{slug}` | Episódios (sync YouTube via `youtube_video_id`) | Público |
+| POST/PATCH/DELETE | `/podcasts`, `/podcasts/{id}` | CRUD | admin+ |
+| GET | `/books` | Livros | Público |
+| POST/PATCH/DELETE | `/books`, `/books/{id}` | CRUD | admin+ |
+
+## Attachments (`/attachments`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/attachments/{post_id}` | Anexos de um post | Público |
+| POST | `/attachments/{post_id}` | Adiciona anexo | editor+ |
+| PATCH | `/attachments/{attachment_id}` | Edita | editor+ |
+| DELETE | `/attachments/{attachment_id}` | Remove | editor+ |
+| GET | `/attachments/download/{attachment_id}` | Download | Público |
+
+## Submissions (`/submissions`)
+
+Artigos submetidos por colaboradores para review editorial — ver o [fluxo de publicação](/agropujante/fluxos#publicacao-de-artigo-colaborador-externo).
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| POST | `/submissions` | Submete artigo para review | JWT |
+| GET | `/submissions` | Minhas submissions | JWT |
+| GET | `/submissions/{id}` | Detalhe | JWT/editor+ |
+| PATCH | `/submissions/{id}` | Atualiza status/conteúdo | JWT/editor+ |
+
+## Comments e likes
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/comments/post/{post_id}` | Comentários aprovados | Público |
+| POST | `/comments/post/{post_id}` | Cria (entra pendente de moderação) | Público |
+| PATCH | `/comments/{comment_id}` | Edita | owner+ |
+| DELETE | `/comments/{comment_id}` | Remove | owner+ |
+| POST | `/likes/posts/{post_id}` | Toggle like no post | JWT |
+| GET | `/likes/posts/{post_id}` | Contagem + status do user | Público/JWT |
+| POST | `/likes/comments/{comment_id}` | Toggle like no comentário | JWT |
+| GET | `/likes/comments/{comment_id}` | Contagem + status | Público/JWT |
+
+## Search (`/search`)
+
+| Método | Path | Descrição | Auth |
+|---|---|---|---|
+| GET | `/search?q=&type=&category=&tags=&date_from=&date_to=&sort=&semantic=` | Busca avançada fuzzy + embeddings (cache 30 s) | Público |
+
+Com `semantic=true`, a busca combina full-text fuzzy com similaridade vetorial (pgvector, embeddings OpenAI `text-embedding-3-small`, índice HNSW).

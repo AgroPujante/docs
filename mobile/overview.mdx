@@ -1,0 +1,60 @@
+---
+title: "Visão geral"
+description: "App mobile do AgroPujante — Expo + React Native, gateway duplo Portal × Escola"
+---
+
+O Pujante Mobile é o app mobile do AgroPujante, construído com Expo e React Native. É um projeto greenfield iniciado em **2026-05-14**, que reúne em um único app dois mundos distintos: o **Portal** (conteúdo editorial jurídico do agro) e a **Escola Pujante** (LMS + mentoria).
+
+## Gateway duplo: Portal × Escola
+
+O app conversa com dois backends independentes:
+
+<CardGroup cols={2}>
+  <Card title="Portal AgroPujante" icon="newspaper">
+    API `/api/v1` — autenticação nativa do portal, posts, julgados, colunas, boletins, busca, gamificação (créditos + streak) e push notifications.
+  </Card>
+  <Card title="Escola Pujante" icon="graduation-cap">
+    API `/api/v2` — JWT Supabase, catálogo LMS, progresso de aulas, mentoria com testes comportamentais, gerador de petições (Exordial) e calendário.
+  </Card>
+</CardGroup>
+
+O login acontece no Portal. Se o usuário tem acesso à Escola (`user.escola.has_access`), o app faz um handoff transparente que troca o token do Portal por um JWT Supabase da Escola — sem segundo login. Veja os detalhes em [Autenticação](/mobile/autenticacao).
+
+## Stack
+
+| Camada | Tecnologia |
+|---|---|
+| Runtime | Expo SDK ~54, React Native 0.81, React 19 |
+| Navegação | Expo Router 6 (file-based routing) |
+| Estado client | Zustand — 4 stores: `auth`, `escola`, `notifications`, `theme` |
+| Estado server | TanStack Query com persistência em AsyncStorage |
+| Estilo | NativeWind 4 (Tailwind para React Native) |
+| Segredos do usuário | Expo Secure Store (tokens; `localStorage` no web) |
+
+<Note>
+  A persistência do TanStack Query em AsyncStorage permite que o conteúdo já carregado (feed, catálogo, perfil) apareça instantaneamente no cold start, antes do refetch em background.
+</Note>
+
+## Stores Zustand
+
+- **`auth`** — sessão do Portal: token, usuário, status de hidratação.
+- **`escola`** — sessão da Escola: JWT Supabase, refresh token, perfil e `escolaSyncStatus` (`ok` / `failed` / `skipped`).
+- **`notifications`** — registro de push token e estado de permissão.
+- **`theme`** — tema claro/escuro.
+
+## Próximos passos
+
+<CardGroup cols={2}>
+  <Card title="Arquitetura" icon="folder-tree" href="/mobile/arquitetura">
+    Estrutura de pastas, feature modules e clients de API.
+  </Card>
+  <Card title="Autenticação" icon="key" href="/mobile/autenticacao">
+    Login no Portal, hidratação e handoff pra Escola.
+  </Card>
+  <Card title="API consumida" icon="plug" href="/mobile/api-consumida">
+    Todos os endpoints dos dois backends.
+  </Card>
+  <Card title="Telas" icon="mobile-screen" href="/mobile/telas">
+    Mapa completo de rotas e telas.
+  </Card>
+</CardGroup>
