@@ -98,8 +98,8 @@ Créditos na referência completa: [API: monetização](/agropujante/api/monetiz
 
 | Método | Endpoint | Auth | Descrição |
 |---|---|---|---|
-| POST | `/devices` | Sim | `{token (Expo push), platform}` — registra device pra push |
-| DELETE | `/devices?token=` | Sim | Remove o device (logout) |
+| POST | `/push-tokens` | Sim | `{expo_push_token, platform, device_id?}` — registra (upsert) o token do device pra push |
+| DELETE | `/push-tokens/{expo_push_token}` | Sim | Remove o token (logout) |
 | GET | `/credits/balance` | Sim | `balance`, `total_earned`, `total_spent`, `welcome_gift_claimed` |
 | GET | `/credits/streak` | Sim | `current_streak`, `longest_streak`, `revive_keys_available` |
 
