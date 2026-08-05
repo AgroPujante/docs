@@ -13,17 +13,23 @@ Configuração central do app Expo:
 | `scheme` | `agropujante://` |
 | Bundle ID (iOS) | `com.agropujante.mobile` |
 | Package (Android) | `com.agropujante.mobile` |
-| Plugins | `expo-router`, `expo-secure-store`, `expo-font`, `expo-notifications` |
+| Plugins | `expo-router`, `expo-secure-store`, `expo-font`, `expo-location`, `expo-web-browser`, `expo-notifications` |
 | `expo.extra.apiUrl` | Base do AgroPujante `/api/v1` |
 | `expo.extra.escolaApiUrl` | Base da Escola `/api/v2` |
 
+<Note>
+  `expo-image`, `expo-sharing` e `expo-linear-gradient` também são dependências do app, mas **não** entram na lista de `plugins` do `app.json` — na versão do SDK 54 nenhum dos três expõe um config plugin de verdade (`main` aponta pro `.ts` fonte, sem `app.plugin.js`). Listá-los ali quebra o carregamento do Metro (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING` / "does not appear to be a config plugin") em Node 22+. Eles funcionam normalmente via autolinking, sem entrada em `plugins`.
+</Note>
+
 ## EAS Build
 
+EAS já está configurado: `expo.extra.eas.projectId` no `app.json` aponta pra um projeto real, e `eas.json` define os profiles `development`/`preview`/`production` (iOS `ascAppId` e Android `serviceAccountKeyPath` já preenchidos pro submit).
+
 <Warning>
-  **EAS Build ainda não está configurado.** O `projectId` no `app.json` é um placeholder (`"TODO-RODAR-eas-init"`). Antes do primeiro build nativo, rode `eas init` pra vincular o app a um projeto EAS real e substituir o placeholder.
+  O app roda em **Expo SDK 54** (não 55) — o Expo Go disponível hoje na App Store/Play Store só suporta a versão anterior do SDK (54); SDK 55/56 exigem build customizado via `eas go`/TestFlight. Se o `package.json` for atualizado pra SDK 55+ no futuro, o Expo Go vai recusar o QR code com "Project is incompatible with this version of Expo Go" até isso mudar.
 </Warning>
 
-Enquanto o EAS não está configurado, o desenvolvimento roda via **Expo Go** (com a Escola apontando pro IP da rede local) e `npx expo start`.
+O desenvolvimento roda via **Expo Go** (com a Escola apontando pro IP da rede local) e `npx expo start`, exceto para push notifications — ver aviso abaixo.
 
 ## Deep links
 
@@ -37,36 +43,52 @@ São usados em notificações push e compartilhamento.
 
 ## Push notifications
 
-O app usa o serviço de push do **Expo** (`expo-notifications`):
+O app usa o serviço de push do **Expo** (`expo-notifications`), com registro/remoção de token feitos automaticamente pela store `notifications`:
 
 <Steps>
   <Step title="Permissão">
-    O app solicita permissão de notificações ao usuário (estado controlado na store `notifications`).
+    No login (`syncOnLogin`), o app pede permissão de notificações ao usuário.
   </Step>
   <Step title="Token Expo">
-    Com a permissão concedida, obtém o Expo push token do device.
+    Com a permissão concedida, obtém o Expo push token do device via `Notifications.getExpoPushTokenAsync` (usa o `projectId` do EAS).
   </Step>
   <Step title="Registro no backend">
-    Envia `POST /devices` com `{token, platform}` pro backend do Portal.
+    Envia `POST /push-tokens` com `{expo_push_token, platform}` pro backend do Portal — grava (upsert por token) na tabela `pujante.mobile_push_tokens`.
   </Step>
   <Step title="Limpeza no logout">
-    No logout, remove o registro com `DELETE /devices?token=` (best-effort).
+    No logout (`unbindOnLogout`), remove o registro com `DELETE /push-tokens/{expo_push_token}` (best-effort, token lido do Secure Store local).
   </Step>
 </Steps>
+
+<Warning>
+  **Expo Go não suporta push remoto desde o SDK 53.** O registro de token roda normalmente (o app só loga um warning e segue), mas pra validar o recebimento de push de verdade é preciso um **development build** (`eas build --profile development` ou `expo run:ios`/`expo run:android`), não Expo Go.
+</Warning>
+
+<Note>
+  Essa é a Fase 1 do processo de notificação (registro de token). O disparo de push em si — mandar notificação quando um post novo é publicado — ainda não existe; é a próxima fase, que vai ler `pujante.mobile_push_tokens` a partir do fluxo de publicação do backend.
+</Note>
+
+## Carregamento de imagem
+
+Os componentes que renderizam imagem remota (capas de post, avatares de autor, logos de apoiador/parceiro etc.) usam `expo-image` em vez do `Image` nativo do React Native — dá cache automático em disco/memória (imagem já vista carrega instantânea) e transição de fade-in (`transition={200}`) em vez de "pop" abrupto quando a imagem termina de carregar.
+
+<Note>
+  Ainda não há redimensionamento no servidor — um avatar de 32px carrega o arquivo original em resolução cheia do Supabase Storage. Uma fase futura pode usar o endpoint de transformação de imagem do Supabase (`/render/image/public/...?width=&height=`) pra pedir só o tamanho necessário por contexto, mas depende de confirmar se Image Transformations está habilitado no plano do projeto.
+</Note>
 
 ## Pendências
 
 Itens conhecidos antes de um release de produção:
 
 <AccordionGroup>
-  <Accordion title="eas init (bloqueante pra build)">
-    Rodar `eas init` pra criar o projeto EAS e substituir o `projectId` placeholder. Sem isso, não há build nativo nem submissão às lojas.
-  </Accordion>
   <Accordion title=".env por ambiente">
     As base URLs vivem hardcoded em `expo.extra` no `app.json`. Falta um esquema de variáveis por ambiente (dev/staging/prod) — por exemplo via `app.config.ts` + `.env`.
   </Accordion>
   <Accordion title="Refresh token">
     Não há refresh automático da sessão do Portal: token expirado força novo login (logout silencioso no 401). Veja [Autenticação](/mobile/autenticacao).
+  </Accordion>
+  <Accordion title="Disparo de push (Fase 2)">
+    O registro de token (Fase 1) está pronto, mas nenhum evento do backend dispara push ainda — falta o hook no fluxo de publicação de conteúdo.
   </Accordion>
 </AccordionGroup>
 
