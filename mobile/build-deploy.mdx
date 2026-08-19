@@ -43,20 +43,20 @@ São usados em notificações push e compartilhamento.
 
 ## Push notifications
 
-O app usa o serviço de push do **Expo** (`expo-notifications`), com registro/remoção de token feitos automaticamente pela store `notifications`:
+O app usa o serviço de push do **Expo** (`expo-notifications`), com registro/desvínculo de token feitos automaticamente pela store `notifications`. Device recebe push mesmo **sem login** — a conta só é usada pra vincular o token, não é pré-requisito.
 
 <Steps>
   <Step title="Permissão">
-    No login (`syncOnLogin`), o app pede permissão de notificações ao usuário.
+    No boot do app (`syncPushToken`), independente de login, o app pede permissão de notificações ao usuário.
   </Step>
   <Step title="Token Expo">
     Com a permissão concedida, obtém o Expo push token do device via `Notifications.getExpoPushTokenAsync` (usa o `projectId` do EAS).
   </Step>
   <Step title="Registro no backend">
-    Envia `POST /push-tokens` com `{expo_push_token, platform}` pro backend do Portal — grava (upsert por token) na tabela `pujante.mobile_push_tokens`.
+    Envia `POST /push-tokens` com `{expo_push_token, platform}` pro backend do Portal — grava (upsert por token) na tabela `pujante.mobile_push_tokens`. Auth é opcional: com sessão, vincula `user_id`; sem sessão, salva como anônimo (`user_id null`) e o device continua recebendo push de conteúdo geral.
   </Step>
-  <Step title="Limpeza no logout">
-    No logout (`unbindOnLogout`), remove o registro com `DELETE /push-tokens/{expo_push_token}` (best-effort, token lido do Secure Store local).
+  <Step title="Desvínculo no logout">
+    No logout (`detachOnLogout`), re-registra o mesmo token forçando `auth: false` (em vez de apagar) — o device volta a ser anônimo mas continua recebendo push depois de sair da conta.
   </Step>
 </Steps>
 
@@ -65,7 +65,7 @@ O app usa o serviço de push do **Expo** (`expo-notifications`), com registro/re
 </Warning>
 
 <Note>
-  Essa é a Fase 1 do processo de notificação (registro de token). O disparo de push em si — mandar notificação quando um post novo é publicado — ainda não existe; é a próxima fase, que vai ler `pujante.mobile_push_tokens` a partir do fluxo de publicação do backend.
+  Disparo de push (Fase 2) já está em produção: `app/services/mobile_push.py` (backend) dispara automaticamente ao publicar conteúdo novo (`notify_if_newly_published`, hookado em `posts.py`), filtrando destinatários por `mobile_push_tokens.categorias` (default: todas habilitadas). Ver [API consumida](/mobile/api-consumida) pra detalhes do endpoint.
 </Note>
 
 ## Carregamento de imagem
