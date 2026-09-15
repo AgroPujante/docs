@@ -66,7 +66,13 @@ O app usa o serviço de push do **Expo** (`expo-notifications`), com registro/de
 
 <Note>
   Disparo de push (Fase 2) já está em produção: `app/services/mobile_push.py` (backend) dispara automaticamente ao publicar conteúdo novo (`notify_if_newly_published`, hookado em `posts.py`), filtrando destinatários por `mobile_push_tokens.categorias` (default: todas habilitadas). Ver [API consumida](/mobile/api-consumida) pra detalhes do endpoint.
+
+  Esteve pausado (comentado no código, `_spawn_send_mobile` desligado) de 2026-09-10 a 2026-09-15 a pedido. `push_notified_at` continuou sendo carimbado normalmente durante a pausa, então religar não reenviou push pros posts publicados nesse meio-tempo.
 </Note>
+
+<Warning>
+  **Entrega iOS pode falhar por credencial APNs ausente.** Achado em 2026-08-21: a Expo aceita o envio (HTTP 200) mas o campo `status` de cada ticket na resposta pode vir `"error"` / `InvalidCredentials` se não houver chave push (APNs) cadastrada pro bundle ID no time Apple. O código atual só confere o HTTP 200 do POST pra Expo, não o `status` por ticket — então "enviado" no log não garante entrega. Testar de verdade exige ler `data[0].status` da resposta da Expo, não só confiar no 200.
+</Warning>
 
 ## Carregamento de imagem
 
@@ -87,8 +93,8 @@ Itens conhecidos antes de um release de produção:
   <Accordion title="Refresh token">
     Não há refresh automático da sessão do Portal: token expirado força novo login (logout silencioso no 401). Veja [Autenticação](/mobile/autenticacao).
   </Accordion>
-  <Accordion title="Disparo de push (Fase 2)">
-    O registro de token (Fase 1) está pronto, mas nenhum evento do backend dispara push ainda — falta o hook no fluxo de publicação de conteúdo.
+  <Accordion title="Credencial APNs ausente (iOS)">
+    Push mobile no iOS pode não ser entregue: falta chave APNs cadastrada na Expo pro bundle ID do Pujante-Mobile. O time Apple STRUCTOR (dono do app publicado) já está no limite de 2 chaves APNs (Fox360 + fox-produtor), o que bloqueou gerar uma nova. Caminhos possíveis: reaproveitar uma chave `.p8` existente do time via `eas credentials -p ios`, ou revogar uma chave não usada (risco: pode derrubar push de outro app que já usa essa chave).
   </Accordion>
 </AccordionGroup>
 
