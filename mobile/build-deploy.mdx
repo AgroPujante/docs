@@ -18,18 +18,22 @@ Configuração central do app Expo:
 | `expo.extra.escolaApiUrl` | Base da Escola `/api/v2` |
 
 <Note>
-  `expo-image`, `expo-sharing` e `expo-linear-gradient` também são dependências do app, mas **não** entram na lista de `plugins` do `app.json` — na versão do SDK 54 nenhum dos três expõe um config plugin de verdade (`main` aponta pro `.ts` fonte, sem `app.plugin.js`). Listá-los ali quebra o carregamento do Metro (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING` / "does not appear to be a config plugin") em Node 22+. Eles funcionam normalmente via autolinking, sem entrada em `plugins`.
+  Desde o upgrade pro SDK 57 (2026-09-15), `expo-image`, `expo-sharing` e `expo-splash-screen` já expõem config plugin de verdade e entram na lista de `plugins` do `app.json` normalmente (o `splash` legado no topo do `app.json` foi removido — SDK 57 não aceita mais essa chave, virou config do plugin `expo-splash-screen`). `expo-linear-gradient` continua sem plugin e funciona só via autolinking.
 </Note>
 
 ## EAS Build
 
 EAS já está configurado: `expo.extra.eas.projectId` no `app.json` aponta pra um projeto real, e `eas.json` define os profiles `development`/`preview`/`production` (iOS `ascAppId` e Android `serviceAccountKeyPath` já preenchidos pro submit).
 
-<Warning>
-  O app roda em **Expo SDK 54** (não 55) — o Expo Go disponível hoje na App Store/Play Store só suporta a versão anterior do SDK (54); SDK 55/56 exigem build customizado via `eas go`/TestFlight. Se o `package.json` for atualizado pra SDK 55+ no futuro, o Expo Go vai recusar o QR code com "Project is incompatible with this version of Expo Go" até isso mudar.
-</Warning>
+<Note>
+  O app roda em **Expo SDK 57** (upgrade de 54→57 em 2026-09-15, `react-native` 0.81.5→0.86.3, `react` 19.1.0→19.2.3). `react-native-reanimated`/`react-native-worklets` foram bumpados além da versão baseline do SDK 57 (4.6.0/0.12.x) pra satisfazer o peer dependency de `react-native` 0.86 — listados em `expo.install.exclude` no `package.json` pra `expo install --fix` parar de reclamar. `@react-navigation/native` como dependência direta foi removido: desde o SDK 56, `expo-router` embute sua própria cópia do react-navigation e ter o pacote direto no projeto quebra o bundle ("expo-router is no longer compatible with react-navigation") — trocar qualquer `useFocusEffect`/hook equivalente pelo export do próprio `expo-router`.
+</Note>
 
 O desenvolvimento roda via **Expo Go** (com a Escola apontando pro IP da rede local) e `npx expo start`, exceto para push notifications — ver aviso abaixo.
+
+<Warning>
+  O Expo Go publicado na App Store/Play Store só suporta a versão mais recente do SDK — se ainda não tiver sido atualizado pro SDK 57, o QR code do `npx expo start` é recusado com "Project is incompatible with this version of Expo Go". Nesse caso, usar um **development build** (`eas build --profile development`) em vez de Expo Go.
+</Warning>
 
 ## Deep links
 
