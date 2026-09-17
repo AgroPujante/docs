@@ -65,13 +65,17 @@ O app usa o serviço de push do **Expo** (`expo-notifications`), com registro/de
 </Warning>
 
 <Note>
-  Disparo de push (Fase 2) já está em produção: `app/services/mobile_push.py` (backend) dispara automaticamente ao publicar conteúdo novo (`notify_if_newly_published`, hookado em `posts.py`), filtrando destinatários por `mobile_push_tokens.categorias` (default: todas habilitadas). Ver [API consumida](/mobile/api-consumida) pra detalhes do endpoint.
+  Disparo de push (Fase 2) está em produção desde 2026-09-17: `app/services/mobile_push.py` (backend) dispara automaticamente ao publicar conteúdo novo (`notify_if_newly_published`, hookado em `posts.py`), filtrando destinatários por `mobile_push_tokens.categorias` (default: todas habilitadas). Ver [API consumida](/mobile/api-consumida) pra detalhes do endpoint.
 
-  Esteve pausado (comentado no código, `_spawn_send_mobile` desligado) de 2026-09-10 a 2026-09-15 a pedido. `push_notified_at` continuou sendo carimbado normalmente durante a pausa, então religar não reenviou push pros posts publicados nesse meio-tempo.
+  Esteve pausado (comentado no código, `_spawn_send_mobile` desligado) de 2026-09-10 a 2026-09-17 — a linha ficou comentada em `main` mesmo depois do PR de reativação ter sido aberto em 2026-09-15, só entrou em produção quando o PR ([#500](https://github.com/AgroPujante/AgroPujante/pull/500)) foi de fato mergeado e deployado em 2026-09-17. `push_notified_at` continuou sendo carimbado normalmente durante toda a pausa (é o web push que carimba), então religar não reenviou push mobile pros posts publicados nesse meio-tempo — e esse carimbo por si só não prova que o push mobile disparou, já que também é setado quando só o web push roda.
+</Note>
+
+<Note>
+  **Credencial APNs confirmada OK em 2026-09-17.** O problema achado em 2026-08-21 (Expo aceitava o envio com HTTP 200 mas o ticket vinha `status: error` / `InvalidCredentials` por falta de chave push pro bundle ID) foi resolvido. Testado com push silencioso (`contentAvailable`, sem alerta) em 3 tokens iOS reais de produção: `send` retornou `status: ok` e `getReceipts` (~16min depois) confirmou `status: ok` — a Apple confirmou a entrega.
 </Note>
 
 <Warning>
-  **Entrega iOS pode falhar por credencial APNs ausente.** Achado em 2026-08-21: a Expo aceita o envio (HTTP 200) mas o campo `status` de cada ticket na resposta pode vir `"error"` / `InvalidCredentials` se não houver chave push (APNs) cadastrada pro bundle ID no time Apple. O código atual só confere o HTTP 200 do POST pra Expo, não o `status` por ticket — então "enviado" no log não garante entrega. Testar de verdade exige ler `data[0].status` da resposta da Expo, não só confiar no 200.
+  **Regressão: sem checagem de status por ticket desde 2026-08-27.** O commit `c8b4e2f` (fix de tag HTML crua no título) reescreveu `mobile_push.py` e removeu, sem avisar no commit, a checagem de `data[i].status`/`details.error` por ticket da Expo e a poda automática de tokens com `DeviceNotRegistered` — lógica que tinha sido adicionada em `34611e7` (o próprio commit que descobriu o problema de credencial acima). Hoje o código só confere o HTTP 200 do POST pra Expo e conta como "enviado" — se a credencial quebrar de novo ou algum ticket falhar, não vai gerar log nem erro visível, só vai parecer que enviou sem nunca chegar no aparelho. Reaplicar a lógica de `34611e7` em `_send_to_tokens` (`mobile_push.py`) resolveria isso.
 </Warning>
 
 ## Carregamento de imagem
@@ -93,8 +97,8 @@ Itens conhecidos antes de um release de produção:
   <Accordion title="Refresh token">
     Não há refresh automático da sessão do Portal: token expirado força novo login (logout silencioso no 401). Veja [Autenticação](/mobile/autenticacao).
   </Accordion>
-  <Accordion title="Credencial APNs ausente (iOS)">
-    Push mobile no iOS pode não ser entregue: falta chave APNs cadastrada na Expo pro bundle ID do Pujante-Mobile. O time Apple STRUCTOR (dono do app publicado) já está no limite de 2 chaves APNs (Fox360 + fox-produtor), o que bloqueou gerar uma nova. Caminhos possíveis: reaproveitar uma chave `.p8` existente do time via `eas credentials -p ios`, ou revogar uma chave não usada (risco: pode derrubar push de outro app que já usa essa chave).
+  <Accordion title="Checagem de status por ticket da Expo (removida)">
+    Desde `c8b4e2f` (2026-08-27), `mobile_push.py` não confere mais `data[i].status`/`details.error` por ticket — só o HTTP 200 do POST pra Expo. Uma falha de entrega por ticket (credencial inválida, device removido) não gera log nem erro visível, e tokens com `DeviceNotRegistered` não são mais podados automaticamente. Ver nota acima.
   </Accordion>
 </AccordionGroup>
 
