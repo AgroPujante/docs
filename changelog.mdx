@@ -4,6 +4,15 @@ description: Histórico de releases da documentação Pujante
 icon: clock-rotate-left
 ---
 
+<Update label="2026-11-18" description="Newsletter diária, checkout em duas etapas e KPIs">
+  Resumo das mudanças de 11 a 18/11/2026 no ecossistema. As páginas de referência de cada produto ainda não foram revisadas para estas mudanças; o detalhe de processo está nos docs do Pujante OS.
+
+  - **Newsletter (AgroPujante):** a diária é criada às 20h e agendada para as 8h do dia seguinte, a semanal sai toda segunda às 7h, e as capas das matérias saem em 16:9. A Black da Pujante abre a edição como banner e os demais produtos entram entre as matérias.
+  - **Checkout da Aula Magna e da Escola:** o contato (nome, e-mail e WhatsApp) é pedido antes do pagamento, num pop-up na página de vendas e na etapa 1 do checkout. O lead é gravado com a UTM da visita em `pujante.site_checkout_leads` e marcado como convertido na compra. Chaves de desligar: `VITE_AULA_MAGNA_DUAS_ETAPAS` e `VITE_CHECKOUT_DUAS_ETAPAS`.
+  - **Pujante Admin (KPIs):** o período escolhido passa a ser comparado com os dois períodos anteriores do mesmo tamanho, e o painel de UTM liga cada edição da newsletter às visitas.
+  - **Pujante Mobile:** rótulos "Boletim" viram "Newsletter" e o app mostra a diária e a semanal.
+</Update>
+
 <Update label="2026-06-12" description="Correções de fidelidade + camada operacional e convenções">
   Quarta release do dia, focada em transversalidade e operação:
 
